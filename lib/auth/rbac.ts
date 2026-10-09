@@ -37,7 +37,9 @@ export type Capability =
   | "ingestion:write"
   | "competition:read"
   | "competition:write"
+  | "competition:delete"
   | "match:read"
+  | "match:assign"
   | "match:operate"
   | "match:confirm"
   | "intelligence:read"
@@ -57,7 +59,9 @@ const MATRIX: Record<Role, Capability[] | "*"> = {
     "ingestion:write",
     "competition:read",
     "competition:write",
+    "competition:delete",
     "match:read",
+    "match:assign",
     "match:operate",
     "match:confirm",
     "intelligence:read",

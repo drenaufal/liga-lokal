@@ -21,6 +21,7 @@ import {
   runTalentSearch,
 } from "@/lib/queries/scout";
 import { DEFAULT_WEIGHTS } from "@/lib/scoring";
+import { insertReturning } from "@/lib/db/returning";
 
 async function weights() {
   const f = await db.query.scoringFormulas.findFirst({
@@ -119,9 +120,7 @@ export async function generatePlayerReport(formData: FormData) {
   );
   const result = gemini ?? demoPlayerAnalysis(flat, ctx.peers);
 
-  const [row] = await db
-    .insert(aiReports)
-    .values({
+  const [row] = await insertReturning(db, aiReports, {
       kind: "player_analysis",
       subjectType: "player",
       subjectId: playerId,
@@ -129,8 +128,7 @@ export async function generatePlayerReport(formData: FormData) {
       result,
       model: gemini ? AI_MODEL : "demo",
       createdBy: user.id,
-    })
-    .returning();
+    });
 
   await recordAudit({
     actorId: user.id,
@@ -158,9 +156,7 @@ export async function generateMatchReport(formData: FormData) {
   );
   const result = gemini ?? demoMatchSummary(ctx);
 
-  const [row] = await db
-    .insert(aiReports)
-    .values({
+  const [row] = await insertReturning(db, aiReports, {
       kind: "match_summary",
       subjectType: "match",
       subjectId: matchId,
@@ -168,8 +164,7 @@ export async function generateMatchReport(formData: FormData) {
       result,
       model: gemini ? AI_MODEL : "demo",
       createdBy: user.id,
-    })
-    .returning();
+    });
 
   await recordAudit({
     actorId: user.id, actorName: user.name, actorRole: user.role,
@@ -193,9 +188,7 @@ export async function generateCompetitionReport(formData: FormData) {
   );
   const result = gemini ?? demoCompetitionInsight(ctx);
 
-  const [row] = await db
-    .insert(aiReports)
-    .values({
+  const [row] = await insertReturning(db, aiReports, {
       kind: "competition_insight",
       subjectType: "tournament",
       subjectId: tournamentId,
@@ -203,8 +196,7 @@ export async function generateCompetitionReport(formData: FormData) {
       result,
       model: gemini ? AI_MODEL : "demo",
       createdBy: user.id,
-    })
-    .returning();
+    });
 
   await recordAudit({
     actorId: user.id, actorName: user.name, actorRole: user.role,

@@ -1,72 +1,106 @@
 import { relations, sql } from "drizzle-orm";
 import {
   boolean,
-  date,
+  char,
+  customType,
+  date as mysqlDate,
+  datetime,
+  double,
   index,
-  integer,
-  jsonb,
-  pgEnum,
-  pgTable,
-  real,
+  int,
+  longtext,
+  mysqlEnum,
+  mysqlTable,
   text,
-  timestamp,
   uniqueIndex,
-  uuid,
   varchar,
-} from "drizzle-orm/pg-core";
+} from "drizzle-orm/mysql-core";
+import { PLAYER_POSITIONS } from "../positions";
+
+/* ═══════════════════════ Column helpers (MariaDB) ══════════════════════ */
+
+/** UUID primary key, generated in the app (MariaDB has no portable uuid default). */
+const id = () =>
+  char("id", { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID());
+
+/** UUID reference column. */
+const uuid = (name: string) => char(name, { length: 36 });
+
+/**
+ * UTC instant with millisecond precision. `lib/db/index.ts` pins every
+ * connection to `time_zone = '+00:00'`, so DB defaults and `now()` are UTC too.
+ */
+const timestamp = (name: string) => datetime(name, { mode: "date", fsp: 3 });
+const NOW = sql`CURRENT_TIMESTAMP(3)`;
+
+/** Calendar date kept as a `YYYY-MM-DD` string. */
+const date = (name: string) => mysqlDate(name, { mode: "string" });
+
+/**
+ * JSON column. MariaDB stores JSON as LONGTEXT, so the driver hands back a
+ * string — parse it here (MySQL 8 already returns parsed objects).
+ */
+const json = customType<{ data: unknown; driverData: string }>({
+  dataType: () => "json",
+  toDriver: (value) => JSON.stringify(value),
+  fromDriver: (value) => (typeof value === "string" ? JSON.parse(value) : value),
+});
 
 /* ═══════════════════════════ Enums ═══════════════════════════════════ */
 
-export const userRole = pgEnum("user_role", [
+export const userRole = [
   "admin",
   "operator",
   "referee",
   "coach",
   "scout",
   "viewer",
-]);
+] as const;
 
-export const verificationStatus = pgEnum("verification_status", [
+export const verificationStatus = [
   "verified",
   "flagged",
   "pending",
   "rejected",
-]);
+] as const;
 
-export const refereeStatus = pgEnum("referee_status", [
+export const refereeStatus = [
   "active",
   "expiring",
   "expired",
   "revoked",
-]);
+] as const;
 
-export const coachStatus = pgEnum("coach_status", [
+export const coachStatus = [
   "active",
   "expiring",
   "expired",
   "revoked",
-]);
+] as const;
 
 /** image = photos / logos (any signed-in user); document = identity papers (verifiers only). */
-export const mediaKind = pgEnum("media_kind", ["image", "document"]);
+export const mediaKind = ["image", "document"] as const;
 
-export const clubType = pgEnum("club_type", ["club", "academy"]);
-export const venueSurface = pgEnum("venue_surface", [
+export const clubType = ["club", "academy"] as const;
+export const venueSurface = [
   "natural",
   "artificial",
   "hybrid",
   "futsal",
-]);
-export const playerPosition = pgEnum("player_position", ["GK", "DF", "MF", "FW"]);
-export const preferredFoot = pgEnum("preferred_foot", ["left", "right", "both"]);
+] as const;
+/** 13 specific roles — see lib/positions.ts for the GK/DF/MF/FW lines derived from them. */
+export const playerPosition = PLAYER_POSITIONS;
+export const preferredFoot = ["left", "right", "both"] as const;
 
-export const tournamentFormat = pgEnum("tournament_format", [
+export const tournamentFormat = [
   "cup",
   "league",
   "hybrid",
   "knockout",
-]);
-export const tournamentStatus = pgEnum("tournament_status", [
+] as const;
+export const tournamentStatus = [
   "draft",
   "registration",
   "verification",
@@ -74,16 +108,16 @@ export const tournamentStatus = pgEnum("tournament_status", [
   "ongoing",
   "completed",
   "archived",
-]);
-export const registrationStatus = pgEnum("registration_status", [
+] as const;
+export const registrationStatus = [
   "invited",
   "registered",
   "verified",
   "rejected",
   "withdrawn",
-]);
+] as const;
 
-export const matchStage = pgEnum("match_stage", [
+export const matchStage = [
   "league",
   "group",
   "round_of_32",
@@ -92,16 +126,16 @@ export const matchStage = pgEnum("match_stage", [
   "semi",
   "final",
   "third_place",
-]);
-export const matchStatus = pgEnum("match_status", [
+] as const;
+export const matchStatus = [
   "scheduled",
   "live",
   "halftime",
   "completed",
   "postponed",
   "cancelled",
-]);
-export const matchPeriod = pgEnum("match_period", [
+] as const;
+export const matchPeriod = [
   "not_started",
   "first_half",
   "halftime",
@@ -109,15 +143,15 @@ export const matchPeriod = pgEnum("match_period", [
   "extra_time",
   "penalties",
   "full_time",
-]);
-export const resultStatus = pgEnum("result_status", [
+] as const;
+export const resultStatus = [
   "unconfirmed",
   "confirmed",
   "disputed",
   "amended",
-]);
+] as const;
 
-export const matchEventType = pgEnum("match_event_type", [
+export const matchEventType = [
   "goal",
   "own_goal",
   "penalty_goal",
@@ -136,17 +170,18 @@ export const matchEventType = pgEnum("match_event_type", [
   "injury",
   "var_check",
   "period",
-]);
-export const lineupRole = pgEnum("lineup_role", ["starter", "substitute"]);
+  "interception",
+] as const;
+export const lineupRole = ["starter", "substitute"] as const;
 
-export const importEntity = pgEnum("import_entity", [
+export const importEntity = [
   "players",
   "clubs",
   "referees",
   "venues",
   "matches",
-]);
-export const importBatchStatus = pgEnum("import_batch_status", [
+] as const;
+export const importBatchStatus = [
   "uploaded",
   "validating",
   "validated",
@@ -155,8 +190,8 @@ export const importBatchStatus = pgEnum("import_batch_status", [
   "importing",
   "completed",
   "failed",
-]);
-export const importRowStatus = pgEnum("import_row_status", [
+] as const;
+export const importRowStatus = [
   "pending",
   "valid",
   "error",
@@ -165,41 +200,41 @@ export const importRowStatus = pgEnum("import_row_status", [
   "approved",
   "rejected",
   "imported",
-]);
+] as const;
 
-export const aiReportKind = pgEnum("ai_report_kind", [
+export const aiReportKind = [
   "player_scout",
   "player_analysis",
   "match_summary",
   "competition_insight",
   "talent_search",
-]);
-export const aiReportStatus = pgEnum("ai_report_status", [
+] as const;
+export const aiReportStatus = [
   "generated",
   "cached",
   "failed",
-]);
-export const badgeTier = pgEnum("badge_tier", [
+] as const;
+export const badgeTier = [
   "bronze",
   "silver",
   "gold",
   "platinum",
-]);
+] as const;
 
 /* ═══════════════════════════ Auth ═══════════════════════════════════ */
 
-export const users = pgTable("users", {
-  id: uuid("id").defaultRandom().primaryKey(),
+export const users = mysqlTable("users", {
+  id: id(),
   name: text("name").notNull(),
-  email: text("email").notNull().unique(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
   passwordHash: text("password_hash").notNull(),
-  role: userRole("role").notNull().default("viewer"),
+  role: mysqlEnum("role", userRole).notNull().default("viewer"),
   image: text("image"),
   title: text("title"),
   clubId: uuid("club_id"),
   active: boolean("active").notNull().default(true),
-  lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  lastLoginAt: timestamp("last_login_at"),
+  createdAt: timestamp("created_at").default(NOW).notNull(),
 });
 
 /* ═══════════════════════ Config / Rules ═════════════════════════════ */
@@ -215,17 +250,17 @@ export type AgeCategoryRules = {
   notes?: string[];
 };
 
-export const ageCategories = pgTable("age_categories", {
-  id: uuid("id").defaultRandom().primaryKey(),
+export const ageCategories = mysqlTable("age_categories", {
+  id: id(),
   code: varchar("code", { length: 12 }).notNull().unique(), // KU-8 … KU-16
   label: text("label").notNull(),
-  minAge: integer("min_age").notNull(),
-  maxAge: integer("max_age").notNull(),
-  birthYearFrom: integer("birth_year_from"),
-  birthYearTo: integer("birth_year_to"),
-  rules: jsonb("rules").$type<AgeCategoryRules>().notNull(),
-  sortOrder: integer("sort_order").notNull().default(0),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  minAge: int("min_age").notNull(),
+  maxAge: int("max_age").notNull(),
+  birthYearFrom: int("birth_year_from"),
+  birthYearTo: int("birth_year_to"),
+  rules: json("rules").$type<AgeCategoryRules>().notNull(),
+  sortOrder: int("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").default(NOW).notNull(),
 });
 
 export type FormulaWeights = {
@@ -243,46 +278,46 @@ export type FormulaWeights = {
   motm: number;
 };
 
-export const scoringFormulas = pgTable("scoring_formulas", {
-  id: uuid("id").defaultRandom().primaryKey(),
+export const scoringFormulas = mysqlTable("scoring_formulas", {
+  id: id(),
   name: text("name").notNull(),
   description: text("description"),
-  weights: jsonb("weights").$type<FormulaWeights>().notNull(),
+  weights: json("weights").$type<FormulaWeights>().notNull(),
   isActive: boolean("is_active").notNull().default(false),
-  version: integer("version").notNull().default(1),
+  version: int("version").notNull().default(1),
   createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at").default(NOW).notNull(),
+  updatedAt: timestamp("updated_at").default(NOW).notNull(),
 });
 
 /* ═══════════════════════════ Registry ══════════════════════════════ */
 
-export const venues = pgTable("venues", {
-  id: uuid("id").defaultRandom().primaryKey(),
+export const venues = mysqlTable("venues", {
+  id: id(),
   name: text("name").notNull(),
   address: text("address"),
   city: text("city").notNull(),
   province: text("province"),
-  capacity: integer("capacity"),
-  fieldCount: integer("field_count").notNull().default(1),
-  surface: venueSurface("surface").notNull().default("natural"),
+  capacity: int("capacity"),
+  fieldCount: int("field_count").notNull().default(1),
+  surface: mysqlEnum("surface", venueSurface).notNull().default("natural"),
   photoUrl: text("photo_url"),
-  latitude: real("latitude"),
-  longitude: real("longitude"),
+  latitude: double("latitude"),
+  longitude: double("longitude"),
   floodlights: boolean("floodlights").notNull().default(false),
   notes: text("notes"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at").default(NOW).notNull(),
 });
 
-export const clubs = pgTable("clubs", {
-  id: uuid("id").defaultRandom().primaryKey(),
+export const clubs = mysqlTable("clubs", {
+  id: id(),
   name: text("name").notNull(),
   shortName: varchar("short_name", { length: 8 }).notNull(),
-  slug: text("slug").notNull().unique(),
-  type: clubType("type").notNull().default("club"),
+  slug: varchar("slug", { length: 255 }).notNull().unique(),
+  type: mysqlEnum("type", clubType).notNull().default("club"),
   city: text("city").notNull(),
   province: text("province"),
-  foundedYear: integer("founded_year"),
+  foundedYear: int("founded_year"),
   logoUrl: text("logo_url"),
   primaryColor: varchar("primary_color", { length: 9 }).default("#00e28a"),
   secondaryColor: varchar("secondary_color", { length: 9 }).default("#0f1620"),
@@ -294,11 +329,11 @@ export const clubs = pgTable("clubs", {
   contactPhone: text("contact_phone"),
   accreditation: text("accreditation"),
   active: boolean("active").notNull().default(true),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at").default(NOW).notNull(),
 });
 
-export const referees = pgTable("referees", {
-  id: uuid("id").defaultRandom().primaryKey(),
+export const referees = mysqlTable("referees", {
+  id: id(),
   fullName: text("full_name").notNull(),
   dob: date("dob"),
   city: text("city"),
@@ -306,19 +341,19 @@ export const referees = pgTable("referees", {
   licenseNumber: varchar("license_number", { length: 40 }).notNull().unique(),
   licenseIssuedAt: date("license_issued_at"),
   licenseExpiry: date("license_expiry").notNull(),
-  status: refereeStatus("status").notNull().default("active"),
+  status: mysqlEnum("status", refereeStatus).notNull().default("active"),
   photoUrl: text("photo_url"),
   phone: text("phone"),
   email: text("email"),
-  matchesOfficiated: integer("matches_officiated").notNull().default(0),
+  matchesOfficiated: int("matches_officiated").notNull().default(0),
   specialty: text("specialty"), // wasit / asisten wasit / wasit ke-4
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at").default(NOW).notNull(),
 });
 
-export const coaches = pgTable(
+export const coaches = mysqlTable(
   "coaches",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
+    id: id(),
     fullName: text("full_name").notNull(),
     dob: date("dob"),
     city: text("city"),
@@ -327,134 +362,149 @@ export const coaches = pgTable(
     licenseNumber: varchar("license_number", { length: 40 }).notNull().unique(),
     licenseIssuedAt: date("license_issued_at"),
     licenseExpiry: date("license_expiry").notNull(),
-    status: coachStatus("status").notNull().default("active"),
+    status: mysqlEnum("status", coachStatus).notNull().default("active"),
     photoUrl: text("photo_url"),
     phone: text("phone"),
     email: text("email"),
-    experienceYears: integer("experience_years").notNull().default(0),
+    experienceYears: int("experience_years").notNull().default(0),
     specialty: text("specialty"), // pelatih kepala / asisten / kiper / fisik
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at").default(NOW).notNull(),
   },
   (t) => [index("coaches_club_idx").on(t.clubId)],
 );
 
-export const players = pgTable(
+export const players = mysqlTable(
   "players",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
+    id: id(),
     fullName: text("full_name").notNull(),
     nickname: text("nickname"),
     registrationNo: varchar("registration_no", { length: 32 }).notNull().unique(),
-    nisn: varchar("nisn", { length: 10 }).unique(), // Nomor Induk Siswa Nasional
+    nisn: varchar("nisn", { length: 10 }).notNull().unique(), // Nomor Induk Siswa Nasional — wajib & unik
     dob: date("dob").notNull(),
     birthPlace: text("birth_place"),
-    nationality: text("nationality").notNull().default("Indonesia"),
+    nationality: varchar("nationality", { length: 64 }).notNull().default("Indonesia"),
     gender: varchar("gender", { length: 8 }).notNull().default("L"),
-    heightCm: integer("height_cm"),
-    weightKg: integer("weight_kg"),
-    foot: preferredFoot("foot").notNull().default("right"),
-    position: playerPosition("position").notNull(),
-    detailedPosition: varchar("detailed_position", { length: 12 }),
-    jerseyNumber: integer("jersey_number"),
+    heightCm: int("height_cm"),
+    weightKg: int("weight_kg"),
+    foot: mysqlEnum("foot", preferredFoot).notNull().default("right"),
+    position: mysqlEnum("position", playerPosition).notNull(),
+    jerseyNumber: int("jersey_number"),
+    /** Klub utama. */
     clubId: uuid("club_id").references(() => clubs.id, { onDelete: "set null" }),
+    /** Klub kedua — seorang pemain boleh membela paling banyak dua klub. */
+    secondClubId: uuid("second_club_id").references(() => clubs.id, { onDelete: "set null" }),
     ageCategoryId: uuid("age_category_id").references(() => ageCategories.id, {
       onDelete: "set null",
     }),
     photoUrl: text("photo_url"),
-    kiaUrl: text("kia_url"), // scan Kartu Identitas Anak (private media)
-    verificationStatus: verificationStatus("verification_status")
+    // Private documents (see lib/player-documents.ts)
+    kiaUrl: text("kia_url"), // Kartu Identitas Anak
+    kkUrl: text("kk_url"), // Kartu Keluarga
+    aktaUrl: text("akta_url"), // Akta kelahiran
+    ijazahUrl: text("ijazah_url"),
+    raporUrl: text("rapor_url"),
+    verificationStatus: mysqlEnum("verification_status", verificationStatus)
       .notNull()
       .default("pending"),
     verificationNotes: text("verification_notes"),
     verifiedBy: uuid("verified_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    verifiedAt: timestamp("verified_at"),
     guardianName: text("guardian_name"),
     guardianPhone: text("guardian_phone"),
     bio: text("bio"),
     joinedAt: date("joined_at"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at").default(NOW).notNull(),
+    updatedAt: timestamp("updated_at").default(NOW).notNull(),
   },
-  (t) => [index("players_club_idx").on(t.clubId), index("players_age_cat_idx").on(t.ageCategoryId)],
+  (t) => [
+    index("players_club_idx").on(t.clubId),
+    index("players_second_club_idx").on(t.secondClubId),
+    index("players_age_cat_idx").on(t.ageCategoryId),
+  ],
 );
 
 /* ═══════════════════ Player stats / history / badges ═══════════════ */
 
-export const playerStats = pgTable(
+export const playerStats = mysqlTable(
   "player_stats",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
+    id: id(),
     playerId: uuid("player_id")
       .notNull()
       .references(() => players.id, { onDelete: "cascade" }),
     tournamentId: uuid("tournament_id").references(() => tournaments.id, {
       onDelete: "cascade",
     }),
+    /** Club represented in that tournament; null on the "career" (all clubs) row. */
+    clubId: uuid("club_id").references(() => clubs.id, { onDelete: "set null" }),
     season: varchar("season", { length: 16 }).notNull().default("career"),
-    appearances: integer("appearances").notNull().default(0),
-    minutesPlayed: integer("minutes_played").notNull().default(0),
-    goals: integer("goals").notNull().default(0),
-    assists: integer("assists").notNull().default(0),
-    saves: integer("saves").notNull().default(0),
-    tackles: integer("tackles").notNull().default(0),
-    interceptions: integer("interceptions").notNull().default(0),
-    keyPasses: integer("key_passes").notNull().default(0),
-    duelsWon: integer("duels_won").notNull().default(0),
-    cleanSheets: integer("clean_sheets").notNull().default(0),
-    yellowCards: integer("yellow_cards").notNull().default(0),
-    redCards: integer("red_cards").notNull().default(0),
-    foulsCommitted: integer("fouls_committed").notNull().default(0),
-    motm: integer("motm").notNull().default(0),
-    rating: real("rating").notNull().default(0),
-    score: real("score").notNull().default(0),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    appearances: int("appearances").notNull().default(0),
+    minutesPlayed: int("minutes_played").notNull().default(0),
+    goals: int("goals").notNull().default(0),
+    assists: int("assists").notNull().default(0),
+    saves: int("saves").notNull().default(0),
+    shotsOnTarget: int("shots_on_target").notNull().default(0),
+    shotsOffTarget: int("shots_off_target").notNull().default(0),
+    tackles: int("tackles").notNull().default(0),
+    interceptions: int("interceptions").notNull().default(0),
+    keyPasses: int("key_passes").notNull().default(0),
+    duelsWon: int("duels_won").notNull().default(0),
+    cleanSheets: int("clean_sheets").notNull().default(0),
+    yellowCards: int("yellow_cards").notNull().default(0),
+    redCards: int("red_cards").notNull().default(0),
+    foulsCommitted: int("fouls_committed").notNull().default(0),
+    motm: int("motm").notNull().default(0),
+    rating: double("rating").notNull().default(0),
+    score: double("score").notNull().default(0),
+    updatedAt: timestamp("updated_at").default(NOW).notNull(),
   },
   (t) => [
     uniqueIndex("player_stats_scope_idx").on(t.playerId, t.tournamentId, t.season),
   ],
 );
 
-export const playerSeasonHistory = pgTable("player_season_history", {
-  id: uuid("id").defaultRandom().primaryKey(),
+export const playerSeasonHistory = mysqlTable("player_season_history", {
+  id: id(),
   playerId: uuid("player_id")
     .notNull()
     .references(() => players.id, { onDelete: "cascade" }),
   season: varchar("season", { length: 16 }).notNull(),
   clubId: uuid("club_id").references(() => clubs.id, { onDelete: "set null" }),
   ageCategoryCode: varchar("age_category_code", { length: 12 }),
-  appearances: integer("appearances").notNull().default(0),
-  goals: integer("goals").notNull().default(0),
-  assists: integer("assists").notNull().default(0),
-  avgRating: real("avg_rating").notNull().default(0),
+  appearances: int("appearances").notNull().default(0),
+  goals: int("goals").notNull().default(0),
+  assists: int("assists").notNull().default(0),
+  avgRating: double("avg_rating").notNull().default(0),
   note: text("note"),
 });
 
-export const badges = pgTable("badges", {
-  id: uuid("id").defaultRandom().primaryKey(),
+export const badges = mysqlTable("badges", {
+  id: id(),
   code: varchar("code", { length: 40 }).notNull().unique(),
   name: text("name").notNull(),
   description: text("description").notNull(),
   icon: varchar("icon", { length: 40 }).notNull().default("award"),
-  tier: badgeTier("tier").notNull().default("bronze"),
+  tier: mysqlEnum("tier", badgeTier).notNull().default("bronze"),
 });
 
-export const playerBadges = pgTable(
+export const playerBadges = mysqlTable(
   "player_badges",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
+    id: id(),
     playerId: uuid("player_id")
       .notNull()
       .references(() => players.id, { onDelete: "cascade" }),
     badgeId: uuid("badge_id")
       .notNull()
       .references(() => badges.id, { onDelete: "cascade" }),
-    context: text("context"),
+    context: varchar("context", { length: 255 }),
     tournamentId: uuid("tournament_id").references(() => tournaments.id, {
       onDelete: "set null",
     }),
-    awardedAt: timestamp("awarded_at", { withTimezone: true }).defaultNow().notNull(),
+    awardedAt: timestamp("awarded_at").default(NOW).notNull(),
   },
   (t) => [uniqueIndex("player_badge_idx").on(t.playerId, t.badgeId, t.context)],
 );
@@ -470,13 +520,13 @@ export type Tiebreaker =
   | "fairPlay"
   | "drawLots";
 
-export const tournaments = pgTable("tournaments", {
-  id: uuid("id").defaultRandom().primaryKey(),
+export const tournaments = mysqlTable("tournaments", {
+  id: id(),
   name: text("name").notNull(),
-  slug: text("slug").notNull().unique(),
+  slug: varchar("slug", { length: 255 }).notNull().unique(),
   season: varchar("season", { length: 16 }).notNull(),
-  format: tournamentFormat("format").notNull(),
-  status: tournamentStatus("status").notNull().default("draft"),
+  format: mysqlEnum("format", tournamentFormat).notNull(),
+  status: mysqlEnum("status", tournamentStatus).notNull().default("draft"),
   ageCategoryId: uuid("age_category_id").references(() => ageCategories.id, {
     onDelete: "set null",
   }),
@@ -490,24 +540,24 @@ export const tournaments = pgTable("tournaments", {
   city: text("city"),
   startDate: date("start_date"),
   endDate: date("end_date"),
-  groupCount: integer("group_count").notNull().default(0),
-  teamsPerGroup: integer("teams_per_group").notNull().default(0),
-  advancePerGroup: integer("advance_per_group").notNull().default(2),
+  groupCount: int("group_count").notNull().default(0),
+  teamsPerGroup: int("teams_per_group").notNull().default(0),
+  advancePerGroup: int("advance_per_group").notNull().default(2),
   doubleRound: boolean("double_round").notNull().default(false),
-  knockoutLegs: integer("knockout_legs").notNull().default(1),
-  pointsWin: integer("points_win").notNull().default(3),
-  pointsDraw: integer("points_draw").notNull().default(1),
-  pointsLoss: integer("points_loss").notNull().default(0),
-  tiebreakers: jsonb("tiebreakers").$type<Tiebreaker[]>().notNull(),
+  knockoutLegs: int("knockout_legs").notNull().default(1),
+  pointsWin: int("points_win").notNull().default(3),
+  pointsDraw: int("points_draw").notNull().default(1),
+  pointsLoss: int("points_loss").notNull().default(0),
+  tiebreakers: json("tiebreakers").$type<Tiebreaker[]>().notNull(),
   createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at").default(NOW).notNull(),
+  updatedAt: timestamp("updated_at").default(NOW).notNull(),
 });
 
-export const tournamentTeams = pgTable(
+export const tournamentTeams = mysqlTable(
   "tournament_teams",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
+    id: id(),
     tournamentId: uuid("tournament_id")
       .notNull()
       .references(() => tournaments.id, { onDelete: "cascade" }),
@@ -515,39 +565,39 @@ export const tournamentTeams = pgTable(
       .notNull()
       .references(() => clubs.id, { onDelete: "cascade" }),
     groupLabel: varchar("group_label", { length: 2 }),
-    seed: integer("seed"),
-    registrationStatus: registrationStatus("registration_status")
+    seed: int("seed"),
+    registrationStatus: mysqlEnum("registration_status", registrationStatus)
       .notNull()
       .default("registered"),
-    squadLockedAt: timestamp("squad_locked_at", { withTimezone: true }),
+    squadLockedAt: timestamp("squad_locked_at"),
     notes: text("notes"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at").default(NOW).notNull(),
   },
   (t) => [uniqueIndex("tournament_team_idx").on(t.tournamentId, t.clubId)],
 );
 
-export const tournamentSquad = pgTable(
+export const tournamentSquad = mysqlTable(
   "tournament_squad",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
+    id: id(),
     tournamentTeamId: uuid("tournament_team_id")
       .notNull()
       .references(() => tournamentTeams.id, { onDelete: "cascade" }),
     playerId: uuid("player_id")
       .notNull()
       .references(() => players.id, { onDelete: "cascade" }),
-    jerseyNumber: integer("jersey_number"),
-    registeredAt: timestamp("registered_at", { withTimezone: true })
-      .defaultNow()
+    jerseyNumber: int("jersey_number"),
+    registeredAt: timestamp("registered_at")
+      .default(NOW)
       .notNull(),
   },
   (t) => [uniqueIndex("tournament_squad_idx").on(t.tournamentTeamId, t.playerId)],
 );
 
-export const standings = pgTable(
+export const standings = mysqlTable(
   "standings",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
+    id: id(),
     tournamentId: uuid("tournament_id")
       .notNull()
       .references(() => tournaments.id, { onDelete: "cascade" }),
@@ -555,30 +605,30 @@ export const standings = pgTable(
       .notNull()
       .references(() => clubs.id, { onDelete: "cascade" }),
     groupLabel: varchar("group_label", { length: 2 }).notNull().default("-"),
-    played: integer("played").notNull().default(0),
-    won: integer("won").notNull().default(0),
-    drawn: integer("drawn").notNull().default(0),
-    lost: integer("lost").notNull().default(0),
-    goalsFor: integer("goals_for").notNull().default(0),
-    goalsAgainst: integer("goals_against").notNull().default(0),
-    points: integer("points").notNull().default(0),
-    fairPlayPoints: integer("fair_play_points").notNull().default(0),
-    form: jsonb("form").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
-    rank: integer("rank").notNull().default(0),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    played: int("played").notNull().default(0),
+    won: int("won").notNull().default(0),
+    drawn: int("drawn").notNull().default(0),
+    lost: int("lost").notNull().default(0),
+    goalsFor: int("goals_for").notNull().default(0),
+    goalsAgainst: int("goals_against").notNull().default(0),
+    points: int("points").notNull().default(0),
+    fairPlayPoints: int("fair_play_points").notNull().default(0),
+    form: json("form").$type<string[]>().notNull().$defaultFn(() => []),
+    rank: int("rank").notNull().default(0),
+    updatedAt: timestamp("updated_at").default(NOW).notNull(),
   },
   (t) => [
     uniqueIndex("standings_idx").on(t.tournamentId, t.clubId, t.groupLabel),
   ],
 );
 
-export const matches = pgTable("matches", {
-  id: uuid("id").defaultRandom().primaryKey(),
+export const matches = mysqlTable("matches", {
+  id: id(),
   tournamentId: uuid("tournament_id")
     .notNull()
     .references(() => tournaments.id, { onDelete: "cascade" }),
-  stage: matchStage("stage").notNull().default("league"),
-  round: integer("round").notNull().default(1),
+  stage: mysqlEnum("stage", matchStage).notNull().default("league"),
+  round: int("round").notNull().default(1),
   groupLabel: varchar("group_label", { length: 2 }),
   bracketSlot: varchar("bracket_slot", { length: 16 }), // e.g. SF1, QF3, F
   homeClubId: uuid("home_club_id").references(() => clubs.id, {
@@ -593,43 +643,45 @@ export const matches = pgTable("matches", {
   refereeId: uuid("referee_id").references(() => referees.id, {
     onDelete: "set null",
   }),
-  scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
-  status: matchStatus("status").notNull().default("scheduled"),
-  period: matchPeriod("period").notNull().default("not_started"),
+  /** Operator assigned to run the match console; kick-off needs both a referee and an operator. */
+  operatorId: uuid("operator_id").references(() => users.id, { onDelete: "set null" }),
+  scheduledAt: timestamp("scheduled_at").notNull(),
+  status: mysqlEnum("status", matchStatus).notNull().default("scheduled"),
+  period: mysqlEnum("period", matchPeriod).notNull().default("not_started"),
   /** Length of this match in minutes, set at kick-off; null = use the age category rule. */
-  durationMinutes: integer("duration_minutes"),
-  currentMinute: integer("current_minute").notNull().default(0),
-  clockStartedAt: timestamp("clock_started_at", { withTimezone: true }),
-  homeScore: integer("home_score").notNull().default(0),
-  awayScore: integer("away_score").notNull().default(0),
-  homeScoreHt: integer("home_score_ht"),
-  awayScoreHt: integer("away_score_ht"),
-  homePenalties: integer("home_penalties"),
-  awayPenalties: integer("away_penalties"),
+  durationMinutes: int("duration_minutes"),
+  currentMinute: int("current_minute").notNull().default(0),
+  clockStartedAt: timestamp("clock_started_at"),
+  homeScore: int("home_score").notNull().default(0),
+  awayScore: int("away_score").notNull().default(0),
+  homeScoreHt: int("home_score_ht"),
+  awayScoreHt: int("away_score_ht"),
+  homePenalties: int("home_penalties"),
+  awayPenalties: int("away_penalties"),
   homeFormation: varchar("home_formation", { length: 12 }).default("4-3-3"),
   awayFormation: varchar("away_formation", { length: 12 }).default("4-3-3"),
-  attendance: integer("attendance"),
+  attendance: int("attendance"),
   weather: text("weather"),
-  resultStatus: resultStatus("result_status").notNull().default("unconfirmed"),
+  resultStatus: mysqlEnum("result_status", resultStatus).notNull().default("unconfirmed"),
   confirmedBy: uuid("confirmed_by").references(() => users.id, {
     onDelete: "set null",
   }),
-  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  confirmedAt: timestamp("confirmed_at"),
   amendmentReason: text("amendment_reason"),
   notes: text("notes"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at").default(NOW).notNull(),
+  updatedAt: timestamp("updated_at").default(NOW).notNull(),
 });
 
-export const matchEvents = pgTable("match_events", {
-  id: uuid("id").defaultRandom().primaryKey(),
+export const matchEvents = mysqlTable("match_events", {
+  id: id(),
   matchId: uuid("match_id")
     .notNull()
     .references(() => matches.id, { onDelete: "cascade" }),
-  type: matchEventType("type").notNull(),
-  minute: integer("minute").notNull().default(0),
-  addedTime: integer("added_time").notNull().default(0),
-  period: matchPeriod("period").notNull().default("first_half"),
+  type: mysqlEnum("type", matchEventType).notNull(),
+  minute: int("minute").notNull().default(0),
+  addedTime: int("added_time").notNull().default(0),
+  period: mysqlEnum("period", matchPeriod).notNull().default("first_half"),
   clubId: uuid("club_id").references(() => clubs.id, { onDelete: "set null" }),
   playerId: uuid("player_id").references(() => players.id, {
     onDelete: "set null",
@@ -637,19 +689,19 @@ export const matchEvents = pgTable("match_events", {
   relatedPlayerId: uuid("related_player_id").references(() => players.id, {
     onDelete: "set null",
   }),
-  x: real("x"),
-  y: real("y"),
-  detail: jsonb("detail").$type<Record<string, unknown>>(),
+  x: double("x"),
+  y: double("y"),
+  detail: json("detail").$type<Record<string, unknown>>(),
   voided: boolean("voided").notNull().default(false),
   voidReason: text("void_reason"),
   createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at").default(NOW).notNull(),
 });
 
-export const matchLineups = pgTable(
+export const matchLineups = mysqlTable(
   "match_lineups",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
+    id: id(),
     matchId: uuid("match_id")
       .notNull()
       .references(() => matches.id, { onDelete: "cascade" }),
@@ -659,17 +711,50 @@ export const matchLineups = pgTable(
     playerId: uuid("player_id")
       .notNull()
       .references(() => players.id, { onDelete: "cascade" }),
-    role: lineupRole("role").notNull().default("starter"),
+    role: mysqlEnum("role", lineupRole).notNull().default("starter"),
     slot: varchar("slot", { length: 8 }), // GK, LB, CM1 …
-    x: real("x"),
-    y: real("y"),
-    shirtNumber: integer("shirt_number"),
+    x: double("x"),
+    y: double("y"),
+    shirtNumber: int("shirt_number"),
     isCaptain: boolean("is_captain").notNull().default(false),
-    subInMinute: integer("sub_in_minute"),
-    subOutMinute: integer("sub_out_minute"),
-    rating: real("rating"),
+    subInMinute: int("sub_in_minute"),
+    subOutMinute: int("sub_out_minute"),
+    rating: double("rating"),
   },
   (t) => [uniqueIndex("match_lineup_idx").on(t.matchId, t.playerId)],
+);
+
+/**
+ * What a confirmed match contributed to each player's statistics. Confirming or
+ * amending a result applies only the difference to this ledger, so a match is
+ * never counted twice and a correction really changes the numbers.
+ */
+export const playerMatchStats = mysqlTable(
+  "player_match_stats",
+  {
+    id: id(),
+    matchId: uuid("match_id")
+      .notNull()
+      .references(() => matches.id, { onDelete: "cascade" }),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    /** Club the player played this match for. */
+    clubId: uuid("club_id").references(() => clubs.id, { onDelete: "set null" }),
+    appearances: int("appearances").notNull().default(0),
+    minutesPlayed: int("minutes_played").notNull().default(0),
+    goals: int("goals").notNull().default(0),
+    assists: int("assists").notNull().default(0),
+    saves: int("saves").notNull().default(0),
+    shotsOnTarget: int("shots_on_target").notNull().default(0),
+    shotsOffTarget: int("shots_off_target").notNull().default(0),
+    interceptions: int("interceptions").notNull().default(0),
+    foulsCommitted: int("fouls_committed").notNull().default(0),
+    yellowCards: int("yellow_cards").notNull().default(0),
+    redCards: int("red_cards").notNull().default(0),
+    motm: int("motm").notNull().default(0),
+  },
+  (t) => [uniqueIndex("player_match_stats_idx").on(t.matchId, t.playerId)],
 );
 
 /* ═══════════════════════ Data Ingestion ═══════════════════════════ */
@@ -689,43 +774,43 @@ export type ImportIssue = {
   severity: "error" | "warning";
 };
 
-export const importBatches = pgTable("import_batches", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  entity: importEntity("entity").notNull(),
+export const importBatches = mysqlTable("import_batches", {
+  id: id(),
+  entity: mysqlEnum("entity", importEntity).notNull(),
   fileName: text("file_name").notNull(),
-  status: importBatchStatus("status").notNull().default("uploaded"),
-  totalRows: integer("total_rows").notNull().default(0),
-  validRows: integer("valid_rows").notNull().default(0),
-  errorRows: integer("error_rows").notNull().default(0),
-  duplicateRows: integer("duplicate_rows").notNull().default(0),
-  reviewRows: integer("review_rows").notNull().default(0),
-  importedRows: integer("imported_rows").notNull().default(0),
-  stages: jsonb("stages").$type<ImportStage[]>().notNull(),
+  status: mysqlEnum("status", importBatchStatus).notNull().default("uploaded"),
+  totalRows: int("total_rows").notNull().default(0),
+  validRows: int("valid_rows").notNull().default(0),
+  errorRows: int("error_rows").notNull().default(0),
+  duplicateRows: int("duplicate_rows").notNull().default(0),
+  reviewRows: int("review_rows").notNull().default(0),
+  importedRows: int("imported_rows").notNull().default(0),
+  stages: json("stages").$type<ImportStage[]>().notNull(),
   uploadedBy: uuid("uploaded_by").references(() => users.id, {
     onDelete: "set null",
   }),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at").default(NOW).notNull(),
+  completedAt: timestamp("completed_at"),
 });
 
-export const importRows = pgTable("import_rows", {
-  id: uuid("id").defaultRandom().primaryKey(),
+export const importRows = mysqlTable("import_rows", {
+  id: id(),
   batchId: uuid("batch_id")
     .notNull()
     .references(() => importBatches.id, { onDelete: "cascade" }),
-  rowNumber: integer("row_number").notNull(),
-  raw: jsonb("raw").$type<Record<string, string>>().notNull(),
-  normalized: jsonb("normalized").$type<Record<string, unknown>>(),
-  status: importRowStatus("status").notNull().default("pending"),
-  issues: jsonb("issues").$type<ImportIssue[]>().notNull().default(sql`'[]'::jsonb`),
+  rowNumber: int("row_number").notNull(),
+  raw: json("raw").$type<Record<string, string>>().notNull(),
+  normalized: json("normalized").$type<Record<string, unknown>>(),
+  status: mysqlEnum("status", importRowStatus).notNull().default("pending"),
+  issues: json("issues").$type<ImportIssue[]>().notNull().$defaultFn(() => []),
   matchCandidateId: uuid("match_candidate_id"),
   matchCandidateName: text("match_candidate_name"),
-  matchScore: real("match_score"),
+  matchScore: double("match_score"),
   resolution: varchar("resolution", { length: 16 }), // create | merge | skip
   resolvedBy: uuid("resolved_by").references(() => users.id, {
     onDelete: "set null",
   }),
-  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  resolvedAt: timestamp("resolved_at"),
   importedEntityId: uuid("imported_entity_id"),
 });
 
@@ -736,21 +821,21 @@ export const importRows = pgTable("import_rows", {
  * base64 so uploads work without any external object store. Served by
  * `/api/media/[id]`.
  */
-export const media = pgTable("media", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  kind: mediaKind("kind").notNull(),
+export const media = mysqlTable("media", {
+  id: id(),
+  kind: mysqlEnum("kind", mediaKind).notNull(),
   fileName: text("file_name"),
   mimeType: varchar("mime_type", { length: 80 }).notNull(),
-  size: integer("size").notNull(),
-  data: text("data").notNull(),
+  size: int("size").notNull(),
+  data: longtext("data").notNull(),
   uploadedBy: uuid("uploaded_by").references(() => users.id, { onDelete: "set null" }),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at").default(NOW).notNull(),
 });
 
 /* ═══════════════════════ Audit + AI ═══════════════════════════════ */
 
-export const auditLogs = pgTable("audit_logs", {
-  id: uuid("id").defaultRandom().primaryKey(),
+export const auditLogs = mysqlTable("audit_logs", {
+  id: id(),
   actorId: uuid("actor_id").references(() => users.id, { onDelete: "set null" }),
   actorName: text("actor_name"),
   actorRole: text("actor_role"),
@@ -758,9 +843,9 @@ export const auditLogs = pgTable("audit_logs", {
   entityType: varchar("entity_type", { length: 40 }).notNull(),
   entityId: uuid("entity_id"),
   summary: text("summary").notNull(),
-  before: jsonb("before").$type<Record<string, unknown>>(),
-  after: jsonb("after").$type<Record<string, unknown>>(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  before: json("before").$type<Record<string, unknown>>(),
+  after: json("after").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at").default(NOW).notNull(),
 });
 
 export type AiReportResult = {
@@ -772,18 +857,18 @@ export type AiReportResult = {
   recommendations?: string[];
 };
 
-export const aiReports = pgTable("ai_reports", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  kind: aiReportKind("kind").notNull(),
+export const aiReports = mysqlTable("ai_reports", {
+  id: id(),
+  kind: mysqlEnum("kind", aiReportKind).notNull(),
   subjectType: varchar("subject_type", { length: 24 }),
   subjectId: uuid("subject_id"),
   subjectLabel: text("subject_label"),
   query: text("query"),
-  result: jsonb("result").$type<AiReportResult>().notNull(),
+  result: json("result").$type<AiReportResult>().notNull(),
   model: varchar("model", { length: 40 }).notNull().default("demo"),
-  status: aiReportStatus("status").notNull().default("generated"),
+  status: mysqlEnum("status", aiReportStatus).notNull().default("generated"),
   createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at").default(NOW).notNull(),
 });
 
 export type ShortlistItem = {
@@ -793,13 +878,13 @@ export type ShortlistItem = {
   score: number;
 };
 
-export const scoutShortlists = pgTable("scout_shortlists", {
-  id: uuid("id").defaultRandom().primaryKey(),
+export const scoutShortlists = mysqlTable("scout_shortlists", {
+  id: id(),
   name: text("name").notNull(),
   query: text("query"),
-  items: jsonb("items").$type<ShortlistItem[]>().notNull(),
+  items: json("items").$type<ShortlistItem[]>().notNull(),
   ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at").default(NOW).notNull(),
 });
 
 /* ═══════════════════════════ Relations ════════════════════════════ */
@@ -960,6 +1045,7 @@ export type Standing = typeof standings.$inferSelect;
 export type Match = typeof matches.$inferSelect;
 export type MatchEvent = typeof matchEvents.$inferSelect;
 export type MatchLineup = typeof matchLineups.$inferSelect;
+export type PlayerMatchStat = typeof playerMatchStats.$inferSelect;
 export type PlayerStat = typeof playerStats.$inferSelect;
 export type Badge = typeof badges.$inferSelect;
 export type PlayerBadge = typeof playerBadges.$inferSelect;

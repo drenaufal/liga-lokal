@@ -12,6 +12,7 @@ import { imageUrlField } from "@/lib/media";
 import { releaseReplaced } from "@/lib/media-store";
 import { formError, optionalInt, type FormState } from "@/lib/form";
 import { COACH_LICENSE_LEVELS, COACH_SPECIALTIES, licenseStatus } from "@/lib/status";
+import { insertReturning } from "@/lib/db/returning";
 
 const optionalDate = z
   .string()
@@ -91,7 +92,7 @@ export async function createCoach(_prev: FormState, formData: FormData): Promise
   const taken = await licenseTaken(row.licenseNumber);
   if (taken) return formError({ licenseNumber: taken }, formData);
 
-  const [created] = await db.insert(coaches).values(row).returning();
+  const [created] = await insertReturning(db, coaches, row);
 
   await recordAudit({
     actorId: user.id,

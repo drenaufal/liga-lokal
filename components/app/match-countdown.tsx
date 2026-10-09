@@ -24,7 +24,7 @@ export function useClockView(
     return () => clearInterval(t);
   }, [running]);
 
-  return clockView(state, duration, running ? now : Date.now());
+  return clockView(state, duration, now);
 }
 
 type Variant = "hero" | "inline";

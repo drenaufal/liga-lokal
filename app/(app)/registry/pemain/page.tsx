@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { IdCard, Plus, Upload } from "lucide-react";
+import { FileCheck2, Plus, Upload } from "lucide-react";
 import { listPlayers, type PlayerListParams } from "@/lib/queries/registry";
 import { getCurrentUser } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
@@ -18,7 +18,8 @@ import {
   SortHeader,
   Pagination,
 } from "@/components/app/list-controls";
-import { POSITION } from "@/lib/status";
+import { POSITION_LINES, POSITION_NAME } from "@/lib/positions";
+import { PLAYER_DOCUMENTS } from "@/lib/player-documents";
 import { ageFromDob } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Registrasi Pemain" };
@@ -72,10 +73,14 @@ export default async function PlayersPage({
           <FilterSelect
             param="position"
             placeholder="Semua posisi"
-            options={Object.entries(POSITION).map(([v, m]) => ({
-              value: v,
-              label: m.label,
+            groups={POSITION_LINES.filter((l) => l.roles.length > 1).map((l) => ({
+              label: l.label,
+              options: [
+                { value: l.line, label: `Semua ${l.label.toLowerCase()}` },
+                ...l.roles.map((r) => ({ value: r, label: `${r} — ${POSITION_NAME[r]}` })),
+              ],
             }))}
+            options={[{ value: "GK", label: "GK — Kiper" }]}
           />
           <FilterSelect
             param="verification"
@@ -138,12 +143,24 @@ export default async function PlayersPage({
                     </TD>
                     <TD>
                       {p.clubShort ? (
-                        <span className="flex items-center gap-1.5">
+                        <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                           <span
                             className="size-2 rounded-full"
                             style={{ background: p.clubColor ?? "var(--color-brand)" }}
                           />
                           {p.clubName}
+                          {p.secondClubShort && (
+                            <span
+                              title={`Klub kedua: ${p.secondClubName}`}
+                              className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-ink-secondary"
+                            >
+                              <span
+                                className="size-1.5 rounded-full"
+                                style={{ background: p.secondClubColor ?? "var(--color-info)" }}
+                              />
+                              +{p.secondClubShort}
+                            </span>
+                          )}
                         </span>
                       ) : (
                         <span className="text-ink-muted">Tanpa klub</span>
@@ -162,7 +179,7 @@ export default async function PlayersPage({
                     <TD className="font-mono text-xs text-ink-muted">
                       {p.registrationNo}
                       <span className="block text-[10px] text-ink-muted/80">
-                        {p.nisn ? `NISN ${p.nisn}` : "NISN —"}
+                        NISN {p.nisn}
                       </span>
                     </TD>
                     <TD>
@@ -173,12 +190,18 @@ export default async function PlayersPage({
                           dot
                         />
                         <span
-                          title={p.hasKia ? "KIA terunggah" : "KIA belum diunggah"}
-                          aria-label={p.hasKia ? "KIA terunggah" : "KIA belum diunggah"}
+                          title={`Dokumen lengkap ${Number(p.docs)} dari ${PLAYER_DOCUMENTS.length}`}
+                          aria-label={`Dokumen lengkap ${Number(p.docs)} dari ${PLAYER_DOCUMENTS.length}`}
+                          className={
+                            Number(p.docs) === PLAYER_DOCUMENTS.length
+                              ? "inline-flex items-center gap-0.5 text-[10px] font-semibold tabular-nums text-success"
+                              : Number(p.docs) > 0
+                                ? "inline-flex items-center gap-0.5 text-[10px] font-semibold tabular-nums text-warn"
+                                : "inline-flex items-center gap-0.5 text-[10px] font-semibold tabular-nums text-ink-muted/60"
+                          }
                         >
-                          <IdCard
-                            className={p.hasKia ? "size-3.5 text-success" : "size-3.5 text-ink-muted/40"}
-                          />
+                          <FileCheck2 className="size-3.5" />
+                          {Number(p.docs)}/{PLAYER_DOCUMENTS.length}
                         </span>
                       </span>
                     </TD>

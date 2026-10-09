@@ -1,10 +1,11 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { db } from "@/lib/db";
 import { MATCH_DURATION_SQL } from "@/lib/match-clock";
 import {
   ageCategories,
   clubs,
+  matchEvents,
   matches,
   players,
   playerStats,
@@ -14,6 +15,7 @@ import {
   tournaments,
   venues,
 } from "@/lib/db/schema";
+import { ascNullsLast, descNullsFirst } from "@/lib/db/order";
 
 export async function listTournaments() {
   const rows = await db
@@ -37,15 +39,18 @@ export async function listTournaments() {
     })
     .from(tournaments)
     .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
-    .orderBy(desc(tournaments.startDate));
+    .orderBy(descNullsFirst(tournaments.startDate));
   return rows;
 }
 
 export async function getTournamentBase(id: string) {
-  return db.query.tournaments.findFirst({
-    where: eq(tournaments.id, id),
-    with: { ageCategory: true, scoringFormula: true },
-  });
+  const [row] = await db
+    .select({ t: tournaments, ageCategory: ageCategories, scoringFormula: scoringFormulas })
+    .from(tournaments)
+    .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
+    .leftJoin(scoringFormulas, eq(scoringFormulas.id, tournaments.scoringFormulaId))
+    .where(eq(tournaments.id, id));
+  return row && { ...row.t, ageCategory: row.ageCategory, scoringFormula: row.scoringFormula };
 }
 
 export async function getTournamentOverview(id: string) {
@@ -68,13 +73,13 @@ export async function getTournamentOverview(id: string) {
       .from(tournamentTeams)
       .innerJoin(clubs, eq(clubs.id, tournamentTeams.clubId))
       .where(eq(tournamentTeams.tournamentId, id))
-      .orderBy(asc(tournamentTeams.groupLabel), asc(tournamentTeams.seed)),
+      .orderBy(ascNullsLast(tournamentTeams.groupLabel), ascNullsLast(tournamentTeams.seed)),
     db
       .select({
         total: sql<number>`count(*)`,
-        completed: sql<number>`count(*) filter (where ${matches.status} = 'completed')`,
-        live: sql<number>`count(*) filter (where ${matches.status} = 'live')`,
-        goals: sql<number>`coalesce(sum(${matches.homeScore} + ${matches.awayScore}) filter (where ${matches.status}='completed'),0)`,
+        completed: sql<number>`count(case when ${matches.status} = 'completed' then 1 end)`,
+        live: sql<number>`count(case when ${matches.status} = 'live' then 1 end)`,
+        goals: sql<number>`coalesce(sum(case when ${matches.status}='completed' then ${matches.homeScore} + ${matches.awayScore} end),0)`,
       })
       .from(matches)
       .where(eq(matches.tournamentId, id)),
@@ -206,6 +211,51 @@ export async function getFormOptions() {
     getClubOptionsForTournament(),
   ]);
   return { ages, formulas, clubs: allClubs };
+}
+
+/** Short codes of the clubs taking part — the values a schedule upload refers to them by. */
+export async function getTournamentTeamShorts(id: string) {
+  const rows = await db
+    .select({ short: clubs.shortName })
+    .from(tournamentTeams)
+    .innerJoin(clubs, eq(clubs.id, tournamentTeams.clubId))
+    .where(eq(tournamentTeams.tournamentId, id))
+    .orderBy(asc(clubs.shortName));
+  return rows.map((r) => r.short);
+}
+
+/** What deleting a tournament would take with it. */
+export async function getTournamentImpact(id: string) {
+  const [[teams], [mt], [ev], [pl]] = await Promise.all([
+    db.select({ n: count() }).from(tournamentTeams).where(eq(tournamentTeams.tournamentId, id)),
+    db
+      .select({
+        total: count(),
+        completed: sql<number>`count(case when ${matches.status} = 'completed' then 1 end)`,
+        live: sql<number>`count(case when ${matches.status} in ('live','halftime') then 1 end)`,
+        confirmed: sql<number>`count(case when ${matches.resultStatus} in ('confirmed','amended') then 1 end)`,
+      })
+      .from(matches)
+      .where(eq(matches.tournamentId, id)),
+    db
+      .select({ n: count() })
+      .from(matchEvents)
+      .innerJoin(matches, eq(matches.id, matchEvents.matchId))
+      .where(eq(matches.tournamentId, id)),
+    db
+      .select({ n: sql<number>`count(distinct ${playerStats.playerId})` })
+      .from(playerStats)
+      .where(eq(playerStats.tournamentId, id)),
+  ]);
+  return {
+    teams: Number(teams.n),
+    matches: Number(mt.total),
+    completed: Number(mt.completed),
+    live: Number(mt.live),
+    confirmed: Number(mt.confirmed),
+    events: Number(ev.n),
+    players: Number(pl.n),
+  };
 }
 
 void inArray;

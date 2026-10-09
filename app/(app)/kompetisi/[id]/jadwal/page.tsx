@@ -1,8 +1,11 @@
-import { getTournamentFixtures } from "@/lib/queries/competition";
+import { getTournamentFixtures, getTournamentTeamShorts } from "@/lib/queries/competition";
+import { getCurrentUser } from "@/lib/auth/session";
+import { can } from "@/lib/auth/rbac";
 import { Card, CardContent } from "@/components/ui/card";
 import { MatchRow } from "@/components/app/match-row";
 import { EmptyState } from "@/components/ui/misc";
 import { STAGE_LABEL } from "@/lib/status";
+import { ScheduleUpload } from "../schedule-upload";
 
 export const dynamic = "force-dynamic";
 
@@ -12,13 +15,21 @@ export default async function FixturesPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const matches = await getTournamentFixtures(id);
+  const user = await getCurrentUser();
+  const canManage = can(user?.role, "competition:write");
+  const [matches, shorts] = await Promise.all([
+    getTournamentFixtures(id),
+    canManage ? getTournamentTeamShorts(id) : Promise.resolve([] as string[]),
+  ]);
+  // The upload lives here, inside the tournament, and nowhere else.
+  const upload = canManage ? <ScheduleUpload tournamentId={id} shorts={shorts} /> : null;
 
   if (matches.length === 0) {
     return (
       <EmptyState
         title="Jadwal belum dibuat"
-        description="Operator dapat membuat jadwal pertandingan otomatis dari tab Ringkasan."
+        description="Buat jadwal otomatis dari tab Ringkasan, atau unggah jadwal Anda sendiri dari berkas CSV."
+        action={upload}
       />
     );
   }
@@ -38,6 +49,10 @@ export default async function FixturesPage({
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-ink-muted">{matches.length} pertandingan</p>
+        {upload}
+      </div>
       {[...buckets.entries()].map(([label, list]) => (
         <Card key={label}>
           <CardContent>

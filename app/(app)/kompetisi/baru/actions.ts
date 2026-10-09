@@ -9,6 +9,7 @@ import { actionUser } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/audit";
 import { DEFAULT_TIEBREAKERS } from "@/lib/standings";
 import { slugify } from "@/lib/utils";
+import { insertReturning } from "@/lib/db/returning";
 
 const schema = z.object({
   name: z.string().min(4, "Nama minimal 4 karakter"),
@@ -52,9 +53,7 @@ export async function createTournament(
   }
   const v = parsed.data;
 
-  const [t] = await db
-    .insert(tournaments)
-    .values({
+  const [t] = await insertReturning(db, tournaments, {
       name: v.name,
       slug: `${slugify(v.name)}-${Date.now().toString(36)}`,
       season: v.season,
@@ -78,8 +77,7 @@ export async function createTournament(
       tiebreakers: DEFAULT_TIEBREAKERS,
       description: v.description || null,
       createdBy: user.id,
-    })
-    .returning();
+    });
 
   if (v.clubIds.length) {
     await db.insert(tournamentTeams).values(

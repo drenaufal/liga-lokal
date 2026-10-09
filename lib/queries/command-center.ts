@@ -1,5 +1,5 @@
 import { and, count, desc, eq, gte, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { alias } from "drizzle-orm/mysql-core";
 import { db } from "@/lib/db";
 import { MATCH_DURATION_SQL } from "@/lib/match-clock";
 import {
@@ -32,16 +32,16 @@ export async function getCommandCenterData() {
     db
       .select({
         total: count(),
-        verified: sql<number>`count(*) filter (where ${players.verificationStatus} = 'verified')`,
-        pending: sql<number>`count(*) filter (where ${players.verificationStatus} = 'pending')`,
-        flagged: sql<number>`count(*) filter (where ${players.verificationStatus} = 'flagged')`,
-        rejected: sql<number>`count(*) filter (where ${players.verificationStatus} = 'rejected')`,
+        verified: sql<number>`count(case when ${players.verificationStatus} = 'verified' then 1 end)`,
+        pending: sql<number>`count(case when ${players.verificationStatus} = 'pending' then 1 end)`,
+        flagged: sql<number>`count(case when ${players.verificationStatus} = 'flagged' then 1 end)`,
+        rejected: sql<number>`count(case when ${players.verificationStatus} = 'rejected' then 1 end)`,
       })
       .from(players),
     db.select({ n: count() }).from(clubs).where(eq(clubs.active, true)),
     db
       .select({
-        active: sql<number>`count(*) filter (where ${referees.status} in ('active','expiring'))`,
+        active: sql<number>`count(case when ${referees.status} in ('active','expiring') then 1 end)`,
         total: count(),
       })
       .from(referees),
@@ -49,10 +49,10 @@ export async function getCommandCenterData() {
     db
       .select({
         total: count(),
-        completed: sql<number>`count(*) filter (where ${matches.status} = 'completed')`,
-        live: sql<number>`count(*) filter (where ${matches.status} = 'live')`,
-        upcoming: sql<number>`count(*) filter (where ${matches.status} = 'scheduled' and ${matches.scheduledAt} >= now())`,
-        thisWeek: sql<number>`count(*) filter (where ${matches.scheduledAt} >= ${weekAgo.toISOString()})`,
+        completed: sql<number>`count(case when ${matches.status} = 'completed' then 1 end)`,
+        live: sql<number>`count(case when ${matches.status} = 'live' then 1 end)`,
+        upcoming: sql<number>`count(case when ${matches.status} = 'scheduled' and ${matches.scheduledAt} >= now() then 1 end)`,
+        thisWeek: sql<number>`count(case when ${matches.scheduledAt} >= ${weekAgo} then 1 end)`,
       })
       .from(matches),
     db

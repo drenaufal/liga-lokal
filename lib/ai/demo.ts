@@ -1,5 +1,6 @@
 import type { AiReportResult } from "@/lib/db/schema";
 import { percentile } from "@/lib/scoring";
+import { positionLine } from "@/lib/positions";
 
 type PlayerCtx = {
   name: string;
@@ -41,7 +42,7 @@ export function demoPlayerAnalysis(p: PlayerCtx, peers: PeerStat[]): AiReportRes
   const strengths: string[] = [];
   const growth: string[] = [];
 
-  if (goalPct >= 70) strengths.push(`Produktivitas gol persentil ${goalPct} untuk ${POS_LABEL[p.position]} ${p.ageCode ?? ""}`.trim());
+  if (goalPct >= 70) strengths.push(`Produktivitas gol persentil ${goalPct} untuk ${POS_LABEL[positionLine(p.position)]} ${p.ageCode ?? ""}`.trim());
   if (assistPct >= 70) strengths.push(`Kreativitas (assist) persentil ${assistPct} — kontributor peluang utama`);
   if (per90(p.tackles + p.interceptions) >= 4) strengths.push(`Aktivitas defensif tinggi (${(per90(p.tackles + p.interceptions)).toFixed(1)} tekel+intersep / 90)`);
   if (p.position === "GK" && p.cleanSheets >= 2) strengths.push(`${p.cleanSheets} nirbobol dari ${p.appearances} penampilan`);
@@ -49,8 +50,8 @@ export function demoPlayerAnalysis(p: PlayerCtx, peers: PeerStat[]): AiReportRes
   if (p.motm > 0) strengths.push(`${p.motm}× terpilih sebagai Pemain Terbaik Pertandingan`);
   if (strengths.length === 0) strengths.push("Konsistensi menit bermain dan kontribusi merata lintas fase permainan");
 
-  if (goalPct < 40 && p.position === "FW") growth.push("Konversi peluang masih di bawah median penyerang seusianya");
-  if (assistPct < 40 && p.position === "MF") growth.push("Kontribusi umpan kunci perlu ditingkatkan untuk peran kreator");
+  if (goalPct < 40 && positionLine(p.position) === "FW") growth.push("Konversi peluang masih di bawah median penyerang seusianya");
+  if (assistPct < 40 && positionLine(p.position) === "MF") growth.push("Kontribusi umpan kunci perlu ditingkatkan untuk peran kreator");
   if (per90(p.keyPasses) < 1) growth.push("Keterlibatan pada fase build-up masih terbatas");
   if (p.yellowCards >= 3) growth.push(`Akumulasi ${p.yellowCards} kartu kuning — kelola agresivitas duel`);
   if (growth.length === 0) growth.push("Perluas variasi kontribusi (mis. kaki lemah, bola atas) untuk melengkapi profil");
@@ -63,7 +64,7 @@ export function demoPlayerAnalysis(p: PlayerCtx, peers: PeerStat[]): AiReportRes
         : "Fokus pembinaan fundamental dan penambahan menit bermain kompetitif sebelum evaluasi jenjang berikutnya.";
 
   return {
-    headline: `${p.name} — ${POS_LABEL[p.position]} dengan skor performa persentil ${scorePct} (${p.ageCode ?? "lintas KU"})`,
+    headline: `${p.name} — ${POS_LABEL[positionLine(p.position)]} dengan skor performa persentil ${scorePct} (${p.ageCode ?? "lintas KU"})`,
     summary: `Analisis berbasis ${p.appearances} penampilan (${p.minutesPlayed} menit) pada data LigaLokal. ${p.name} mencatat ${p.goals} gol, ${p.assists} assist, dan rating rata-rata ${p.rating.toFixed(1)}. ${pathway}`,
     sections: [
       { title: "Kekuatan", body: "Aspek yang menonjol dibanding rekan seposisi dan sekelompok umur:", bullets: strengths },
@@ -80,9 +81,9 @@ export function demoPlayerAnalysis(p: PlayerCtx, peers: PeerStat[]): AiReportRes
     recommendations: [
       scorePct >= 80 ? "Promosi kelompok umur" : "Evaluasi ulang akhir musim",
       "Program strength & conditioning individual",
-      p.position === "FW" ? "Latihan finishing kaki lemah & situasi 1v1" : "Latihan pengambilan keputusan di sepertiga akhir",
+      positionLine(p.position) === "FW" ? "Latihan finishing kaki lemah & situasi 1v1" : "Latihan pengambilan keputusan di sepertiga akhir",
     ],
-    tags: [POS_LABEL[p.position], scorePct >= 75 ? "prioritas-pemantauan" : "pemantauan-reguler"],
+    tags: [POS_LABEL[positionLine(p.position)], scorePct >= 75 ? "prioritas-pemantauan" : "pemantauan-reguler"],
   };
 }
 

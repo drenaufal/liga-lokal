@@ -7,15 +7,23 @@ export function cn(...inputs: ClassValue[]) {
 
 /* ── Formatting helpers (id-ID locale) ─────────────────────────────── */
 
+/**
+ * Every date is shown in WIB regardless of where the code runs. Without this a
+ * server in UTC (Hostinger) would render kick-off times 7 hours early, and the
+ * browser could disagree with the server on hydration.
+ */
+export const APP_TIME_ZONE = "Asia/Jakarta";
+
 export function formatDate(
   date: Date | string | number,
   opts: Intl.DateTimeFormatOptions = { dateStyle: "medium" },
 ) {
-  return new Intl.DateTimeFormat("id-ID", opts).format(new Date(date));
+  return new Intl.DateTimeFormat("id-ID", { timeZone: APP_TIME_ZONE, ...opts }).format(new Date(date));
 }
 
 export function formatDateTime(date: Date | string | number) {
   return new Intl.DateTimeFormat("id-ID", {
+    timeZone: APP_TIME_ZONE,
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(date));
@@ -23,6 +31,7 @@ export function formatDateTime(date: Date | string | number) {
 
 export function formatTime(date: Date | string | number) {
   return new Intl.DateTimeFormat("id-ID", {
+    timeZone: APP_TIME_ZONE,
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(date));

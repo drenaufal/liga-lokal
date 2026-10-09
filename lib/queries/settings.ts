@@ -1,4 +1,4 @@
-import { count, desc, eq, ilike, sql, and, type SQL } from "drizzle-orm";
+import { count, desc, eq, like, sql, and, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { auditLogs, users } from "@/lib/db/schema";
 
@@ -40,7 +40,7 @@ export async function getAuditLog(params: AuditParams) {
   const page = Math.max(1, Number(params.page) || 1);
   const size = 30;
   const conds: SQL[] = [];
-  if (params.q) conds.push(ilike(auditLogs.summary, `%${params.q}%`));
+  if (params.q) conds.push(like(auditLogs.summary, `%${params.q}%`));
   if (params.action) conds.push(eq(auditLogs.action, params.action));
   const where = conds.length ? and(...conds) : undefined;
 

@@ -1,11 +1,13 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
 
-import { eq } from "drizzle-orm";
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import { eq, inArray } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/mysql2";
 import { hashSync } from "bcryptjs";
 import * as s from "./schema";
+import { createPool } from "./pool";
+import { truncateAll } from "./reset";
+import { insertReturning } from "./returning";
 import {
   AGE_CATEGORIES,
   BADGES,
@@ -26,9 +28,9 @@ import {
   type MatchResultInput,
 } from "@/lib/standings";
 import { groupStage, roundRobin } from "@/lib/fixtures";
+import { LEGACY_ROLE_SPREAD, positionLine } from "@/lib/positions";
 
-const sql = neon(process.env.DATABASE_URL!);
-const db = drizzle(sql, { schema: s });
+const db = drizzle(createPool(process.env.DATABASE_URL!), { schema: s, mode: "planetscale" });
 
 /* ── deterministic RNG ─────────────────────────────────────────────── */
 function mulberry32(seed: number) {
@@ -111,15 +113,12 @@ type SeedPlayer = typeof s.players.$inferSelect & { _cat: string; _potential: nu
 
 async function main() {
   console.log("→ Reset");
-  await sql`TRUNCATE TABLE "audit_logs","ai_reports","scout_shortlists","import_rows","import_batches","match_lineups","match_events","matches","standings","tournament_squad","tournament_teams","tournaments","player_badges","player_season_history","player_stats","players","badges","coaches","referees","clubs","venues","scoring_formulas","age_categories","media","users" RESTART IDENTITY CASCADE`;
+  await truncateAll(process.env.DATABASE_URL!);
 
   /* ── Users ──────────────────────────────────────────────────────── */
   console.log("→ Users");
   const pwHash = hashSync(DEMO_PASSWORD, 10);
-  const users = await db
-    .insert(s.users)
-    .values(
-      DEMO_ACCOUNTS.map((a) => ({
+  const users = await insertReturning(db, s.users, DEMO_ACCOUNTS.map((a) => ({
         name: a.name,
         email: a.email,
         passwordHash: pwHash,
@@ -127,19 +126,14 @@ async function main() {
         title: a.title,
         image: null,
         lastLoginAt: daysAgo(int(0, 4)),
-      })),
-    )
-    .returning();
+      })));
   const admin = users.find((u) => u.role === "admin")!;
   const operator = users.find((u) => u.role === "operator")!;
   const scout = users.find((u) => u.role === "scout")!;
 
   /* ── Age categories ─────────────────────────────────────────────── */
   console.log("→ Age categories");
-  const ages = await db
-    .insert(s.ageCategories)
-    .values(
-      AGE_CATEGORIES.map((a, i) => ({
+  const ages = await insertReturning(db, s.ageCategories, AGE_CATEGORIES.map((a, i) => ({
         code: a.code,
         label: a.label,
         minAge: a.minAge,
@@ -148,16 +142,12 @@ async function main() {
         birthYearTo: 2026 - a.minAge,
         rules: a.rules,
         sortOrder: i,
-      })),
-    )
-    .returning();
+      })));
   const ageByCode = Object.fromEntries(ages.map((a) => [a.code, a]));
 
   /* ── Scoring formulas ───────────────────────────────────────────── */
   console.log("→ Scoring formulas");
-  const formulas = await db
-    .insert(s.scoringFormulas)
-    .values([
+  const formulas = await insertReturning(db, s.scoringFormulas, [
       {
         name: "Formula Standar LigaLokal v1",
         description:
@@ -183,16 +173,12 @@ async function main() {
         version: 1,
         createdBy: admin.id,
       },
-    ])
-    .returning();
+    ]);
   const activeFormula = formulas[0];
 
   /* ── Venues ─────────────────────────────────────────────────────── */
   console.log("→ Venues");
-  const venues = await db
-    .insert(s.venues)
-    .values(
-      VENUES.map((v) => ({
+  const venues = await insertReturning(db, s.venues, VENUES.map((v) => ({
         name: v.name,
         city: v.city,
         province: v.province,
@@ -203,16 +189,11 @@ async function main() {
         floodlights: v.floodlights,
         latitude: -6.2 - rnd() * 0.5,
         longitude: 106.7 + rnd() * 0.6,
-      })),
-    )
-    .returning();
+      })));
 
   /* ── Clubs ──────────────────────────────────────────────────────── */
   console.log("→ Clubs");
-  const clubs = await db
-    .insert(s.clubs)
-    .values(
-      CLUBS.map((c, i) => ({
+  const clubs = await insertReturning(db, s.clubs, CLUBS.map((c, i) => ({
         name: c.name,
         shortName: c.short,
         slug: c.name.toLowerCase().replace(/[^\w]+/g, "-").replace(/(^-|-$)/g, ""),
@@ -233,16 +214,11 @@ async function main() {
           "Binaan Askot",
         ]),
         logoUrl: null,
-      })),
-    )
-    .returning();
+      })));
 
   /* ── Referees ───────────────────────────────────────────────────── */
   console.log("→ Referees");
-  const referees = await db
-    .insert(s.referees)
-    .values(
-      Array.from({ length: 16 }).map((_, i) => {
+  const referees = await insertReturning(db, s.referees, Array.from({ length: 16 }).map((_, i) => {
         const expOffset = int(-120, 400);
         let status: "active" | "expiring" | "expired" | "revoked" = "active";
         if (expOffset < 0) status = "expired";
@@ -262,19 +238,14 @@ async function main() {
           specialty: pick(["Wasit", "Wasit", "Asisten Wasit", "Wasit ke-4"]),
           photoUrl: null,
         };
-      }),
-    )
-    .returning();
+      }));
   /* ── Coaches ────────────────────────────────────────────────────── */
   console.log("→ Coaches");
   const crnd = mulberry32(20261001);
   const cpick = <T>(arr: readonly T[]): T => arr[Math.floor(crnd() * arr.length)];
   const cint = (min: number, max: number) => Math.floor(crnd() * (max - min + 1)) + min;
   let coachNo = 101;
-  const coaches = await db
-    .insert(s.coaches)
-    .values(
-      clubs.flatMap((club, ci) =>
+  const coaches = await insertReturning(db, s.coaches, clubs.flatMap((club, ci) =>
         COACH_SPECIALTIES.slice(0, club.type === "academy" ? 3 : 2).map((specialty, si) => {
           const head = si === 0;
           const expiry = ymd(daysAhead(cint(-90, 720)));
@@ -296,9 +267,7 @@ async function main() {
             photoUrl: null,
           };
         }),
-      ),
-    )
-    .returning();
+      ));
 
   const activeRefs = referees.filter(
     (r) => r.status === "active" || r.status === "expiring",
@@ -306,7 +275,7 @@ async function main() {
 
   /* ── Badges ─────────────────────────────────────────────────────── */
   console.log("→ Badges");
-  const badges = await db.insert(s.badges).values(BADGES).returning();
+  const badges = await insertReturning(db, s.badges, BADGES);
   const badgeByCode = Object.fromEntries(badges.map((b) => [b.code, b]));
 
   /* ── Players ────────────────────────────────────────────────────── */
@@ -323,12 +292,16 @@ async function main() {
     const cat = ageByCode[catCode];
     const birthYear = int(cat.birthYearFrom!, cat.birthYearTo!);
     const dob = new Date(birthYear, int(0, 11), int(1, 28));
-    let position: "GK" | "DF" | "MF" | "FW";
-    if (idx < 2) position = "GK";
-    else if (idx < 7) position = "DF";
-    else if (idx < 12) position = "MF";
-    else position = "FW";
-    if (idx >= 12 && chance(0.3)) position = "MF";
+    let line: "GK" | "DF" | "MF" | "FW";
+    if (idx < 2) line = "GK";
+    else if (idx < 7) line = "DF";
+    else if (idx < 12) line = "MF";
+    else line = "FW";
+    if (idx >= 12 && chance(0.3)) line = "MF";
+    // spread each line over its specific roles (CB/RB/LB/WB, DMF/CMF/AMF/WF, ST/CF/LW/RW)
+    const roles = LEGACY_ROLE_SPREAD[line];
+    const lineStart = { GK: 0, DF: 2, MF: 7, FW: 12 }[line];
+    const position = roles[(idx - lineStart) % roles.length];
     const name = fullName();
     const vr = rnd();
     const verificationStatus =
@@ -388,7 +361,7 @@ async function main() {
     const chunk = playerInserts
       .slice(i, i + 350)
       .map(({ _cat, _potential, ...r }) => r);
-    const back = await db.insert(s.players).values(chunk).returning();
+    const back = await insertReturning(db, s.players, chunk);
     insertedPlayers.push(...back);
   }
   const P: SeedPlayer[] = insertedPlayers.map((p, i) => ({
@@ -396,9 +369,17 @@ async function main() {
     _cat: playerInserts[i]._cat,
     _potential: playerInserts[i]._potential,
   }));
+  // A handful of players are registered with a second club (index-based, so the
+  // random sequence — and therefore all other seed data — stays unchanged).
+  const dual = P.filter((p, i) => p.clubId && i % 83 === 5);
+  for (const p of dual) {
+    const at = clubs.findIndex((c) => c.id === p.clubId);
+    p.secondClubId = clubs[(at + 1) % clubs.length].id;
+    await db.update(s.players).set({ secondClubId: p.secondClubId }).where(eq(s.players.id, p.id));
+  }
   const squadOf = (clubId: string, cat: string) =>
     P.filter((p) => p.clubId === clubId && p._cat === cat);
-  console.log(`   ${P.length} pemain`);
+  console.log(`   ${P.length} pemain (${dual.length} dengan klub kedua)`);
 
   /* ── Match simulation helper ───────────────────────────────────── */
   const matchRows: (typeof s.matches.$inferInsert)[] = [];
@@ -460,13 +441,13 @@ async function main() {
         const scorer = weightedPick(
           scorers,
           (p) =>
-            (p.position === "FW" ? 5 : p.position === "MF" ? 3 : 1) *
+            (positionLine(p.position) === "FW" ? 5 : positionLine(p.position) === "MF" ? 3 : 1) *
             (0.4 + p._potential),
         );
         const assister = chance(0.66)
           ? weightedPick(
               scorers.filter((p) => p.id !== scorer.id),
-              (p) => (p.position === "MF" ? 3 : p.position === "FW" ? 2 : 1),
+              (p) => (positionLine(p.position) === "MF" ? 3 : positionLine(p.position) === "FW" ? 2 : 1),
             )
           : null;
         const isPen = chance(0.11);
@@ -510,7 +491,7 @@ async function main() {
     const emitCards = (xi: SeedPlayer[], clubId: string) => {
       for (let y = 0; y < int(0, 3); y++) {
         const pl = weightedPick(xi, (p) =>
-          p.position === "DF" ? 3 : p.position === "MF" ? 2 : 1,
+          positionLine(p.position) === "DF" ? 3 : positionLine(p.position) === "MF" ? 2 : 1,
         );
         const minute = int(8, dur);
         eventRows.push({
@@ -561,12 +542,12 @@ async function main() {
           if (p.position === "GK") {
             a.saves += Math.max(0, oppShots - conceded);
             if (conceded === 0 && !opts.live) a.cleanSheets++;
-          } else if (p.position === "DF") {
+          } else if (positionLine(p.position) === "DF") {
             a.tackles += int(1, 5);
             a.interceptions += int(0, 4);
             a.duelsWon += int(1, 6);
             if (conceded === 0 && idx < 5 && !opts.live) a.cleanSheets++;
-          } else if (p.position === "MF") {
+          } else if (positionLine(p.position) === "MF") {
             a.tackles += int(0, 3);
             a.keyPasses += int(0, 3);
             a.duelsWon += int(1, 5);
@@ -589,7 +570,7 @@ async function main() {
       const motm = weightedPick(
         winnerXI,
         (p) =>
-          (p.position === "FW" ? 3 : p.position === "MF" ? 2.5 : 1.5) * p._potential,
+          (positionLine(p.position) === "FW" ? 3 : positionLine(p.position) === "MF" ? 2.5 : 1.5) * p._potential,
       );
       bump(motm.id, tournamentId, (a) => a.motm++);
       eventRows.push({
@@ -700,10 +681,7 @@ async function main() {
     },
   ];
 
-  const tournaments = await db
-    .insert(s.tournaments)
-    .values(
-      TSPECS.map((t) => ({
+  const tournaments = await insertReturning(db, s.tournaments, TSPECS.map((t) => ({
         name: t.name,
         slug: t.name.toLowerCase().replace(/[^\w]+/g, "-").replace(/(^-|-$)/g, ""),
         season: SEASON,
@@ -726,9 +704,7 @@ async function main() {
         logoUrl: null,
         createdBy: operator.id,
         createdAt: t.start,
-      })),
-    )
-    .returning();
+      })));
 
   const teamRows: (typeof s.tournamentTeams.$inferInsert)[] = [];
   const squadRows: (typeof s.tournamentSquad.$inferInsert)[] = [];
@@ -771,7 +747,7 @@ async function main() {
     (tour as Record<string, unknown>)._plan = { spec, teamClubs, groupsByClub };
   }
 
-  const teams = await db.insert(s.tournamentTeams).values(teamRows).returning();
+  const teams = await insertReturning(db, s.tournamentTeams, teamRows);
   const teamId = (tournamentId: string, clubId: string) =>
     teams.find((t) => t.tournamentId === tournamentId && t.clubId === clubId)!.id;
 
@@ -1061,12 +1037,14 @@ async function main() {
   // Insert matches, then simulate
   const insertedMatches: (typeof s.matches.$inferSelect)[] = [];
   for (let i = 0; i < pending.length; i += 300) {
-    const back = await db
-      .insert(s.matches)
-      .values(pending.slice(i, i + 300).map((p) => p.row))
-      .returning();
+    const back = await insertReturning(db, s.matches, pending.slice(i, i + 300).map((p) => p.row));
     insertedMatches.push(...back);
   }
+  // matches that have started were run by the operator (kick-off needs one)
+  await db
+    .update(s.matches)
+    .set({ operatorId: operator.id })
+    .where(inArray(s.matches.status, ["live", "halftime", "completed"]));
 
   console.log(`→ Simulasi ${insertedMatches.length} pertandingan`);
   const scoreUpdates: {
@@ -1217,6 +1195,7 @@ async function main() {
       statRows.push({
         playerId: p.id,
         tournamentId: scope === "career" ? null : scope,
+        clubId: scope === "career" ? null : p.clubId,
         season: scope === "career" ? "career" : SEASON,
         appearances: a.appearances,
         minutesPlayed: a.minutesPlayed,
@@ -1478,9 +1457,7 @@ async function main() {
       status: over[s.key] ?? "passed",
     }));
 
-  const [batchA, batchB] = await db
-    .insert(s.importBatches)
-    .values([
+  const [batchA, batchB] = await insertReturning(db, s.importBatches, [
       {
         entity: "players",
         fileName: "registrasi-pemain-liga-u14-gelombang1.csv",
@@ -1511,8 +1488,7 @@ async function main() {
         createdAt: daysAgo(41),
         completedAt: daysAgo(41),
       },
-    ])
-    .returning();
+    ]);
 
   await db.insert(s.importRows).values(
     [

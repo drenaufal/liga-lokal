@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { requireCapability } from "@/lib/auth/session";
 import { getPlayer, getRegistryFilters } from "@/lib/queries/registry";
 import { getMediaMeta } from "@/lib/media-store";
+import { PLAYER_DOCUMENTS } from "@/lib/player-documents";
 import { Card, CardContent } from "@/components/ui/card";
 import { PlayerForm } from "../../player-form";
 
@@ -20,10 +21,11 @@ export default async function EditPlayerPage({
   const { id } = await params;
   const player = await getPlayer(id);
   if (!player) notFound();
-  const [{ clubs, ageCategories }, kiaMeta] = await Promise.all([
+  const [{ clubs, ageCategories }, ...metas] = await Promise.all([
     getRegistryFilters(),
-    getMediaMeta(player.kiaUrl),
+    ...PLAYER_DOCUMENTS.map((d) => getMediaMeta(player[d.key])),
   ]);
+  const docMeta = Object.fromEntries(PLAYER_DOCUMENTS.map((d, i) => [d.key, metas[i]]));
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -44,7 +46,7 @@ export default async function EditPlayerPage({
             clubs={clubs}
             ageCategories={ageCategories}
             player={player}
-            kiaMeta={kiaMeta}
+            docMeta={docMeta}
           />
         </CardContent>
       </Card>

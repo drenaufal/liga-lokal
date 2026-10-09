@@ -61,10 +61,13 @@ export function SearchBox({ placeholder = "Cari…" }: { placeholder?: string })
 export function FilterSelect({
   param,
   options,
+  groups,
   placeholder,
 }: {
   param: string;
-  options: { value: string; label: string }[];
+  options?: { value: string; label: string }[];
+  /** Grouped options, rendered as <optgroup>s. */
+  groups?: { label: string; options: { value: string; label: string }[] }[];
   placeholder: string;
 }) {
   const params = useSearchParams();
@@ -76,10 +79,19 @@ export function FilterSelect({
       className="h-10 w-[calc(50%-0.25rem)] min-w-0 rounded-full text-xs sm:w-auto sm:min-w-[150px]"
     >
       <option value="">{placeholder}</option>
-      {options.map((o) => (
+      {options?.map((o) => (
         <option key={o.value} value={o.value}>
           {o.label}
         </option>
+      ))}
+      {groups?.map((g) => (
+        <optgroup key={g.label} label={g.label}>
+          {g.options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </optgroup>
       ))}
     </Select>
   );

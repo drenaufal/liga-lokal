@@ -1,9 +1,10 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
 
-import { neon } from "@neondatabase/serverless";
+import { createPool } from "./pool";
 
 const TABLES = [
+  "player_match_stats",
   "audit_logs",
   "ai_reports",
   "scout_shortlists",
@@ -31,16 +32,29 @@ const TABLES = [
   "users",
 ];
 
+/** Empty every table. FK checks are per-session, so it all runs on one connection. */
+export async function truncateAll(uri: string) {
+  const pool = createPool(uri);
+  const conn = await pool.getConnection();
+  try {
+    await conn.query("SET FOREIGN_KEY_CHECKS = 0");
+    for (const t of TABLES) await conn.query(`TRUNCATE TABLE \`${t}\``);
+    await conn.query("SET FOREIGN_KEY_CHECKS = 1");
+  } finally {
+    conn.release();
+    await pool.end();
+  }
+}
+
 async function main() {
-  const sql = neon(process.env.DATABASE_URL!);
   console.log("→ Truncating all tables…");
-  await sql.query(
-    `TRUNCATE TABLE ${TABLES.map((t) => `"${t}"`).join(", ")} RESTART IDENTITY CASCADE`,
-  );
+  await truncateAll(process.env.DATABASE_URL!);
   console.log("✓ Database cleared.");
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+if (process.argv[1]?.replace(/\\/g, "/").endsWith("lib/db/reset.ts")) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

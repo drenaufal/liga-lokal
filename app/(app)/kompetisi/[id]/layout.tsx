@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, CalendarDays, MapPin, Gauge } from "lucide-react";
-import { getTournamentBase } from "@/lib/queries/competition";
+import { getTournamentBase, getTournamentImpact } from "@/lib/queries/competition";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/app/status-badge";
 import { TournamentTabs } from "./tabs";
 import { LifecycleControl } from "./lifecycle-control";
+import { DeleteTournament } from "./delete-tournament";
 import { getCurrentUser } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { formatDate } from "@/lib/utils";
@@ -29,6 +30,8 @@ export default async function TournamentLayout({
   if (!t) notFound();
   const user = await getCurrentUser();
   const canManage = can(user?.role, "competition:write");
+  const canDelete = can(user?.role, "competition:delete");
+  const impact = canDelete ? await getTournamentImpact(id) : null;
 
   return (
     <div>
@@ -67,7 +70,12 @@ export default async function TournamentLayout({
             <p className="mt-2 max-w-2xl text-xs text-ink-muted">{t.description}</p>
           )}
         </div>
-        {canManage && <LifecycleControl tournamentId={t.id} status={t.status} />}
+        {(canManage || impact) && (
+          <div className="flex shrink-0 flex-col items-end gap-3">
+            {canManage && <LifecycleControl tournamentId={t.id} status={t.status} />}
+            {impact && <DeleteTournament tournamentId={t.id} name={t.name} impact={impact} />}
+          </div>
+        )}
       </div>
 
       <TournamentTabs id={t.id} format={t.format} />

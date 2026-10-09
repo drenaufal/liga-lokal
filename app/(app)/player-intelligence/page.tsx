@@ -5,6 +5,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Radar } from "@/components/charts/radar";
 import { RADAR_AXES, radarValues, per90Summary, percentileOf } from "@/lib/player-metrics";
 import { POSITION } from "@/lib/status";
+import { LINE_LABEL, positionLine } from "@/lib/positions";
 import { PlayerPicker } from "./player-picker";
 
 export const dynamic = "force-dynamic";
@@ -66,7 +67,7 @@ export default async function RadarPage({
                 </div>
                 <div className="text-[10px] text-ink-muted">
                   Persentil<br />
-                  {POSITION[row.position].label} {row.ageCode}
+                  {LINE_LABEL[positionLine(row.position)]} {row.ageCode}
                 </div>
               </div>
             </CardContent>
@@ -90,7 +91,7 @@ export default async function RadarPage({
               <CardHeader>
                 <CardTitle>Persentil vs Rekan Seposisi</CardTitle>
                 <span className="text-[11px] text-ink-muted">
-                  {peers.length} pemain {POSITION[row.position].label} {row.ageCode}
+                  {peers.length} pemain {LINE_LABEL[positionLine(row.position)]} {row.ageCode}
                 </span>
               </CardHeader>
               <CardContent className="space-y-3">

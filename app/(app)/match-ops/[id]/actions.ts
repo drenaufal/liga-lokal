@@ -1,25 +1,30 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, ne, or } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
-  ageCategories,
+  clubs,
   matchEvents,
   matches,
+  referees,
   scoringFormulas,
   standings,
   tournamentTeams,
-  tournaments,
+  users,
 } from "@/lib/db/schema";
 import { actionUser } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/audit";
+import { liveMinute, recomputeMatchScore, syncMatchStats } from "@/lib/match-engine";
 import {
-  applyMatchToPlayerStats,
-  liveMinute,
-  recomputeMatchScore,
-} from "@/lib/match-engine";
+  QUICK_TYPES,
+  matchDuration,
+  recordQuickEvent,
+  undoQuickEvent,
+  type QuickType,
+} from "@/lib/match-events";
 import {
   DEFAULT_TIEBREAKERS,
   computeStandings,
@@ -27,28 +32,18 @@ import {
 } from "@/lib/standings";
 import { DEFAULT_WEIGHTS } from "@/lib/scoring";
 import {
-  DEFAULT_MATCH_MINUTES,
   MAX_MATCH_MINUTES,
   MIN_MATCH_MINUTES,
   clockCap,
   halfOf,
 } from "@/lib/match-clock";
+import { EVENT_LABEL, licenseStatus } from "@/lib/status";
+import { formatDateTime } from "@/lib/utils";
 
 async function loadMatch(id: string) {
   const m = await db.query.matches.findFirst({ where: eq(matches.id, id) });
   if (!m) throw new Error("Pertandingan tidak ditemukan");
   return m;
-}
-
-/** Match length: set at kick-off, else the age category rule, else 90. */
-async function durationOf(m: { durationMinutes: number | null; tournamentId: string }) {
-  if (m.durationMinutes) return m.durationMinutes;
-  const row = await db
-    .select({ rules: ageCategories.rules })
-    .from(tournaments)
-    .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
-    .where(eq(tournaments.id, m.tournamentId));
-  return row[0]?.rules?.matchDuration ?? DEFAULT_MATCH_MINUTES;
 }
 
 function rev(id: string, tournamentId?: string) {
@@ -58,10 +53,106 @@ function rev(id: string, tournamentId?: string) {
   if (tournamentId) revalidatePath(`/kompetisi/${tournamentId}`, "layout");
 }
 
+/* ── Penugasan wasit & operator ─────────────────────────────────────────── */
+
+/** Other matches within two hours that already use this referee or operator. */
+async function assignmentConflicts(
+  m: { id: string; scheduledAt: Date },
+  refereeId: string | null,
+  operatorId: string | null,
+) {
+  if (!refereeId && !operatorId) return [];
+  const hc = alias(clubs, "hc");
+  const ac = alias(clubs, "ac");
+  const lo = new Date(m.scheduledAt.getTime() - 2 * 3_600_000);
+  const hi = new Date(m.scheduledAt.getTime() + 2 * 3_600_000);
+  const rows = await db
+    .select({
+      scheduledAt: matches.scheduledAt,
+      refereeId: matches.refereeId,
+      operatorId: matches.operatorId,
+      home: hc.shortName,
+      away: ac.shortName,
+    })
+    .from(matches)
+    .leftJoin(hc, eq(hc.id, matches.homeClubId))
+    .leftJoin(ac, eq(ac.id, matches.awayClubId))
+    .where(
+      and(
+        ne(matches.id, m.id),
+        gte(matches.scheduledAt, lo),
+        lte(matches.scheduledAt, hi),
+        inArray(matches.status, ["scheduled", "live", "halftime"]),
+        or(
+          refereeId ? eq(matches.refereeId, refereeId) : undefined,
+          operatorId ? eq(matches.operatorId, operatorId) : undefined,
+        ),
+      ),
+    );
+  const out: string[] = [];
+  for (const r of rows) {
+    const where = `${r.home ?? "?"} vs ${r.away ?? "?"} (${formatDateTime(r.scheduledAt)})`;
+    if (refereeId && r.refereeId === refereeId) out.push(`Wasit juga bertugas di ${where}`);
+    if (operatorId && r.operatorId === operatorId) out.push(`Operator juga bertugas di ${where}`);
+  }
+  return out;
+}
+
+/** Assign (or change) the referee and operator. Allowed until the match kicks off. */
+export async function assignOfficials(formData: FormData) {
+  const user = await actionUser("match:assign");
+  const matchId = String(formData.get("matchId"));
+  const refereeId = String(formData.get("refereeId") ?? "") || null;
+  const operatorId = String(formData.get("operatorId") ?? "") || null;
+  const m = await loadMatch(matchId);
+  if (m.status !== "scheduled") throw new Error("Penugasan hanya bisa diubah sebelum pertandingan dimulai");
+
+  let refereeName: string | null = null;
+  if (refereeId) {
+    const [r] = await db.select().from(referees).where(eq(referees.id, refereeId));
+    if (!r) throw new Error("Wasit tidak ditemukan");
+    const st = licenseStatus(r.licenseExpiry, r.status === "revoked");
+    if (st === "expired" || st === "revoked")
+      throw new Error(`Lisensi ${r.fullName} ${st === "expired" ? "sudah kedaluwarsa" : "telah dicabut"}`);
+    refereeName = r.fullName;
+  }
+  let operatorName: string | null = null;
+  if (operatorId) {
+    const [o] = await db
+      .select({ name: users.name, role: users.role, active: users.active })
+      .from(users)
+      .where(eq(users.id, operatorId));
+    if (!o || !o.active) throw new Error("Operator tidak ditemukan");
+    if (o.role !== "operator" && o.role !== "admin") throw new Error("Pengguna ini bukan operator kompetisi");
+    operatorName = o.name;
+  }
+
+  await db.update(matches).set({ refereeId, operatorId, updatedAt: new Date() }).where(eq(matches.id, matchId));
+
+  await recordAudit({
+    actorId: user.id,
+    actorName: user.name,
+    actorRole: user.role,
+    action: "match.assign",
+    entityType: "match",
+    entityId: matchId,
+    summary: `Penugasan: wasit ${refereeName ?? "—"}, operator ${operatorName ?? "—"}`,
+    before: { refereeId: m.refereeId, operatorId: m.operatorId },
+    after: { refereeId, operatorId },
+  });
+  rev(matchId, m.tournamentId);
+  return { warnings: await assignmentConflicts(m, refereeId, operatorId) };
+}
+
+/* ── Jalannya pertandingan ──────────────────────────────────────────────── */
+
 export async function startMatch(id: string, durationMinutes: number) {
   const user = await actionUser("match:operate");
   const m = await loadMatch(id);
   if (m.status === "completed") throw new Error("Pertandingan sudah selesai");
+  if (m.status !== "scheduled") throw new Error("Pertandingan sudah dimulai");
+  if (!m.refereeId || !m.operatorId)
+    throw new Error("Tugaskan wasit dan operator terlebih dahulu sebelum memulai pertandingan.");
   const duration = Math.round(Number(durationMinutes));
   if (!Number.isFinite(duration) || duration < MIN_MATCH_MINUTES || duration > MAX_MATCH_MINUTES) {
     throw new Error(`Durasi harus antara ${MIN_MATCH_MINUTES} dan ${MAX_MATCH_MINUTES} menit`);
@@ -94,7 +185,7 @@ export async function startMatch(id: string, durationMinutes: number) {
 export async function pauseClock(id: string) {
   const user = await actionUser("match:operate");
   const m = await loadMatch(id);
-  const duration = await durationOf(m);
+  const duration = await matchDuration(m);
   const minute = liveMinute(m, clockCap(duration));
   await db
     .update(matches)
@@ -112,7 +203,7 @@ export async function resumeSecondHalf(id: string) {
   const user = await actionUser("match:operate");
   const m = await loadMatch(id);
   const half = (m.homeScoreHt == null);
-  const duration = await durationOf(m);
+  const duration = await matchDuration(m);
   await db
     .update(matches)
     .set({
@@ -135,7 +226,7 @@ export async function resumeSecondHalf(id: string) {
 export async function endMatch(id: string) {
   const user = await actionUser("match:operate");
   const m = await loadMatch(id);
-  const duration = await durationOf(m);
+  const duration = await matchDuration(m);
   const minute = liveMinute(m, clockCap(duration));
   await db
     .update(matches)
@@ -155,12 +246,14 @@ export async function endMatch(id: string) {
   rev(id, m.tournamentId);
 }
 
+/* ── Kejadian ───────────────────────────────────────────────────────────── */
+
 const eventSchema = z.object({
   matchId: z.string(),
   type: z.enum([
     "goal", "penalty_goal", "own_goal", "assist", "save", "yellow_card",
     "red_card", "second_yellow", "foul", "corner", "offside", "substitution",
-    "shot_on", "shot_off", "injury",
+    "shot_on", "shot_off", "injury", "interception",
   ]),
   clubId: z.string(),
   playerId: z.string().optional(),
@@ -175,7 +268,7 @@ export async function addEvent(formData: FormData) {
   if (!parsed.success) throw new Error("Data kejadian tidak valid");
   const v = parsed.data;
   const m = await loadMatch(v.matchId);
-  const half = halfOf(await durationOf(m));
+  const half = halfOf(await matchDuration(m));
   const period = v.minute > half ? "second_half" : "first_half";
 
   await db.insert(matchEvents).values({
@@ -217,17 +310,65 @@ export async function addEvent(formData: FormData) {
   rev(v.matchId, m.tournamentId);
 }
 
+/**
+ * One tap on a player's row: records the event at the current match minute and
+ * puts it on the timeline straight away. Returns what was recorded so the page
+ * can offer "Batalkan".
+ */
+export async function quickEvent(input: { matchId: string; clubId: string; playerId: string; type: string }) {
+  const user = await actionUser("match:operate");
+  if (!(QUICK_TYPES as readonly string[]).includes(input.type)) throw new Error("Jenis kejadian tidak valid");
+  const r = await recordQuickEvent({
+    matchId: input.matchId,
+    clubId: input.clubId,
+    playerId: input.playerId,
+    type: input.type as QuickType,
+    userId: user.id,
+  });
+  await recordAudit({
+    actorId: user.id, actorName: user.name, actorRole: user.role,
+    action: "match.event.create", entityType: "match", entityId: input.matchId,
+    summary: `${EVENT_LABEL[r.type] ?? r.type} — ${r.jerseyNumber ? `#${r.jerseyNumber} ` : ""}${r.playerName}, menit ${r.minute}`,
+  });
+  rev(input.matchId, r.tournamentId);
+  return {
+    eventId: r.eventId,
+    type: r.type,
+    minute: r.minute,
+    linked: r.linked,
+    playerName: r.playerName,
+    jerseyNumber: r.jerseyNumber,
+  };
+}
+
+/** "Batalkan" on the toast that follows a quick event. */
+export async function undoEvent(input: { matchId: string; eventId: string }) {
+  const user = await actionUser("match:operate");
+  const r = await undoQuickEvent({
+    matchId: input.matchId,
+    eventId: input.eventId,
+    userId: user.id,
+    isAdmin: user.role === "admin",
+  });
+  await recordAudit({
+    actorId: user.id, actorName: user.name, actorRole: user.role,
+    action: "match.event.undo", entityType: "match", entityId: input.matchId,
+    summary: `Kejadian ${EVENT_LABEL[r.type] ?? r.type} menit ${r.minute} dibatalkan (salah catat)`,
+  });
+  rev(input.matchId, r.tournamentId);
+}
+
 export async function voidEvent(formData: FormData) {
   const user = await actionUser("match:operate");
   const eventId = String(formData.get("eventId"));
   const matchId = String(formData.get("matchId"));
   const reason = String(formData.get("reason") ?? "Koreksi operator");
 
-  const [ev] = await db
+  await db
     .update(matchEvents)
     .set({ voided: true, voidReason: reason })
-    .where(eq(matchEvents.id, eventId))
-    .returning();
+    .where(eq(matchEvents.id, eventId));
+  const [ev] = await db.select().from(matchEvents).where(eq(matchEvents.id, eventId));
 
   // voiding a goal also voids the assist recorded with it
   if (ev && (ev.type === "goal" || ev.type === "penalty_goal") && ev.playerId && ev.relatedPlayerId) {
@@ -245,6 +386,21 @@ export async function voidEvent(formData: FormData) {
         ),
       );
   }
+  // …and voiding an assist leaves its goal without an assister
+  if (ev && ev.type === "assist" && ev.playerId && ev.relatedPlayerId) {
+    await db
+      .update(matchEvents)
+      .set({ relatedPlayerId: null })
+      .where(
+        and(
+          eq(matchEvents.matchId, matchId),
+          inArray(matchEvents.type, ["goal", "penalty_goal"]),
+          eq(matchEvents.playerId, ev.relatedPlayerId),
+          eq(matchEvents.relatedPlayerId, ev.playerId),
+          eq(matchEvents.minute, ev.minute),
+        ),
+      );
+  }
 
   await recomputeMatchScore(matchId);
   const m = await loadMatch(matchId);
@@ -255,6 +411,8 @@ export async function voidEvent(formData: FormData) {
   });
   rev(matchId, m.tournamentId);
 }
+
+/* ── Hasil & statistik ──────────────────────────────────────────────────── */
 
 async function activeWeights() {
   const f = await db.query.scoringFormulas.findFirst({
@@ -326,8 +484,8 @@ export async function confirmResult(formData: FormData) {
   const m = await loadMatch(id);
   if (m.status !== "completed") throw new Error("Selesaikan pertandingan terlebih dahulu");
 
-  const weights = await activeWeights();
-  await applyMatchToPlayerStats(id, weights, 1);
+  // Idempotent: confirming again only applies what changed since last time.
+  await syncMatchStats(id, await activeWeights());
 
   await db
     .update(matches)
@@ -356,13 +514,9 @@ export async function amendResult(formData: FormData) {
   if (!reason) throw new Error("Alasan koreksi wajib diisi");
   const m = await loadMatch(id);
 
-  const weights = await activeWeights();
-  // reverse previous contribution, then re-apply from current events
-  if (m.resultStatus === "confirmed") {
-    await applyMatchToPlayerStats(id, weights, -1);
-  }
+  // Scoreline from the current events, then only the difference in player stats.
   await recomputeMatchScore(id);
-  await applyMatchToPlayerStats(id, weights, 1);
+  await syncMatchStats(id, await activeWeights());
 
   await db
     .update(matches)
@@ -377,10 +531,12 @@ export async function amendResult(formData: FormData) {
 
   await recomputeTournamentStandings(m.tournamentId);
 
+  const after = await loadMatch(id);
   await recordAudit({
     actorId: user.id, actorName: user.name, actorRole: user.role,
     action: "match.amend", entityType: "match", entityId: id,
-    summary: `Hasil dikoreksi menjadi ${m.homeScore}-${m.awayScore} — ${reason}`,
+    summary: `Hasil dikoreksi menjadi ${after.homeScore}-${after.awayScore} — ${reason}`,
   });
   rev(id, m.tournamentId);
 }
+

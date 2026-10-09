@@ -1,3 +1,11 @@
+import {
+  LINE_LABEL,
+  PLAYER_POSITIONS,
+  POSITION_NAME,
+  positionLine,
+  type PositionLine,
+} from "@/lib/positions";
+
 type Tone =
   | "neutral"
   | "brand"
@@ -96,11 +104,24 @@ export const IMPORT_BATCH_STATUS: Record<string, Meta> = {
   failed: { label: "Gagal", tone: "danger" },
 };
 
+const LINE_TONE: Record<PositionLine, Tone> = {
+  GK: "warn",
+  DF: "info",
+  MF: "success",
+  FW: "magenta",
+};
+
+/**
+ * Label + colour per stored role ("CB · Bek Tengah"). The old four-way line
+ * codes stay as a fallback so a stray "DF" still renders instead of crashing.
+ */
 export const POSITION: Record<string, { label: string; tone: Tone }> = {
-  GK: { label: "Kiper", tone: "warn" },
-  DF: { label: "Bertahan", tone: "info" },
-  MF: { label: "Tengah", tone: "success" },
-  FW: { label: "Depan", tone: "magenta" },
+  ...Object.fromEntries(
+    PLAYER_POSITIONS.map((p) => [p, { label: `${p} · ${POSITION_NAME[p]}`, tone: LINE_TONE[positionLine(p)] }]),
+  ),
+  DF: { label: LINE_LABEL.DF, tone: LINE_TONE.DF },
+  MF: { label: LINE_LABEL.MF, tone: LINE_TONE.MF },
+  FW: { label: LINE_LABEL.FW, tone: LINE_TONE.FW },
 };
 
 export const STAGE_LABEL: Record<string, string> = {
@@ -133,4 +154,5 @@ export const EVENT_LABEL: Record<string, string> = {
   injury: "Cedera",
   var_check: "Tinjauan",
   period: "Babak",
+  interception: "Intersep",
 };

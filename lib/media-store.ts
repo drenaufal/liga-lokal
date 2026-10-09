@@ -10,18 +10,19 @@ export async function saveMedia(input: {
   bytes: ArrayBuffer;
   uploadedBy: string | null;
 }) {
-  const [row] = await db
+  const id = crypto.randomUUID();
+  await db
     .insert(media)
     .values({
+      id,
       kind: input.kind,
       fileName: input.fileName,
       mimeType: input.mimeType,
       size: input.bytes.byteLength,
       data: Buffer.from(input.bytes).toString("base64"),
       uploadedBy: input.uploadedBy,
-    })
-    .returning({ id: media.id });
-  return row.id;
+    });
+  return id;
 }
 
 export async function getMedia(id: string) {

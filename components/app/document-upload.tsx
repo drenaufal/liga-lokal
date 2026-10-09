@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 export type DocumentMeta = { fileName: string | null; mimeType: string; size: number };
 
 /**
- * Private document field (e.g. KIA scan). Accepts images or PDF, uploads as a
+ * Private document field (KIA, KK, akta, ijazah, rapor …). Accepts images or PDF, uploads as a
  * `document` media row (only verifiers can open it) and writes the URL into a
  * hidden input.
  */
@@ -20,6 +20,7 @@ export function DocumentUpload({
   defaultValue,
   defaultMeta,
   error: fieldError,
+  icon: DocIcon = IdCard,
 }: {
   name: string;
   label: string;
@@ -27,6 +28,8 @@ export function DocumentUpload({
   defaultValue?: string | null;
   defaultMeta?: DocumentMeta | null;
   error?: string;
+  /** Glyph shown in the empty state (defaults to an ID card). */
+  icon?: React.ComponentType<{ className?: string }>;
 }) {
   const [url, setUrl] = React.useState(defaultValue ?? "");
   const [meta, setMeta] = React.useState<DocumentMeta | null>(defaultMeta ?? null);
@@ -135,7 +138,7 @@ export function DocumentUpload({
           )}
         >
           <span className="grid h-14 w-20 shrink-0 place-items-center rounded-md border border-line bg-surface-2 text-ink-muted">
-            {busy ? <Loader2 className="size-5 animate-spin text-brand" /> : <IdCard className="size-6" />}
+            {busy ? <Loader2 className="size-5 animate-spin text-brand" /> : <DocIcon className="size-6" />}
           </span>
           <span className="min-w-0">
             <span className="block text-xs font-medium text-ink">

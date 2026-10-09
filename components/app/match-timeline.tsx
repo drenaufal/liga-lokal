@@ -13,6 +13,7 @@ import {
   Sparkles,
   Crosshair,
   CircleSlash,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EVENT_LABEL } from "@/lib/status";
@@ -42,6 +43,7 @@ const ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   red_card: Square,
   second_yellow: Square,
   save: Hand,
+  interception: ShieldCheck,
   foul: ShieldAlert,
   offside: Flag,
   corner: Flag,

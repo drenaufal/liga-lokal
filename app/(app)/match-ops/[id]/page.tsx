@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, MapPin, Flag as FlagIcon, CalendarClock } from "lucide-react";
-import { getMatchConsole } from "@/lib/queries/match";
+import { ArrowLeft, MapPin, Flag as FlagIcon, CalendarClock, UserCog } from "lucide-react";
+import { getMatchConsole, getOfficialOptions } from "@/lib/queries/match";
 import { getCurrentUser } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { DEFAULT_MATCH_MINUTES, clockCap } from "@/lib/match-clock";
@@ -13,9 +13,12 @@ import { AutoRefresh } from "@/components/app/auto-refresh";
 import { MatchTimeline } from "@/components/app/match-timeline";
 import { ConsoleControls } from "./console-controls";
 import type { RosterPlayer } from "./event-entry";
-import { PlayerList, type PlayerTally } from "./player-list";
+import { PlayerList } from "./player-list";
+import { AssignmentCard } from "./assignment-card";
+import { buildTallies } from "@/lib/match-tally";
 import { ResultControl } from "./result-control";
 import { STAGE_LABEL } from "@/lib/status";
+import { LINE_ORDER, positionLine } from "@/lib/positions";
 import { formatDateTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +47,9 @@ export default async function MatchConsolePage({
   const user = await getCurrentUser();
   const canOperate = can(user?.role, "match:operate");
   const canConfirm = can(user?.role, "match:confirm");
+  const canAssign = can(user?.role, "match:assign");
+  const assigned = !!(m.refereeId && m.operatorId);
+  const officialOptions = canAssign && m.status === "scheduled" ? await getOfficialOptions() : null;
 
   const duration = m.durationMinutes ?? d.ageDuration?.matchDuration ?? DEFAULT_MATCH_MINUTES;
   const clock = {
@@ -59,9 +65,8 @@ export default async function MatchConsolePage({
 
   // Team sheets: the confirmed line-up (starters, then bench) when there is
   // one, otherwise every registered player of the club in this age category.
-  const POS_ORDER: Record<string, number> = { GK: 0, DF: 1, MF: 2, FW: 3 };
   const byPitchOrder = (a: RosterPlayer, b: RosterPlayer) =>
-    (POS_ORDER[a.position] ?? 9) - (POS_ORDER[b.position] ?? 9) || (a.number ?? 99) - (b.number ?? 99);
+    LINE_ORDER[positionLine(a.position)] - LINE_ORDER[positionLine(b.position)] || (a.number ?? 99) - (b.number ?? 99);
   const rosterFor = (clubId: string | null): RosterPlayer[] => {
     if (!clubId) return [];
     const lineup = d.lineups.filter((l) => l.clubId === clubId);
@@ -85,25 +90,12 @@ export default async function MatchConsolePage({
 
   const evs = d.events.filter((e) => !e.voided);
 
-  // Per-player tags for the list. Assists come from the paired "assist"
-  // events (as the stats engine counts them), not the goal's relatedPlayerId.
-  const tallies: Record<string, PlayerTally> = {};
-  const tally = (pid: string) =>
-    (tallies[pid] ??= { goals: 0, ownGoals: 0, assists: 0, yellow: 0, red: 0, subOff: null, subOn: null });
-  for (const e of evs) {
-    if (!e.playerId) continue;
-    if (e.type === "goal" || e.type === "penalty_goal") tally(e.playerId).goals++;
-    else if (e.type === "own_goal") tally(e.playerId).ownGoals++;
-    else if (e.type === "assist") tally(e.playerId).assists++;
-    else if (e.type === "yellow_card") tally(e.playerId).yellow++;
-    else if (e.type === "red_card" || e.type === "second_yellow") tally(e.playerId).red++;
-    else if (e.type === "substitution") {
-      tally(e.playerId).subOff = e.minute;
-      if (e.relatedPlayerId) tally(e.relatedPlayerId).subOn = e.minute;
-    }
-  }
+  // Per-player counters for the list (assists come from the paired "assist" events).
+  const tallies = buildTallies(evs);
 
   const canRecord = canOperate && m.status !== "scheduled";
+  // one-tap buttons only while the match is in play; afterwards corrections go through the full form
+  const canQuick = canOperate && (m.status === "live" || m.status === "halftime");
 
   // simple live stats from events
   const countFor = (clubId: string | null, types: string[]) =>
@@ -113,6 +105,7 @@ export default async function MatchConsolePage({
     ["Tepat sasaran", countFor(m.homeClubId, ["goal", "penalty_goal", "shot_on"]), countFor(m.awayClubId, ["goal", "penalty_goal", "shot_on"])],
     ["Sudut", countFor(m.homeClubId, ["corner"]), countFor(m.awayClubId, ["corner"])],
     ["Pelanggaran", countFor(m.homeClubId, ["foul"]), countFor(m.awayClubId, ["foul"])],
+    ["Intersep", countFor(m.homeClubId, ["interception"]), countFor(m.awayClubId, ["interception"])],
     ["Kartu kuning", countFor(m.homeClubId, ["yellow_card"]), countFor(m.awayClubId, ["yellow_card"])],
   ];
 
@@ -145,6 +138,14 @@ export default async function MatchConsolePage({
         homeScore={m.homeScore}
         awayScore={m.awayScore}
         canOperate={canOperate}
+        canStart={assigned}
+        startHint={
+          !m.refereeId && !m.operatorId
+            ? "Tugaskan wasit dan operator terlebih dahulu"
+            : !m.refereeId
+              ? "Tugaskan wasit terlebih dahulu"
+              : "Tugaskan operator terlebih dahulu"
+        }
         meta={
           <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-night-muted">
             <Link href={`/kompetisi/${d.tournamentId}`} className="font-semibold text-white hover:underline">
@@ -153,6 +154,7 @@ export default async function MatchConsolePage({
             <span>· {STAGE_LABEL[m.stage] ?? m.stage}{m.groupLabel ? ` Grup ${m.groupLabel}` : ""}</span>
             {d.venue && <span className="flex items-center gap-1"><MapPin className="size-3" />{d.venue}</span>}
             {d.referee && <span className="flex items-center gap-1"><FlagIcon className="size-3" />{d.referee}</span>}
+            {d.operator && <span className="flex items-center gap-1"><UserCog className="size-3" />{d.operator}</span>}
             <span className="flex items-center gap-1"><CalendarClock className="size-3" />{formatDateTime(m.scheduledAt)}</span>
             <StatusBadge kind="result" value={m.resultStatus} />
           </div>
@@ -160,7 +162,16 @@ export default async function MatchConsolePage({
       />
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_360px]">
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
+          <AssignmentCard
+            key={`${m.refereeId ?? "-"}:${m.operatorId ?? "-"}`}
+            matchId={id}
+            referee={m.refereeId && d.referee ? { id: m.refereeId, name: d.referee } : null}
+            operator={m.operatorId && d.operator ? { id: m.operatorId, name: d.operator } : null}
+            options={officialOptions}
+            scheduled={m.status === "scheduled"}
+          />
+
           {/* Squad list — click a player to record an event (replaces the tactical board) */}
           {m.homeClubId && m.awayClubId && (
             <PlayerList
@@ -180,6 +191,7 @@ export default async function MatchConsolePage({
               }}
               tallies={tallies}
               canRecord={canRecord}
+              canQuick={canQuick}
               hint={
                 canOperate
                   ? "Pencatatan kejadian aktif setelah pertandingan dimulai."
@@ -228,7 +240,7 @@ export default async function MatchConsolePage({
           )}
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto">
           {/* Timeline */}
           <Card>
             <CardHeader>

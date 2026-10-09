@@ -74,4 +74,4 @@ export function formatCountdown(sec: number) {
  * SQL for a match's length: its own setting, else the age category rule, else
  * 90. Correlated on the (un-aliased) matches table.
  */
-export const MATCH_DURATION_SQL = `coalesce("matches"."duration_minutes", (select (_a."rules"->>'matchDuration')::int from "tournaments" _t join "age_categories" _a on _a."id" = _t."age_category_id" where _t."id" = "matches"."tournament_id"), ${DEFAULT_MATCH_MINUTES})`;
+export const MATCH_DURATION_SQL = `coalesce(matches.duration_minutes, (select cast(json_value(_a.rules, '$.matchDuration') as signed) from tournaments _t join age_categories _a on _a.id = _t.age_category_id where _t.id = matches.tournament_id), ${DEFAULT_MATCH_MINUTES})`;

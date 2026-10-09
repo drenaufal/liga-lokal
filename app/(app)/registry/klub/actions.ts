@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, ilike, ne } from "drizzle-orm";
+import { and, eq, like, ne } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { clubs } from "@/lib/db/schema";
@@ -12,6 +12,7 @@ import { imageUrlField } from "@/lib/media";
 import { releaseReplaced } from "@/lib/media-store";
 import { formError, optionalInt, type FormState } from "@/lib/form";
 import { slugify } from "@/lib/utils";
+import { insertReturning } from "@/lib/db/returning";
 
 const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Warna harus format #RRGGBB");
 
@@ -61,8 +62,8 @@ function toRow(v: ClubInput) {
 async function shortNameTaken(shortName: string, exceptId?: string) {
   const hit = await db.query.clubs.findFirst({
     where: exceptId
-      ? and(ilike(clubs.shortName, shortName), ne(clubs.id, exceptId))
-      : ilike(clubs.shortName, shortName),
+      ? and(like(clubs.shortName, shortName), ne(clubs.id, exceptId))
+      : like(clubs.shortName, shortName),
     columns: { name: true },
   });
   return hit ? `Singkatan sudah dipakai ${hit.name}` : null;
@@ -86,10 +87,7 @@ export async function createClub(_prev: FormState, formData: FormData): Promise<
   const taken = await shortNameTaken(row.shortName);
   if (taken) return formError({ shortName: taken }, formData);
 
-  const [created] = await db
-    .insert(clubs)
-    .values({ ...row, slug: await uniqueSlug(row.name) })
-    .returning();
+  const [created] = await insertReturning(db, clubs, { ...row, slug: await uniqueSlug(row.name) });
 
   await recordAudit({
     actorId: user.id,

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ilike, or, sql } from "drizzle-orm";
+import { like, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { clubs, coaches, players, referees, tournaments, venues } from "@/lib/db/schema";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -10,7 +10,7 @@ export async function GET(req: Request) {
 
   const q = new URL(req.url).searchParams.get("q")?.trim() ?? "";
   if (q.length < 2) return NextResponse.json({ results: [] });
-  const like = `%${q}%`;
+  const pattern = `%${q}%`;
 
   const [pl, cl, rf, co, tn, vn] = await Promise.all([
     db
@@ -18,36 +18,36 @@ export async function GET(req: Request) {
       .from(players)
       .where(
         or(
-          ilike(players.fullName, like),
-          ilike(players.registrationNo, like),
-          ilike(players.nisn, like),
+          like(players.fullName, pattern),
+          like(players.registrationNo, pattern),
+          like(players.nisn, pattern),
         ),
       )
       .limit(6),
     db
       .select({ id: clubs.id, name: clubs.name, short: clubs.shortName })
       .from(clubs)
-      .where(or(ilike(clubs.name, like), ilike(clubs.shortName, like)))
+      .where(or(like(clubs.name, pattern), like(clubs.shortName, pattern)))
       .limit(4),
     db
       .select({ id: referees.id, name: referees.fullName })
       .from(referees)
-      .where(ilike(referees.fullName, like))
+      .where(like(referees.fullName, pattern))
       .limit(3),
     db
       .select({ id: coaches.id, name: coaches.fullName, level: coaches.licenseLevel })
       .from(coaches)
-      .where(or(ilike(coaches.fullName, like), ilike(coaches.licenseNumber, like)))
+      .where(or(like(coaches.fullName, pattern), like(coaches.licenseNumber, pattern)))
       .limit(3),
     db
       .select({ id: tournaments.id, name: tournaments.name })
       .from(tournaments)
-      .where(ilike(tournaments.name, like))
+      .where(like(tournaments.name, pattern))
       .limit(3),
     db
       .select({ id: venues.id, name: venues.name })
       .from(venues)
-      .where(ilike(venues.name, like))
+      .where(like(venues.name, pattern))
       .limit(3),
   ]);
 

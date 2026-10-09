@@ -10,6 +10,7 @@ import { actionUser } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/audit";
 import { formError, requiredInt, type FormState } from "@/lib/form";
 import { MAX_CATEGORY_AGE, MIN_CATEGORY_AGE } from "./shared";
+import { insertReturning } from "@/lib/db/returning";
 
 const categorySchema = z
   .object({
@@ -106,7 +107,7 @@ export async function createCategory(_prev: FormState, formData: FormData): Prom
   const taken = await codeTaken(row.code);
   if (taken) return formError({ code: taken }, formData);
 
-  const [created] = await db.insert(ageCategories).values({ ...row, sortOrder: 999 }).returning();
+  const [created] = await insertReturning(db, ageCategories, { ...row, sortOrder: 999 });
   await resequence();
 
   await recordAudit({

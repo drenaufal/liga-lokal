@@ -5,19 +5,42 @@ import { CheckCircle2, AlertTriangle, Info, XCircle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ToastTone = "success" | "error" | "warn" | "info";
-type Toast = { id: number; title: string; description?: string; tone: ToastTone };
+type ToastAction = { label: string; onClick: () => void | Promise<void> };
+type Toast = {
+  id: number;
+  title: string;
+  description?: string;
+  tone: ToastTone;
+  action?: ToastAction;
+  duration: number;
+};
 
 let externalPush: ((t: Omit<Toast, "id">) => void) | null = null;
 
-export function toast(
-  title: string,
-  opts: { description?: string; tone?: ToastTone } = {},
-) {
-  externalPush?.({ title, description: opts.description, tone: opts.tone ?? "info" });
+type ToastOpts = {
+  description?: string;
+  tone?: ToastTone;
+  /** A button on the toast, e.g. "Batalkan". Clicking it also closes the toast. */
+  action?: ToastAction;
+  /** How long it stays, in ms (default 4500). */
+  duration?: number;
+};
+
+export function toast(title: string, opts: ToastOpts = {}) {
+  externalPush?.({
+    title,
+    description: opts.description,
+    tone: opts.tone ?? "info",
+    action: opts.action,
+    duration: opts.duration ?? 4500,
+  });
 }
-toast.success = (t: string, d?: string) => toast(t, { description: d, tone: "success" });
-toast.error = (t: string, d?: string) => toast(t, { description: d, tone: "error" });
-toast.warn = (t: string, d?: string) => toast(t, { description: d, tone: "warn" });
+toast.success = (t: string, d?: string, o: Pick<ToastOpts, "action" | "duration"> = {}) =>
+  toast(t, { description: d, tone: "success", ...o });
+toast.error = (t: string, d?: string, o: Pick<ToastOpts, "action" | "duration"> = {}) =>
+  toast(t, { description: d, tone: "error", ...o });
+toast.warn = (t: string, d?: string, o: Pick<ToastOpts, "action" | "duration"> = {}) =>
+  toast(t, { description: d, tone: "warn", ...o });
 
 const icons = {
   success: <CheckCircle2 className="size-4 text-block-mint" />,
@@ -32,10 +55,11 @@ export function Toaster() {
   React.useEffect(() => {
     externalPush = (t) => {
       const id = Date.now() + Math.random();
-      setToasts((prev) => [...prev, { ...t, id }]);
+      // keep the stack short: a burst of quick events should not bury the screen
+      setToasts((prev) => [...prev, { ...t, id }].slice(-3));
       setTimeout(() => {
         setToasts((prev) => prev.filter((x) => x.id !== id));
-      }, 4500);
+      }, t.duration);
     };
     return () => {
       externalPush = null;
@@ -59,6 +83,17 @@ export function Toaster() {
               <p className="mt-0.5 text-xs text-night-muted">{t.description}</p>
             )}
           </div>
+          {t.action && (
+            <button
+              onClick={() => {
+                setToasts((prev) => prev.filter((x) => x.id !== t.id));
+                void t.action?.onClick();
+              }}
+              className="shrink-0 self-center rounded-full bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/20"
+            >
+              {t.action.label}
+            </button>
+          )}
           <button
             onClick={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}
             aria-label="Tutup notifikasi"

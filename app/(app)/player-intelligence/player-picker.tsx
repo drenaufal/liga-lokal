@@ -6,6 +6,7 @@ import { Search } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { POSITION } from "@/lib/status";
+import { LINE_LABEL, type PositionLine } from "@/lib/positions";
 
 type P = {
   id: string;
@@ -50,7 +51,7 @@ export function PlayerPicker({
     router.push(`${pathname}?${next.toString()}`);
   };
 
-  const filters = ["GK", "DF", "MF", "FW"];
+  const filters: PositionLine[] = ["GK", "DF", "MF", "FW"];
   const activePos = params.get("position");
 
   return (
@@ -81,7 +82,7 @@ export function PlayerPicker({
                   : "border-line text-ink-muted",
               )}
             >
-              {POSITION[f].label}
+              {LINE_LABEL[f]}
             </button>
           ))}
         </div>

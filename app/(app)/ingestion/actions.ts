@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, ilike } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   ageCategories,
@@ -24,6 +24,9 @@ import {
   parseCsv,
   similarity,
 } from "@/lib/ingestion";
+import { insertReturning } from "@/lib/db/returning";
+import type { PlayerPosition } from "@/lib/positions";
+import { nextRegistrationNumbers } from "@/lib/registration";
 
 function rev(id?: string) {
   revalidatePath("/ingestion");
@@ -45,17 +48,14 @@ export async function uploadCsv(formData: FormData) {
   const stages = freshStages();
   const missingCols = schema.required.filter((c) => !headers.includes(c));
 
-  const [batch] = await db
-    .insert(importBatches)
-    .values({
+  const [batch] = await insertReturning(db, importBatches, {
       entity: entity as "players" | "clubs" | "referees" | "venues" | "matches",
       fileName: file.name,
       status: "validating",
       totalRows: rows.length,
       stages,
       uploadedBy: user.id,
-    })
-    .returning();
+    });
 
   await db.insert(importRows).values(
     rows.map((raw, i) => ({
@@ -260,7 +260,6 @@ export async function runPipeline(formData: FormData) {
   });
 
   rev(batchId);
-  void ilike;
   void and;
 }
 
@@ -356,16 +355,14 @@ export async function commitBatch(formData: FormData) {
     const n = row.normalized as Record<string, unknown>;
     try {
       if (batch.entity === "players") {
-        const count = await db.$count(players);
-        const [p] = await db
-          .insert(players)
-          .values({
+        const [regNo] = await nextRegistrationNumbers(1);
+        const [p] = await insertReturning(db, players, {
             fullName: String(n.fullName),
             nickname: (n.nickname as string) || null,
-            nisn: (n.nisn as string) || null,
-            registrationNo: `FG-2026-${String(count + 1 + imported).padStart(5, "0")}`,
+            nisn: String(n.nisn),
+            registrationNo: regNo,
             dob: String(n.dob),
-            position: n.position as "GK" | "DF" | "MF" | "FW",
+            position: n.position as PlayerPosition,
             foot: (n.foot as "left" | "right" | "both") || "right",
             jerseyNumber: (n.jerseyNumber as number) ?? null,
             heightCm: (n.heightCm as number) ?? null,
@@ -376,13 +373,10 @@ export async function commitBatch(formData: FormData) {
             clubId: n.clubShort ? clubMap.get(String(n.clubShort).toLowerCase()) ?? null : null,
             ageCategoryId: n.ageCategory ? ageMap.get(String(n.ageCategory).toLowerCase()) ?? null : null,
             verificationStatus: "pending",
-          })
-          .returning();
+          });
         await db.update(importRows).set({ status: "imported", importedEntityId: p.id }).where(eq(importRows.id, row.id));
       } else if (batch.entity === "clubs") {
-        const [c] = await db
-          .insert(clubs)
-          .values({
+        const [c] = await insertReturning(db, clubs, {
             name: String(n.name),
             shortName: String(n.shortName),
             slug: String(n.name).toLowerCase().replace(/[^\w]+/g, "-") + "-" + Date.now().toString(36),
@@ -391,13 +385,10 @@ export async function commitBatch(formData: FormData) {
             type: (n.type as "club" | "academy") || "club",
             foundedYear: (n.foundedYear as number) ?? null,
             contactEmail: (n.contactEmail as string) || null,
-          })
-          .returning();
+          });
         await db.update(importRows).set({ status: "imported", importedEntityId: c.id }).where(eq(importRows.id, row.id));
       } else if (batch.entity === "referees") {
-        const [r] = await db
-          .insert(referees)
-          .values({
+        const [r] = await insertReturning(db, referees, {
             fullName: String(n.fullName),
             licenseLevel: String(n.licenseLevel),
             licenseNumber: String(n.licenseNumber),
@@ -405,21 +396,17 @@ export async function commitBatch(formData: FormData) {
             city: (n.city as string) || null,
             phone: (n.phone as string) || null,
             email: (n.email as string) || null,
-          })
-          .returning();
+          });
         await db.update(importRows).set({ status: "imported", importedEntityId: r.id }).where(eq(importRows.id, row.id));
       } else if (batch.entity === "venues") {
-        const [v] = await db
-          .insert(venues)
-          .values({
+        const [v] = await insertReturning(db, venues, {
             name: String(n.name),
             city: String(n.city),
             province: (n.province as string) || null,
             capacity: (n.capacity as number) ?? null,
             fieldCount: (n.fieldCount as number) ?? 1,
             surface: (n.surface as "natural" | "artificial" | "hybrid" | "futsal") || "natural",
-          })
-          .returning();
+          });
         await db.update(importRows).set({ status: "imported", importedEntityId: v.id }).where(eq(importRows.id, row.id));
       }
       imported++;

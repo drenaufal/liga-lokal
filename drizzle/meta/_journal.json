@@ -1,33 +1,33 @@
 {
   "version": "7",
-  "dialect": "postgresql",
+  "dialect": "mysql",
   "entries": [
     {
       "idx": 0,
-      "version": "7",
-      "when": 1788791962476,
+      "version": "5",
+      "when": 1791473702294,
       "tag": "0000_init",
       "breakpoints": true
     },
     {
       "idx": 1,
-      "version": "7",
-      "when": 1788792766582,
-      "tag": "0001_drop_jersey_idx",
+      "version": "5",
+      "when": 1791475732306,
+      "tag": "0001_player_match_assign",
       "breakpoints": true
     },
     {
       "idx": 2,
-      "version": "7",
-      "when": 1790831389039,
-      "tag": "0002_registry_media_coaches",
+      "version": "5",
+      "when": 1791475811320,
+      "tag": "0002_drop_detailed_position",
       "breakpoints": true
     },
     {
       "idx": 3,
-      "version": "7",
-      "when": 1791388409751,
-      "tag": "0003_match_duration",
+      "version": "5",
+      "when": 1791505449135,
+      "tag": "0003_player_match_stats",
       "breakpoints": true
     }
   ]

@@ -1,5 +1,6 @@
-import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, like, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { expandPosition, positionLine, rolesOfLine } from "@/lib/positions";
 import {
   ageCategories,
   badges,
@@ -11,8 +12,9 @@ import {
 
 export async function searchPlayersForRadar(q?: string, position?: string, age?: string) {
   const conds = [eq(playerStats.season, "career"), sql`${playerStats.appearances} > 0`];
-  if (q) conds.push(ilike(players.fullName, `%${q}%`));
-  if (position) conds.push(eq(players.position, position as "GK" | "DF" | "MF" | "FW"));
+  if (q) conds.push(like(players.fullName, `%${q}%`));
+  const roles = expandPosition(position);
+  if (roles.length) conds.push(inArray(players.position, roles));
   if (age) conds.push(eq(ageCategories.code, age));
 
   return db
@@ -82,7 +84,7 @@ export async function getPeerPool(position: string, ageCategoryId: string | null
       and(
         eq(playerStats.season, "career"),
         sql`${playerStats.appearances} > 0`,
-        eq(players.position, position as "GK" | "DF" | "MF" | "FW"),
+        inArray(players.position, [...rolesOfLine(positionLine(position))]),
         ageCategoryId ? eq(players.ageCategoryId, ageCategoryId) : sql`true`,
       ),
     );

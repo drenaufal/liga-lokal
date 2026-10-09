@@ -52,6 +52,8 @@ export function ConsoleControls({
   homeScore,
   awayScore,
   canOperate,
+  canStart = true,
+  startHint,
   meta,
 }: {
   matchId: string;
@@ -72,6 +74,10 @@ export function ConsoleControls({
   homeScore: number;
   awayScore: number;
   canOperate: boolean;
+  /** Kick-off is allowed (referee and operator are assigned). */
+  canStart?: boolean;
+  /** Why kick-off is blocked, shown under the button. */
+  startHint?: string;
   meta: React.ReactNode;
 }) {
   const [pending, start] = React.useTransition();
@@ -137,10 +143,20 @@ export function ConsoleControls({
       {canOperate && status !== "completed" && (
         <div className="relative mt-5 flex flex-wrap items-center justify-center gap-2 border-t border-night-line pt-5">
           {status === "scheduled" && (
-            <Button size="sm" disabled={pending} onClick={() => setStartOpen(true)}>
-              <Play className="size-3.5" />
-              Mulai Pertandingan
-            </Button>
+            <>
+              <Button size="sm" disabled={pending || !canStart} onClick={() => setStartOpen(true)}>
+                <Play className="size-3.5" />
+                Mulai Pertandingan
+              </Button>
+              {!canStart && (
+                <a
+                  href="#penugasan"
+                  className="basis-full text-center text-[11px] font-medium text-white/75 underline-offset-2 hover:text-white hover:underline"
+                >
+                  {startHint ?? "Tugaskan wasit dan operator terlebih dahulu"} ↓
+                </a>
+              )}
+            </>
           )}
           {status === "live" && period === "first_half" && (
             <Button size="sm" variant="secondary" disabled={pending} onClick={() => run(pauseClock, "Turun minum")}>

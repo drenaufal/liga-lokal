@@ -1,15 +1,16 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
 
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
-import { migrate } from "drizzle-orm/neon-http/migrator";
+import { drizzle } from "drizzle-orm/mysql2";
+import { migrate } from "drizzle-orm/mysql2/migrator";
+import { createPool } from "./pool";
 
 async function main() {
-  const sql = neon(process.env.DATABASE_URL!);
-  const db = drizzle(sql);
-  console.log("→ Running migrations against Neon…");
+  const pool = createPool(process.env.DATABASE_URL!);
+  const db = drizzle(pool);
+  console.log("→ Running migrations against MariaDB…");
   await migrate(db, { migrationsFolder: "./drizzle" });
+  await pool.end();
   console.log("✓ Migrations applied.");
 }
 

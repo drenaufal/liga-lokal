@@ -1,6 +1,7 @@
-import { and, desc, eq, gte, sql, type SQL } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { and, desc, eq, gte, inArray, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { db } from "@/lib/db";
+import { positionLine, rolesOfLine } from "@/lib/positions";
 import {
   aiReports,
   ageCategories,
@@ -18,7 +19,7 @@ import { computeScore, DEFAULT_WEIGHTS } from "@/lib/scoring";
 
 export async function runTalentSearch(filters: ScoutFilters, weights = DEFAULT_WEIGHTS) {
   const conds: SQL[] = [eq(playerStats.season, "career"), sql`${playerStats.appearances} > 0`];
-  if (filters.position) conds.push(eq(players.position, filters.position));
+  if (filters.position) conds.push(inArray(players.position, [...rolesOfLine(filters.position)]));
   if (filters.ageCode) conds.push(eq(ageCategories.code, filters.ageCode));
   if (filters.minGoals) conds.push(gte(playerStats.goals, filters.minGoals));
   if (filters.minAssists) conds.push(gte(playerStats.assists, filters.minAssists));
@@ -117,7 +118,7 @@ export async function getPlayerReportContext(playerId: string) {
       and(
         eq(playerStats.season, "career"),
         sql`${playerStats.appearances} > 0`,
-        eq(players.position, p.position),
+        inArray(players.position, [...rolesOfLine(positionLine(p.position))]),
         p.ageCategoryId ? eq(players.ageCategoryId, p.ageCategoryId) : sql`true`,
       ),
     );
@@ -165,8 +166,8 @@ export async function getCompetitionReportContext(tournamentId: string) {
   if (!t) return null;
   const agg = await db
     .select({
-      played: sql<number>`count(*) filter (where ${matches.status} = 'completed')`,
-      goals: sql<number>`coalesce(sum(${matches.homeScore} + ${matches.awayScore}) filter (where ${matches.status}='completed'),0)`,
+      played: sql<number>`count(case when ${matches.status} = 'completed' then 1 end)`,
+      goals: sql<number>`coalesce(sum(case when ${matches.status}='completed' then ${matches.homeScore} + ${matches.awayScore} end),0)`,
     })
     .from(matches)
     .where(eq(matches.tournamentId, tournamentId));

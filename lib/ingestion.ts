@@ -1,7 +1,8 @@
 import type { ImportIssue, ImportStage } from "@/lib/db/schema";
+import { PLAYER_POSITIONS, parsePosition } from "@/lib/positions";
 
 /* ── CSV parsing (RFC-4180-ish, handles quoted fields) ─────────────── */
-export function parseCsv(text: string): { headers: string[]; rows: Record<string, string>[] } {
+export function parseCsv(text: string, delimiter = ","): { headers: string[]; rows: Record<string, string>[] } {
   const lines: string[][] = [];
   let field = "";
   let row: string[] = [];
@@ -19,7 +20,7 @@ export function parseCsv(text: string): { headers: string[]; rows: Record<string
       } else field += c;
     } else if (c === '"') {
       inQuotes = true;
-    } else if (c === ",") {
+    } else if (c === delimiter) {
       row.push(field);
       field = "";
     } else if (c === "\n") {
@@ -61,7 +62,7 @@ const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse
 
 export const ENTITY_SCHEMAS: Record<string, EntitySchema> = {
   players: {
-    required: ["full_name", "dob", "position"],
+    required: ["full_name", "dob", "position", "nisn"],
     optional: ["nickname", "nisn", "club_short", "age_category", "jersey_number", "height_cm", "weight_kg", "foot", "birth_place", "guardian_name", "guardian_phone"],
     validate: (r) => {
       const issues: ImportIssue[] = [];
@@ -69,8 +70,11 @@ export const ENTITY_SCHEMAS: Record<string, EntitySchema> = {
         issues.push({ field: "full_name", code: "required", message: "Nama lengkap wajib (min 3 karakter)", severity: "error" });
       if (!isDate(r.dob))
         issues.push({ field: "dob", code: "format", message: "Tanggal lahir harus format YYYY-MM-DD", severity: "error" });
-      if (!["GK", "DF", "MF", "FW"].includes((r.position ?? "").toUpperCase()))
-        issues.push({ field: "position", code: "enum", message: "Posisi harus GK/DF/MF/FW", severity: "error" });
+      const pos = parsePosition(r.position);
+      if (!pos)
+        issues.push({ field: "position", code: "enum", message: `Posisi harus salah satu dari ${PLAYER_POSITIONS.join("/")}`, severity: "error" });
+      else if (pos.legacy)
+        issues.push({ field: "position", code: "legacy", message: `Kode umum "${r.position}" dibaca sebagai ${pos.role} - tulis peran spesifik agar akurat`, severity: "warning" });
       if (r.jersey_number && (isNaN(+r.jersey_number) || +r.jersey_number < 1 || +r.jersey_number > 99))
         issues.push({ field: "jersey_number", code: "range", message: "Nomor punggung 1–99", severity: "warning" });
       if (r.dob && isDate(r.dob)) {
@@ -78,7 +82,9 @@ export const ENTITY_SCHEMAS: Record<string, EntitySchema> = {
         if (age < 5 || age > 20)
           issues.push({ field: "dob", code: "business", message: `Usia ${age} tahun di luar rentang wajar akar rumput`, severity: "warning" });
       }
-      if (r.nisn && !/^\d{10}$/.test(r.nisn))
+      if (!r.nisn)
+        issues.push({ field: "nisn", code: "required", message: "NISN wajib diisi (10 digit angka)", severity: "error" });
+      else if (!/^\d{10}$/.test(r.nisn))
         issues.push({ field: "nisn", code: "format", message: "NISN harus 10 digit angka", severity: "error" });
       if (r.foot && !["left", "right", "both", "kiri", "kanan", "keduanya"].includes(r.foot.toLowerCase()))
         issues.push({ field: "foot", code: "enum", message: "Kaki dominan tidak dikenali", severity: "warning" });
@@ -87,9 +93,9 @@ export const ENTITY_SCHEMAS: Record<string, EntitySchema> = {
     normalize: (r) => ({
       fullName: r.full_name.replace(/\s+/g, " ").trim(),
       nickname: r.nickname || null,
-      nisn: r.nisn || null,
+      nisn: r.nisn,
       dob: r.dob,
-      position: (r.position ?? "").toUpperCase(),
+      position: parsePosition(r.position)?.role ?? "",
       jerseyNumber: r.jersey_number ? Number(r.jersey_number) : null,
       heightCm: r.height_cm ? Number(r.height_cm) : null,
       weightKg: r.weight_kg ? Number(r.weight_kg) : null,
