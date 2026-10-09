@@ -56,7 +56,10 @@ npm run dev          # http://localhost:3000
    Untuk membawa data yang sudah ada, ekspor database lokal (`mysqldump`) lalu
    impor lewat phpMyAdmin. Kembalikan `DATABASE_URL` ke lokal setelahnya.
 3. **Aplikasi** — hPanel → Websites → tambah Node.js Web App dari repo GitHub
-   (Next.js, Node 22, build `npm run build`, start `npm start`).
+   (Next.js, Node 22, build `npm run build`, start `npm start`). Skrip `build`
+   memakai `next build --webpack`: Turbopack menjalankan PostCSS lewat proses
+   Node anak yang dimatikan oleh batas proses di hosting bersama
+   (`TurbopackInternalError` di `app/globals.css`).
 4. **Environment variables** di pengaturan aplikasi:
    `DATABASE_URL=mysql://USER:PASSWORD@localhost:3306/NAMA_DB`, `AUTH_SECRET`,
    `AUTH_URL=https://domain-anda`, `AUTH_TRUST_HOST=true`, serta `CLOUDINARY_*` /
