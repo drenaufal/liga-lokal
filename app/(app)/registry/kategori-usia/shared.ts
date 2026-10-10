@@ -9,7 +9,6 @@ export const MAX_CATEGORY_AGE = 20;
 export type CategoryDefaults = {
   code: string;
   label: string;
-  minAge: number;
   maxAge: number;
   halfDuration: number;
   playersOnField: number;
@@ -24,7 +23,6 @@ export function toDefaults(c: AgeCategory): CategoryDefaults {
   return {
     code: c.code,
     label: c.label,
-    minAge: c.minAge,
     maxAge: c.maxAge,
     halfDuration: c.rules.halfDuration,
     playersOnField: c.rules.playersOnField,

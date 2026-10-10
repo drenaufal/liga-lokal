@@ -17,12 +17,12 @@ Bima Sakti,,0129876543,2012-11-03,CMF,GMF,KU-14,8,161,49,left,Bogor,Ibu Rini,081
 Rangga Aditya,,0131234568,2013-04-12,ST,GMF,KU-14,19,157,45,right,Depok,Bapak Slamet,081234567890
 Reza Fahlevi,Levi,0147654321,2014-02-20,CB,XYZ,KU-16,4,,,kanan,,,
 Nabil Ananta,,12345,not-a-date,GK,DBJ,KU-12,1,150,42,right,Jakarta,,`,
-  clubs: `name,short_name,city,province,type,founded_year,contact_email
-Bekasi Raya United,BRU,Bekasi,Jawa Barat,club,2018,sekretariat@bru.or.id
-Akademi Sriwijaya Muda,ASM,Palembang,Sumatera Selatan,academy,2015,info@asm.id`,
-  referees: `full_name,license_level,license_number,license_expiry,city,phone,email
-Hendra Kusuma,C-2,WST-2026-2001,2027-06-30,Depok,081200001111,hendra@pssi.or.id
-Yanto Prawira,C-3,WST-2026-2002,2025-01-15,Bogor,081200002222,`,
+  clubs: `name,short_name,city,province,address,askot,asprov,type,founded_year,contact_email
+SSB Bekasi Raya,BRU,Bekasi,Jawa Barat,Jl. Raya Bekasi No. 8,Askot PSSI Bekasi,Asprov PSSI Jawa Barat,club,2018,sekretariat@bru.or.id
+Akademi Sriwijaya Muda,ASM,Palembang,Sumatera Selatan,Jl. Sudirman No. 21,Askot PSSI Palembang,Asprov PSSI Sumatera Selatan,academy,2015,info@asm.id`,
+  referees: `full_name,license_level,license_number,license_expiry,city,askot,phone,email
+Hendra Kusuma,C-2,WST-2026-2001,2027-06-30,Depok,Askot PSSI Depok,081200001111,hendra@pssi.or.id
+Yanto Prawira,C-3,WST-2026-2002,2025-01-15,Bogor,Askot PSSI Bogor,081200002222,`,
   venues: `name,city,province,capacity,field_count,surface
 Lapangan Merdeka Depok,Depok,Jawa Barat,1500,2,natural
 GOR Futsal Cibubur,Jakarta Timur,DKI Jakarta,400,3,futsal`,

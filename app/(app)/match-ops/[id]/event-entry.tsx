@@ -36,7 +36,6 @@ export type ClubMini = {
   id: string;
   short: string;
   name: string;
-  color: string | null;
   logo?: string | null;
 };
 
@@ -196,7 +195,7 @@ export function EventForm({
             </p>
           </div>
           <span className="flex shrink-0 flex-col items-center gap-1">
-            <ClubCrest logoUrl={club.logo} short={club.short} color={club.color} size={34} />
+            <ClubCrest logoUrl={club.logo} short={club.short} size={34} />
             <span className="text-[10px] font-semibold text-ink-muted">{club.short}</span>
           </span>
         </div>
@@ -218,7 +217,7 @@ export function EventForm({
                   : "border-line text-ink-secondary hover:border-ink/30",
               )}
             >
-              <ClubCrest logoUrl={c.logo} short={c.short} color={c.color} size={26} />
+              <ClubCrest logoUrl={c.logo} short={c.short} size={26} />
               <span className="truncate">{c.name}</span>
             </button>
           ))}

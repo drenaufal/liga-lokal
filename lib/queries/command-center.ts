@@ -3,8 +3,10 @@ import { alias } from "drizzle-orm/mysql-core";
 import { db } from "@/lib/db";
 import { MATCH_DURATION_SQL } from "@/lib/match-clock";
 import {
+  ageCategories,
   auditLogs,
   clubs,
+  competitions,
   matches,
   players,
   playerStats,
@@ -12,6 +14,7 @@ import {
   tournaments,
   venues,
 } from "@/lib/db/schema";
+import { kuNameSql } from "@/lib/queries/ku";
 
 export async function getCommandCenterData() {
   const weekAgo = new Date(Date.now() - 7 * 86400000);
@@ -67,17 +70,17 @@ export async function getCommandCenterData() {
         period: matches.period,
         home: hc.name,
         homeShort: hc.shortName,
-        homeColor: hc.primaryColor,
         homeLogo: hc.logoUrl,
         away: ac.name,
         awayShort: ac.shortName,
-        awayColor: ac.primaryColor,
         awayLogo: ac.logoUrl,
-        tournament: tournaments.name,
+        tournament: kuNameSql,
         venue: venues.name,
       })
       .from(matches)
       .innerJoin(tournaments, eq(tournaments.id, matches.tournamentId))
+      .innerJoin(competitions, eq(competitions.id, tournaments.competitionId))
+      .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
       .leftJoin(hc, eq(hc.id, matches.homeClubId))
       .leftJoin(ac, eq(ac.id, matches.awayClubId))
       .leftJoin(venues, eq(venues.id, matches.venueId))

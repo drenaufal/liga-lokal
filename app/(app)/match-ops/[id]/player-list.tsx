@@ -216,7 +216,7 @@ export function PlayerList({
                   active ? "border-night bg-night text-white" : "border-line bg-surface hover:border-ink/30",
                 )}
               >
-                <ClubCrest logoUrl={t.club.logo} short={t.club.short} color={t.club.color} size={40} />
+                <ClubCrest logoUrl={t.club.logo} short={t.club.short} size={40} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{t.club.name}</span>
                   <span className={cn("block text-[11px]", active ? "text-white/65" : "text-ink-muted")}>
@@ -230,9 +230,10 @@ export function PlayerList({
         </div>
 
         {groups.length === 0 && (
-          <p className="rounded-2xl bg-surface-2 px-3 py-10 text-center text-xs text-ink-muted">
-            Belum ada pemain terdaftar untuk {team.club.name}.
-          </p>
+          <div className="rounded-2xl bg-surface-2 px-3 py-10 text-center text-xs text-ink-muted">
+            <p>Belum ada pemain terdaftar untuk {team.club.name} pada kategori usia pertandingan ini.</p>
+            <p className="mt-2">Periksa skuad KU atau klub utama / klub kedua dan kategori usia pemain di Master Data → Pemain.</p>
+          </div>
         )}
 
         {groups.map((g) => (

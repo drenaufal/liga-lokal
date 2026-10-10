@@ -42,22 +42,26 @@ export const VENUES = [
 ];
 
 export const CLUBS = [
-  { name: "Garuda Muda Football Academy", short: "GMF", type: "academy" as const, city: "Jakarta Selatan", province: "DKI Jakarta", founded: 2009, colors: ["#00e28a", "#0a0e14"] },
-  { name: "Depok Bhayangkara Junior", short: "DBJ", type: "club" as const, city: "Depok", province: "Jawa Barat", founded: 2012, colors: ["#38bdf8", "#0a0e14"] },
-  { name: "Cibinong Putra FC", short: "CPF", type: "club" as const, city: "Bogor", province: "Jawa Barat", founded: 2005, colors: ["#fbbf24", "#111720"] },
-  { name: "Rajawali Bekasi Soccer School", short: "RBS", type: "academy" as const, city: "Bekasi", province: "Jawa Barat", founded: 2015, colors: ["#f87171", "#0a0e14"] },
-  { name: "Tangerang Elang Muda", short: "TEM", type: "club" as const, city: "Tangerang", province: "Banten", founded: 2010, colors: ["#a78bfa", "#0a0e14"] },
-  { name: "Jakarta Timur United Youth", short: "JTU", type: "club" as const, city: "Jakarta Timur", province: "DKI Jakarta", founded: 2008, colors: ["#f472b6", "#111720"] },
-  { name: "Persib Junior Development", short: "PJD", type: "academy" as const, city: "Bandung", province: "Jawa Barat", founded: 2000, colors: ["#60a5fa", "#0a0e14"] },
-  { name: "Ciputat Raya FA", short: "CRF", type: "academy" as const, city: "Tangerang Selatan", province: "Banten", founded: 2016, colors: ["#34d399", "#0a0e14"] },
-  { name: "Bogor Kencana FC", short: "BKF", type: "club" as const, city: "Bogor", province: "Jawa Barat", founded: 2007, colors: ["#fb923c", "#111720"] },
-  { name: "Bintang Selatan Academy", short: "BSA", type: "academy" as const, city: "Jakarta Selatan", province: "DKI Jakarta", founded: 2013, colors: ["#22d3ee", "#0a0e14"] },
-  { name: "Metro Bekasi Junior", short: "MBJ", type: "club" as const, city: "Bekasi", province: "Jawa Barat", founded: 2011, colors: ["#facc15", "#0a0e14"] },
-  { name: "Depok Garuda Sakti", short: "DGS", type: "club" as const, city: "Depok", province: "Jawa Barat", founded: 2014, colors: ["#c084fc", "#0a0e14"] },
+  { name: "Garuda Muda Football Academy", short: "GMF", type: "academy" as const, city: "Jakarta Selatan", province: "DKI Jakarta", founded: 2009 },
+  { name: "Depok Bhayangkara Junior", short: "DBJ", type: "club" as const, city: "Depok", province: "Jawa Barat", founded: 2012 },
+  { name: "Cibinong Putra FC", short: "CPF", type: "club" as const, city: "Bogor", province: "Jawa Barat", founded: 2005 },
+  { name: "Rajawali Bekasi Soccer School", short: "RBS", type: "academy" as const, city: "Bekasi", province: "Jawa Barat", founded: 2015 },
+  { name: "Tangerang Elang Muda", short: "TEM", type: "club" as const, city: "Tangerang", province: "Banten", founded: 2010 },
+  { name: "Jakarta Timur United Youth", short: "JTU", type: "club" as const, city: "Jakarta Timur", province: "DKI Jakarta", founded: 2008 },
+  { name: "Persib Junior Development", short: "PJD", type: "academy" as const, city: "Bandung", province: "Jawa Barat", founded: 2000 },
+  { name: "Ciputat Raya FA", short: "CRF", type: "academy" as const, city: "Tangerang Selatan", province: "Banten", founded: 2016 },
+  { name: "Bogor Kencana FC", short: "BKF", type: "club" as const, city: "Bogor", province: "Jawa Barat", founded: 2007 },
+  { name: "Bintang Selatan Academy", short: "BSA", type: "academy" as const, city: "Jakarta Selatan", province: "DKI Jakarta", founded: 2013 },
+  { name: "Metro Bekasi Junior", short: "MBJ", type: "club" as const, city: "Bekasi", province: "Jawa Barat", founded: 2011 },
+  { name: "Depok Garuda Sakti", short: "DGS", type: "club" as const, city: "Depok", province: "Jawa Barat", founded: 2014 },
 ];
 
 export const REFEREE_LEVELS = ["C-3", "C-2", "C-1", "Nasional"];
 
+/**
+ * `minAge` is only used here, to spread the generated players' birth years over
+ * the youngest ages of a category; the database stores just the upper limit.
+ */
 export const AGE_CATEGORIES = [
   {
     code: "KU-8", label: "Kelompok Umur 8", minAge: 6, maxAge: 8,
@@ -82,16 +86,16 @@ export const AGE_CATEGORIES = [
 ];
 
 export const BADGES = [
-  { code: "top_scorer", name: "Pencetak Gol Terbanyak", description: "Top skor pada sebuah kompetisi resmi.", icon: "target", tier: "gold" as const },
-  { code: "playmaker", name: "Kreator Serangan", description: "Assist terbanyak pada sebuah kompetisi.", icon: "wand", tier: "gold" as const },
-  { code: "golden_glove", name: "Sarung Tangan Emas", description: "Kiper dengan nirbobol terbanyak.", icon: "hand", tier: "gold" as const },
-  { code: "mvp_tournament", name: "Pemain Terbaik Turnamen", description: "Pemain paling berpengaruh sepanjang turnamen.", icon: "star", tier: "platinum" as const },
-  { code: "hat_trick", name: "Hat-trick", description: "Mencetak tiga gol dalam satu pertandingan.", icon: "flame", tier: "silver" as const },
-  { code: "iron_man", name: "Manusia Besi", description: "Bermain penuh di seluruh pertandingan kompetisi.", icon: "shield", tier: "silver" as const },
-  { code: "fair_play", name: "Fair Play", description: "Tanpa kartu sepanjang kompetisi dengan >8 penampilan.", icon: "heart", tier: "bronze" as const },
-  { code: "debut", name: "Debut Kompetisi", description: "Penampilan pertama pada kompetisi resmi LigaLokal.", icon: "sparkles", tier: "bronze" as const },
-  { code: "rising_talent", name: "Talenta Menjanjikan", description: "Skor performa persentil 90+ untuk kelompok umurnya.", icon: "trending-up", tier: "gold" as const },
-  { code: "wall", name: "Tembok Pertahanan", description: "Tekel + intersep terbanyak pada sebuah kompetisi.", icon: "brick-wall", tier: "silver" as const },
+  { code: "top_scorer", name: "Pencetak Gol Terbanyak", description: "Top skor pada sebuah kompetisi resmi.", icon: "target" },
+  { code: "playmaker", name: "Kreator Serangan", description: "Assist terbanyak pada sebuah kompetisi.", icon: "wand" },
+  { code: "golden_glove", name: "Sarung Tangan Emas", description: "Kiper dengan nirbobol terbanyak.", icon: "hand" },
+  { code: "mvp_tournament", name: "Pemain Terbaik Turnamen", description: "Pemain paling berpengaruh sepanjang turnamen.", icon: "star" },
+  { code: "hat_trick", name: "Hat-trick", description: "Mencetak tiga gol dalam satu pertandingan.", icon: "flame" },
+  { code: "iron_man", name: "Manusia Besi", description: "Bermain penuh di seluruh pertandingan kompetisi.", icon: "shield" },
+  { code: "fair_play", name: "Fair Play", description: "Tanpa kartu sepanjang kompetisi dengan >8 penampilan.", icon: "heart" },
+  { code: "debut", name: "Debut Kompetisi", description: "Penampilan pertama pada kompetisi resmi LigaLokal.", icon: "sparkles" },
+  { code: "rising_talent", name: "Talenta Menjanjikan", description: "Skor performa persentil 90+ untuk kelompok umurnya.", icon: "trending-up" },
+  { code: "wall", name: "Tembok Pertahanan", description: "Tekel + intersep terbanyak pada sebuah kompetisi.", icon: "brick-wall" },
 ];
 
 export const FORMATIONS: Record<string, { slot: string; x: number; y: number }[]> = {

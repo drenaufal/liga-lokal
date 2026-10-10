@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { ArrowRight, Menu, X } from "lucide-react";
-import { Logo } from "@/components/brand/logo";
+import { LogoChip } from "@/components/brand/logo";
 import { BRAND } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
@@ -62,7 +62,7 @@ export function LandingNav({ links }: { links: LandingLink[] }) {
           )}
         >
           <Link href="/" aria-label={BRAND.name} className="shrink-0">
-            <Logo variant="wordmark" className="h-10 text-ink" />
+            <LogoChip logoClassName="h-10" />
           </Link>
 
           <nav aria-label="Bagian halaman" className="hidden items-center gap-1 md:flex">

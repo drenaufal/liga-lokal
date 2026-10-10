@@ -7,6 +7,7 @@ import { PanelLeftClose, PanelLeft } from "lucide-react";
 import { NAV, SETTINGS_NAV } from "@/lib/nav";
 import { can, type Role } from "@/lib/auth/rbac";
 import { Logo } from "@/components/brand/logo";
+import { BRAND } from "@/lib/brand";
 import { Icon } from "./icon";
 import { cn } from "@/lib/utils";
 
@@ -25,13 +26,9 @@ export function Sidebar({ role }: { role: Role }) {
         collapsed ? "w-[76px]" : "w-[248px]",
       )}
     >
-      <div className={cn("flex h-20 items-center", collapsed ? "justify-center px-3" : "px-5")}>
-        <Link href="/command-center" className="flex items-center text-white">
-          {collapsed ? (
-            <Logo variant="mark" className="h-10" />
-          ) : (
-            <Logo variant="wordmark" className="h-12" />
-          )}
+      <div className={cn("flex h-24 items-center", collapsed ? "justify-center px-3" : "px-5")}>
+        <Link href="/command-center" aria-label={BRAND.name} className="flex items-center">
+          <Logo className={collapsed ? "h-9" : "h-[72px]"} />
         </Link>
       </div>
 

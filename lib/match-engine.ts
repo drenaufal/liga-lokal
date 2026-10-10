@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   ageCategories,
+  competitions,
   matchEvents,
   matchLineups,
   matches,
@@ -41,18 +42,18 @@ export function liveMinute(
 
 const GOAL_TYPES = ["goal", "penalty_goal"];
 
-/** Recompute a match's scoreline from its non-voided events. */
-export async function recomputeMatchScore(matchId: string) {
-  const evs = await db
+/** Serialize score refreshes so concurrent recorders cannot overwrite a newer total. */
+export async function recomputeMatchScore(matchId: string, tx?: Tx): Promise<void> {
+  if (!tx) return db.transaction((transaction) => recomputeMatchScore(matchId, transaction));
+  const [m] = await tx.select().from(matches).where(eq(matches.id, matchId)).for("update");
+  if (!m) return;
+  const evs = await tx
     .select({
       type: matchEvents.type,
       clubId: matchEvents.clubId,
     })
     .from(matchEvents)
     .where(and(eq(matchEvents.matchId, matchId), eq(matchEvents.voided, false)));
-
-  const m = await db.query.matches.findFirst({ where: eq(matches.id, matchId) });
-  if (!m) return;
 
   let home = 0;
   let away = 0;
@@ -67,7 +68,7 @@ export async function recomputeMatchScore(matchId: string) {
     }
   }
 
-  await db
+  await tx
     .update(matches)
     .set({ homeScore: home, awayScore: away, updatedAt: new Date() })
     .where(eq(matches.id, matchId));
@@ -154,8 +155,9 @@ export async function syncMatchStats(matchId: string, weights: FormulaWeights) {
     if (!m) return { players: 0 };
 
     const [tour] = await tx
-      .select({ season: tournaments.season, rules: ageCategories.rules })
+      .select({ season: competitions.season, rules: ageCategories.rules })
       .from(tournaments)
+      .innerJoin(competitions, eq(competitions.id, tournaments.competitionId))
       .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
       .where(eq(tournaments.id, m.tournamentId));
     const duration = m.durationMinutes ?? tour?.rules?.matchDuration ?? DEFAULT_MATCH_MINUTES;

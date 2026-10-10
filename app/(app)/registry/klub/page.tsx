@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { MapPin, Users2, CalendarClock, Plus } from "lucide-react";
+import { MapPin, Users2, Landmark, Plus } from "lucide-react";
 import { listClubs } from "@/lib/queries/registry";
 import { getCurrentUser } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
@@ -12,7 +12,7 @@ import { ClubCrest } from "@/components/app/club-crest";
 import { SearchBox, FilterSelect } from "@/components/app/list-controls";
 import { EmptyState } from "@/components/ui/misc";
 
-export const metadata: Metadata = { title: "Klub & Akademi" };
+export const metadata: Metadata = { title: "SSB" };
 export const dynamic = "force-dynamic";
 
 export default async function ClubsPage({
@@ -28,25 +28,25 @@ export default async function ClubsPage({
   return (
     <div>
       <PageHeader
-        title="Registrasi Klub & Akademi"
-        description="Profil klub, logo tim, manajemen skuad, dan riwayat performa antar kompetisi."
+        title="Registrasi SSB"
+        description="Profil SSB, logo, afiliasi Askot / Asprov, alamat, skuad, dan riwayat performa antar kompetisi."
         actions={
           canWrite && (
             <Button size="sm" href="/registry/klub/baru">
-              <Plus className="size-3.5" /> Klub Baru
+              <Plus className="size-3.5" /> SSB Baru
             </Button>
           )
         }
       />
       <Card className="mb-4">
         <div className="flex flex-wrap items-center gap-2 p-3">
-          <SearchBox placeholder="Cari klub…" />
+          <SearchBox placeholder="Cari nama SSB, Askot, Asprov…" />
           <FilterSelect
             param="type"
             placeholder="Semua jenis"
             options={[
               { value: "club", label: "Klub" },
-              { value: "academy", label: "Akademi" },
+              { value: "academy", label: "Akademi / SSB" },
             ]}
           />
           <FilterSelect
@@ -58,47 +58,47 @@ export default async function ClubsPage({
       </Card>
 
       {rows.length === 0 ? (
-        <EmptyState title="Tidak ada klub yang cocok" />
+        <EmptyState title="Tidak ada SSB yang cocok" />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {rows.map((c) => (
-            <Link
-              key={c.id}
-              href={`/registry/klub/${c.id}`}
-              className="group rounded-xl border border-line bg-surface/70 p-4 transition-colors hover:border-brand/40"
-            >
-              <div className="flex items-start gap-3">
-                <ClubCrest logoUrl={c.logoUrl} short={c.shortName} color={c.primaryColor} size={44} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-ink group-hover:text-brand">
-                    {c.name}
-                  </p>
-                  <p className="text-xs text-ink-muted">
-                    {c.shortName} · Est. {c.foundedYear ?? "—"}
-                  </p>
+          {rows.map((c) => {
+            const affiliation = [c.askot, c.asprov].filter(Boolean).join(" · ");
+            return (
+              <Link
+                key={c.id}
+                href={`/registry/klub/${c.id}`}
+                className="group rounded-xl border border-line bg-surface/70 p-4 transition-colors hover:border-brand/40"
+              >
+                <div className="flex items-start gap-3">
+                  <ClubCrest logoUrl={c.logoUrl} short={c.shortName} size={44} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-ink group-hover:text-brand">
+                      {c.name}
+                    </p>
+                    <p className="text-xs text-ink-muted">
+                      {c.shortName} · Est. {c.foundedYear ?? "—"}
+                    </p>
+                  </div>
+                  <Badge tone={c.type === "academy" ? "violet" : "info"}>
+                    {c.type === "academy" ? "Akademi" : "Klub"}
+                  </Badge>
                 </div>
-                <Badge tone={c.type === "academy" ? "violet" : "info"}>
-                  {c.type === "academy" ? "Akademi" : "Klub"}
-                </Badge>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink-muted">
-                <span className="flex items-center gap-1">
-                  <MapPin className="size-3" /> {c.city}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Users2 className="size-3" /> {c.squadSize} pemain
-                </span>
-                {c.venue && (
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink-muted">
                   <span className="flex items-center gap-1">
-                    <CalendarClock className="size-3" /> {c.venue}
+                    <MapPin className="size-3" /> {c.city}
                   </span>
-                )}
-              </div>
-              {c.accreditation && (
-                <p className="mt-2 text-[10px] text-brand">{c.accreditation}</p>
-              )}
-            </Link>
-          ))}
+                  <span className="flex items-center gap-1">
+                    <Users2 className="size-3" /> {c.squadSize} pemain
+                  </span>
+                  {affiliation && (
+                    <span className="flex items-center gap-1">
+                      <Landmark className="size-3" /> {affiliation}
+                    </span>
+                  )}
+                </div>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

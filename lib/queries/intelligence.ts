@@ -1,13 +1,15 @@
-import { and, asc, desc, eq, like, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, like, inArray, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { expandPosition, positionLine, rolesOfLine } from "@/lib/positions";
 import {
   ageCategories,
   badges,
   clubs,
+  competitions,
   playerBadges,
   players,
   playerStats,
+  tournaments,
 } from "@/lib/db/schema";
 
 export async function searchPlayersForRadar(q?: string, position?: string, age?: string) {
@@ -22,7 +24,6 @@ export async function searchPlayersForRadar(q?: string, position?: string, age?:
       id: players.id,
       name: players.fullName,
       club: clubs.shortName,
-      clubColor: clubs.primaryColor,
       position: players.position,
       ageCode: ageCategories.code,
       photoUrl: players.photoUrl,
@@ -48,7 +49,6 @@ export async function getPlayerRadarData(ids: string[]) {
       id: players.id,
       name: players.fullName,
       club: clubs.shortName,
-      clubColor: clubs.primaryColor,
       position: players.position,
       ageCode: ageCategories.code,
       ageCategoryId: players.ageCategoryId,
@@ -90,26 +90,62 @@ export async function getPeerPool(position: string, ageCategoryId: string | null
     );
 }
 
-export async function getBadgeGallery() {
-  const defs = await db.select().from(badges);
-  const awards = await db
-    .select({
-      badgeId: playerBadges.badgeId,
-      playerId: playerBadges.playerId,
-      playerName: players.fullName,
-      club: clubs.shortName,
-      context: playerBadges.context,
-      awardedAt: playerBadges.awardedAt,
-    })
-    .from(playerBadges)
-    .innerJoin(players, eq(players.id, playerBadges.playerId))
-    .leftJoin(clubs, eq(clubs.id, players.clubId))
-    .orderBy(desc(playerBadges.awardedAt));
+/**
+ * The badge gallery. Awards belong to a KU (a row of `tournaments`), so they
+ * are counted per Turnamen and per KU: `competitionId` narrows to one Turnamen,
+ * `ageCategoryId` to one KU (age group) — across all Turnamen, or inside the
+ * chosen one. With neither, every award is listed.
+ */
+export async function getBadgeGallery(filter: { competitionId?: string; ageCategoryId?: string } = {}) {
+  const conds: SQL[] = [];
+  if (filter.competitionId) conds.push(eq(tournaments.competitionId, filter.competitionId));
+  if (filter.ageCategoryId) conds.push(eq(tournaments.ageCategoryId, filter.ageCategoryId));
 
-  return defs.map((d) => ({
-    ...d,
-    awards: awards.filter((a) => a.badgeId === d.id),
-  }));
+  const [defs, awards, competitionRows, kuRows] = await Promise.all([
+    db.select().from(badges),
+    db
+      .select({
+        badgeId: playerBadges.badgeId,
+        playerId: playerBadges.playerId,
+        playerName: players.fullName,
+        club: clubs.shortName,
+        context: playerBadges.context,
+        awardedAt: playerBadges.awardedAt,
+        kuId: tournaments.id,
+        competition: competitions.name,
+        ageCode: ageCategories.code,
+      })
+      .from(playerBadges)
+      .innerJoin(players, eq(players.id, playerBadges.playerId))
+      .leftJoin(clubs, eq(clubs.id, players.clubId))
+      // an award without a KU (very old data) only shows when nothing is filtered
+      .leftJoin(tournaments, eq(tournaments.id, playerBadges.tournamentId))
+      .leftJoin(competitions, eq(competitions.id, tournaments.competitionId))
+      .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
+      .where(conds.length ? and(...conds) : undefined)
+      .orderBy(desc(playerBadges.awardedAt)),
+    db
+      .select({ id: competitions.id, name: competitions.name, season: competitions.season })
+      .from(competitions)
+      .orderBy(desc(competitions.createdAt)),
+    // the KUs on offer: those inside the chosen Turnamen, else every age group that has a KU
+    db
+      .selectDistinct({ id: ageCategories.id, code: ageCategories.code, sortOrder: ageCategories.sortOrder })
+      .from(tournaments)
+      .innerJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
+      .where(filter.competitionId ? eq(tournaments.competitionId, filter.competitionId) : undefined)
+      .orderBy(asc(ageCategories.sortOrder)),
+  ]);
+
+  return {
+    badges: defs.map((d) => ({
+      ...d,
+      awards: awards.filter((a) => a.badgeId === d.id),
+    })),
+    totalAwards: awards.length,
+    competitions: competitionRows,
+    kus: kuRows.map((k) => ({ id: k.id, code: k.code })),
+  };
 }
 
 export async function getFormulaData() {

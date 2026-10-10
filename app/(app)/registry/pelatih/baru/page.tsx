@@ -26,7 +26,7 @@ export default async function NewCoachPage({
       </Link>
       <h1 className="text-lg font-semibold tracking-tight text-ink">Registrasi Pelatih Baru</h1>
       <p className="mt-1 text-sm text-ink-muted">
-        Status lisensi dihitung otomatis dari tanggal berlaku dan tercatat pada jejak audit.
+        Unggah lisensi kepelatihan dan KTP. Perubahan tercatat pada jejak audit.
       </p>
       <Card className="mt-5">
         <CardContent>

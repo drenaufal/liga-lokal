@@ -39,7 +39,6 @@ export type SearchState = {
     position: string;
     ageCode: string | null;
     club: string | null;
-    clubColor: string | null;
     photoUrl: string | null;
     goals: number;
     assists: number;

@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Mail, Phone, MapPin, ScrollText } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, ScrollText, Pencil, Landmark } from "lucide-react";
 import { getRefereeProfile } from "@/lib/queries/registry";
+import { getCurrentUser } from "@/lib/auth/session";
+import { can } from "@/lib/auth/rbac";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/app/status-badge";
 import { formatDate } from "@/lib/utils";
 
@@ -30,6 +33,8 @@ export default async function RefereeProfilePage({
   const d = await getRefereeProfile(id);
   if (!d) notFound();
   const { referee: r, assignments } = d;
+  const user = await getCurrentUser();
+  const canWrite = can(user?.role, "registry:write");
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -48,9 +53,16 @@ export default async function RefereeProfilePage({
               <h1 className="text-lg font-semibold tracking-tight text-ink">{r.fullName}</h1>
               <Badge tone="violet">{r.licenseLevel}</Badge>
               <StatusBadge kind="referee" value={r.status} dot />
+              {canWrite && (
+                <Button variant="outline" size="sm" href={`/registry/wasit/${r.id}/edit`} className="ml-auto">
+                  <Pencil className="size-3.5" /> Ubah data
+                </Button>
+              )}
             </div>
+            {r.specialty && <p className="mt-0.5 text-xs text-ink-muted">{r.specialty}</p>}
             <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-secondary">
               <span className="flex items-center gap-1"><ScrollText className="size-3" /> {r.licenseNumber}</span>
+              {r.askot && <span className="flex items-center gap-1"><Landmark className="size-3" /> Asal {r.askot}</span>}
               {r.city && <span className="flex items-center gap-1"><MapPin className="size-3" /> {r.city}</span>}
               {r.email && <span className="flex items-center gap-1"><Mail className="size-3" /> {r.email}</span>}
               {r.phone && <span className="flex items-center gap-1"><Phone className="size-3" /> {r.phone}</span>}

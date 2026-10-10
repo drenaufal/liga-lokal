@@ -29,6 +29,20 @@
       "when": 1791505449135,
       "tag": "0003_player_match_stats",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1791603648755,
+      "tag": "0004_turnamen_ku",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1791660495938,
+      "tag": "0005_match_operators",
+      "breakpoints": true
     }
   ]
 }

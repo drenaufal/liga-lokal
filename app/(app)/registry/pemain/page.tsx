@@ -20,6 +20,7 @@ import {
 } from "@/components/app/list-controls";
 import { POSITION_LINES, POSITION_NAME } from "@/lib/positions";
 import { PLAYER_DOCUMENTS } from "@/lib/player-documents";
+import { crestTint } from "@/lib/crest";
 import { ageFromDob } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Registrasi Pemain" };
@@ -146,7 +147,7 @@ export default async function PlayersPage({
                         <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                           <span
                             className="size-2 rounded-full"
-                            style={{ background: p.clubColor ?? "var(--color-brand)" }}
+                            style={{ background: crestTint(p.clubShort).bg }}
                           />
                           {p.clubName}
                           {p.secondClubShort && (
@@ -156,7 +157,7 @@ export default async function PlayersPage({
                             >
                               <span
                                 className="size-1.5 rounded-full"
-                                style={{ background: p.secondClubColor ?? "var(--color-info)" }}
+                                style={{ background: crestTint(p.secondClubShort).bg }}
                               />
                               +{p.secondClubShort}
                             </span>

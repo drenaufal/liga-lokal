@@ -23,11 +23,10 @@ export function CategoryForm({
   const sv = state?.values ?? {};
   const val = (key: keyof CategoryDefaults) => (key in sv ? sv[key] : String(defaults[key]));
 
-  const [minAge, setMinAge] = React.useState(Number(val("minAge")));
   const [maxAge, setMaxAge] = React.useState(Number(val("maxAge")));
   const [half, setHalf] = React.useState(Number(val("halfDuration")));
   const year = new Date().getFullYear();
-  const ageOk = minAge >= MIN_CATEGORY_AGE && maxAge <= MAX_CATEGORY_AGE && maxAge >= minAge;
+  const ageOk = maxAge >= MIN_CATEGORY_AGE && maxAge <= MAX_CATEGORY_AGE;
 
   return (
     <form action={formAction} className="space-y-6">
@@ -38,18 +37,11 @@ export function CategoryForm({
         <Field label="Nama kategori" error={fe.label}>
           <Input name="label" required defaultValue={val("label")} placeholder="Kelompok Umur 18" />
         </Field>
-        <Field label="Usia minimal" error={fe.minAge}>
-          <Input
-            name="minAge"
-            type="number"
-            required
-            min={MIN_CATEGORY_AGE}
-            max={MAX_CATEGORY_AGE}
-            defaultValue={val("minAge")}
-            onChange={(e) => setMinAge(Number(e.target.value))}
-          />
-        </Field>
-        <Field label="Usia maksimal" error={fe.maxAge} hint={`Maksimal ${MAX_CATEGORY_AGE} tahun`}>
+        <Field
+          label="Usia maksimal"
+          error={fe.maxAge}
+          hint={`${MIN_CATEGORY_AGE}–${MAX_CATEGORY_AGE} tahun`}
+        >
           <Input
             name="maxAge"
             type="number"
@@ -63,11 +55,11 @@ export function CategoryForm({
         <p className="rounded-lg border border-line-soft bg-surface-2/40 px-3 py-2 text-[11px] text-ink-muted sm:col-span-2">
           {ageOk ? (
             <>
-              Pemain kelahiran <strong className="text-ink">{year - maxAge}–{year - minAge}</strong> masuk kategori ini
-              (acuan musim {year}).
+              Pemain kelahiran <strong className="text-ink">{year - maxAge}</strong> atau setelahnya (usia ≤ {maxAge}{" "}
+              tahun) boleh bermain di kategori ini (acuan musim {year}).
             </>
           ) : (
-            <>Rentang usia harus antara {MIN_CATEGORY_AGE} dan {MAX_CATEGORY_AGE} tahun.</>
+            <>Usia maksimal harus antara {MIN_CATEGORY_AGE} dan {MAX_CATEGORY_AGE} tahun.</>
           )}
         </p>
       </Section>

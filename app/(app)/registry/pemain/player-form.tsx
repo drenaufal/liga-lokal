@@ -25,8 +25,8 @@ import type { Player } from "@/lib/db/schema";
 type AgeOption = {
   id: string;
   code: string;
+  /** Oldest eligible birth year: a player born in or after it may play in the category. */
   birthYearFrom: number | null;
-  birthYearTo: number | null;
 };
 
 const DOC_ICON: Record<PlayerDocumentKey, React.ComponentType<{ className?: string }>> = {
@@ -66,23 +66,18 @@ export function PlayerForm({
   const [dob, setDob] = React.useState(val("dob"));
   const ageRef = React.useRef<HTMLSelectElement>(null);
   const birthYear = dob ? Number(dob.slice(0, 4)) : null;
-  const suggested = birthYear
-    ? ageCategories.find(
-        (a) =>
-          a.birthYearFrom != null &&
-          a.birthYearTo != null &&
-          birthYear >= a.birthYearFrom &&
-          birthYear <= a.birthYearTo,
-      )
-    : undefined;
+  // A category only has an upper age limit, so a young player fits several; the
+  // suggestion is the tightest one (the youngest category he still qualifies for).
+  const bestFit = (year: number) =>
+    ageCategories
+      .filter((a) => a.birthYearFrom != null && year >= a.birthYearFrom)
+      .sort((a, b) => (b.birthYearFrom ?? 0) - (a.birthYearFrom ?? 0))[0];
+  const suggested = birthYear ? bestFit(birthYear) : undefined;
 
   const onDob = (value: string) => {
     setDob(value);
     // Fill the category automatically only while it is still unset.
-    const y = Number(value.slice(0, 4));
-    const match = ageCategories.find(
-      (a) => a.birthYearFrom != null && a.birthYearTo != null && y >= a.birthYearFrom && y <= a.birthYearTo,
-    );
+    const match = bestFit(Number(value.slice(0, 4)));
     if (match && ageRef.current && !ageRef.current.value) ageRef.current.value = match.id;
   };
 

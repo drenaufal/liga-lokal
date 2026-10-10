@@ -19,6 +19,16 @@ const nextConfig: NextConfig = {
     // but don't hard-block the demo build on them.
     ignoreBuildErrors: true,
   },
+  // The icon set lives in /public/Web. Browsers, crawlers and iOS ask for these
+  // well-known names at the site root, so point them at the real files.
+  async rewrites() {
+    return [
+      { source: "/favicon.ico", destination: "/Web/favicon.ico" },
+      { source: "/apple-touch-icon.png", destination: "/Web/apple-touch-icon.png" },
+      { source: "/apple-touch-icon-precomposed.png", destination: "/Web/apple-touch-icon.png" },
+      { source: "/manifest.json", destination: "/Web/manifest.json" },
+    ];
+  },
 };
 
 export default nextConfig;

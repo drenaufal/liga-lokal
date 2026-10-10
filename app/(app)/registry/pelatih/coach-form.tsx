@@ -2,23 +2,33 @@
 
 import * as React from "react";
 import { useActionState } from "react";
-import { Loader2, Save, UserPlus } from "lucide-react";
+import { IdCard, Loader2, Save, ScrollText, UserPlus } from "lucide-react";
 import { createCoach, updateCoach } from "./actions";
 import type { FormState } from "@/lib/form";
 import type { Coach } from "@/lib/db/schema";
 import { COACH_LICENSE_LEVELS, COACH_SPECIALTIES } from "@/lib/status";
+import { COACH_DOCUMENTS, type CoachDocumentKey } from "@/lib/coach-documents";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Field } from "@/components/ui/input";
 import { ImageUpload } from "@/components/app/image-upload";
+import { DocumentUpload, type DocumentMeta } from "@/components/app/document-upload";
+
+const DOC_ICON: Record<CoachDocumentKey, React.ComponentType<{ className?: string }>> = {
+  licenseDocUrl: ScrollText,
+  ktpUrl: IdCard,
+};
 
 export function CoachForm({
   clubs,
   coach,
   defaultClubId,
+  docMeta,
 }: {
   clubs: { id: string; name: string }[];
   coach?: Coach;
   defaultClubId?: string;
+  /** File name / size of already-uploaded documents (only loaded for people who may open them). */
+  docMeta?: Partial<Record<CoachDocumentKey, DocumentMeta | null>>;
 }) {
   const action = coach ? updateCoach.bind(null, coach.id) : createCoach;
   const [state, formAction, pending] = useActionState<FormState, FormData>(action, undefined);
@@ -29,7 +39,6 @@ export function CoachForm({
     const v = coach?.[key];
     return v == null ? fallback : String(v);
   };
-  const revoked = state?.values ? sv.revoked === "on" : coach?.status === "revoked";
 
   return (
     <form action={formAction} className="space-y-6">
@@ -55,9 +64,9 @@ export function CoachForm({
       </Section>
 
       <Section title="Penugasan">
-        <Field label="Klub / Akademi" error={fe.clubId}>
+        <Field label="SSB" error={fe.clubId}>
           <Select name="clubId" defaultValue={val("clubId", defaultClubId ?? "")}>
-            <option value="">Belum terikat klub</option>
+            <option value="">Belum terikat SSB</option>
             {clubs.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -74,9 +83,6 @@ export function CoachForm({
               </option>
             ))}
           </Select>
-        </Field>
-        <Field label="Pengalaman melatih (tahun)" error={fe.experienceYears}>
-          <Input name="experienceYears" type="number" min={0} max={60} defaultValue={val("experienceYears")} />
         </Field>
       </Section>
 
@@ -99,26 +105,26 @@ export function CoachForm({
             className="font-mono uppercase"
           />
         </Field>
-        <Field label="Tanggal terbit" error={fe.licenseIssuedAt}>
-          <Input name="licenseIssuedAt" type="date" defaultValue={val("licenseIssuedAt")} />
-        </Field>
-        <Field label="Berlaku sampai" error={fe.licenseExpiry} hint="Status Aktif / Akan Kedaluwarsa dihitung otomatis">
-          <Input name="licenseExpiry" type="date" required defaultValue={val("licenseExpiry")} />
-        </Field>
-        <label className="flex items-start gap-2 rounded-lg border border-line-soft bg-surface-2/40 p-3 text-xs sm:col-span-2">
-          <input
-            type="checkbox"
-            name="revoked"
-            defaultChecked={revoked}
-            className="mt-0.5 size-3.5 accent-[var(--color-danger)]"
-          />
-          <span>
-            <span className="font-medium text-ink">Lisensi dicabut</span>
-            <span className="block text-[11px] text-ink-muted">
-              Tandai bila lisensi dicabut/dibekukan — status menjadi &ldquo;Dicabut&rdquo; terlepas dari masa berlaku.
-            </span>
-          </span>
-        </label>
+      </Section>
+
+      <Section title="Dokumen pelatih">
+        <p className="rounded-lg bg-surface-2/60 px-3 py-2 text-[11px] leading-relaxed text-ink-muted sm:col-span-2">
+          Dokumen bersifat <strong className="text-ink-secondary">privat</strong> — hanya admin & operator yang dapat
+          membukanya. Boleh diunggah bertahap; kelengkapannya tampil di profil dan daftar pelatih.
+        </p>
+        {COACH_DOCUMENTS.map((d) => (
+          <div key={d.key} className="sm:col-span-2">
+            <DocumentUpload
+              name={d.key}
+              label={d.label}
+              hint={d.hint}
+              icon={DOC_ICON[d.key]}
+              defaultValue={sv[d.key] ?? coach?.[d.key]}
+              defaultMeta={docMeta?.[d.key]}
+              error={fe[d.key]}
+            />
+          </div>
+        ))}
       </Section>
 
       <Section title="Kontak">

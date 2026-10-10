@@ -2,11 +2,13 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { MatchRowData } from "./match-row";
 import { STAGE_LABEL } from "@/lib/status";
+import { matchWinnerSide } from "@/lib/fixtures";
 import { ClubCrest } from "./club-crest";
 
 /**
- * Knockout bracket — columns per round, connectors drawn with borders.
- * Reads left-to-right: quarters → semis → final (+ third place shown separately).
+ * Cup bracket — one column per round, left to right: first round → … → final
+ * (+ the third-place match shown separately). Later rounds show "Pemenang …"
+ * until their sides are known.
  */
 export function Bracket({ matches }: { matches: MatchRowData[] }) {
   const thirdPlace = matches.filter((m) => m.stage === "third_place");
@@ -16,7 +18,8 @@ export function Bracket({ matches }: { matches: MatchRowData[] }) {
   if (rounds.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-line px-4 py-10 text-center text-xs text-ink-muted">
-        Bagan babak gugur akan tersedia setelah fase grup selesai.
+        Bagan Cup akan tersedia setelah jadwal dibuat — otomatis dari tab Ringkasan, atau tambahkan pertandingan
+        gugur di tab Jadwal & Hasil.
       </p>
     );
   }
@@ -56,8 +59,11 @@ export function Bracket({ matches }: { matches: MatchRowData[] }) {
 
 function BracketMatch({ m }: { m: MatchRowData }) {
   const done = m.status === "completed";
-  const homeWon = done && m.homeScore > m.awayScore;
-  const awayWon = done && m.awayScore > m.homeScore;
+  const winner = done ? matchWinnerSide(m) : null;
+  const homeWon = winner === "home";
+  const awayWon = winner === "away";
+  const level = done && m.homeScore === m.awayScore;
+  const pens = level && m.homePenalties != null && m.awayPenalties != null;
 
   return (
     <Link
@@ -67,27 +73,31 @@ function BracketMatch({ m }: { m: MatchRowData }) {
       <BracketSide
         name={m.homeName ?? m.homePlaceholder ?? "TBD"}
         short={m.homeShort}
-        color={m.homeColor}
         logo={m.homeLogo}
         score={done ? m.homeScore : null}
+        penalties={pens ? m.homePenalties : null}
         won={homeWon}
         lost={awayWon}
+        pending={!m.homeName}
       />
       <div className="h-px bg-line" />
       <BracketSide
         name={m.awayName ?? m.awayPlaceholder ?? "TBD"}
         short={m.awayShort}
-        color={m.awayColor}
         logo={m.awayLogo}
         score={done ? m.awayScore : null}
+        penalties={pens ? m.awayPenalties : null}
         won={awayWon}
         lost={homeWon}
+        pending={!m.awayName}
       />
       <div className="border-t border-line-soft bg-surface/60 px-2.5 py-1 text-[9px] text-ink-muted">
         {m.status === "live"
           ? `Berlangsung · ${m.currentMinute}'`
           : done
-            ? "Selesai"
+            ? pens
+              ? "Selesai · adu penalti"
+              : "Selesai"
             : "Terjadwal"}
       </div>
     </Link>
@@ -97,19 +107,22 @@ function BracketMatch({ m }: { m: MatchRowData }) {
 function BracketSide({
   name,
   short,
-  color,
   logo,
   score,
+  penalties,
   won,
   lost,
+  pending,
 }: {
   name: string;
   short?: string | null;
-  color?: string | null;
   logo?: string | null;
   score: number | null;
+  penalties?: number | null;
   won?: boolean;
   lost?: boolean;
+  /** The side is still a "Pemenang …" placeholder. */
+  pending?: boolean;
 }) {
   return (
     <div
@@ -118,11 +131,21 @@ function BracketSide({
         won && "bg-brand/5",
       )}
     >
-      <ClubCrest logoUrl={logo} short={short} color={color} size={20} className="rounded" />
+      {pending ? (
+        <span className="size-5 shrink-0 rounded-full border border-dashed border-line" aria-hidden />
+      ) : (
+        <ClubCrest logoUrl={logo} short={short} size={20} className="rounded" />
+      )}
       <span
         className={cn(
           "min-w-0 flex-1 truncate text-xs",
-          lost ? "text-ink-muted" : won ? "font-semibold text-ink" : "text-ink-secondary",
+          pending
+            ? "italic text-ink-muted"
+            : lost
+              ? "text-ink-muted"
+              : won
+                ? "font-semibold text-ink"
+                : "text-ink-secondary",
         )}
       >
         {name}
@@ -135,6 +158,7 @@ function BracketSide({
           )}
         >
           {score}
+          {penalties != null && <span className="ml-1 text-[10px] font-semibold">({penalties})</span>}
         </span>
       )}
     </div>

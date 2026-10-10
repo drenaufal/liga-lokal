@@ -16,11 +16,9 @@ export type LiveMatch = {
   period: string;
   home: string | null;
   homeShort: string | null;
-  homeColor?: string | null;
   homeLogo?: string | null;
   away: string | null;
   awayShort: string | null;
-  awayColor?: string | null;
   awayLogo?: string | null;
   tournament: string;
   venue?: string | null;
@@ -63,7 +61,7 @@ export function LiveMatchCard({ m, compact }: { m: LiveMatch; compact?: boolean 
       </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-2">
-        <TeamSide name={m.home} short={m.homeShort} color={m.homeColor} logo={m.homeLogo} align="left" />
+        <TeamSide name={m.home} short={m.homeShort} logo={m.homeLogo} align="left" />
         <div className="flex flex-col items-center pt-1">
           <span className="font-display text-4xl leading-none tracking-wide tabular-nums text-white">
             {m.homeScore}<span className="mx-1.5 text-night-muted">:</span>{m.awayScore}
@@ -72,7 +70,7 @@ export function LiveMatchCard({ m, compact }: { m: LiveMatch; compact?: boolean 
             {PERIOD_LABEL[m.period] ?? "Berlangsung"}
           </span>
         </div>
-        <TeamSide name={m.away} short={m.awayShort} color={m.awayColor} logo={m.awayLogo} align="right" />
+        <TeamSide name={m.away} short={m.awayShort} logo={m.awayLogo} align="right" />
       </div>
 
       {!compact && m.venue && (
@@ -88,19 +86,17 @@ export function LiveMatchCard({ m, compact }: { m: LiveMatch; compact?: boolean 
 function TeamSide({
   name,
   short,
-  color,
   logo,
   align,
 }: {
   name: string | null;
   short: string | null;
-  color?: string | null;
   logo?: string | null;
   align: "left" | "right";
 }) {
   return (
     <div className={cn("flex min-w-0 flex-col items-center gap-2 text-center", align === "right" && "order-last")}>
-      <ClubCrest logoUrl={logo} short={short} color={color} size={44} />
+      <ClubCrest logoUrl={logo} short={short} size={44} />
       <span className="line-clamp-2 text-xs font-semibold leading-snug text-white">{name}</span>
     </div>
   );

@@ -9,7 +9,7 @@ import { BRAND } from "@/lib/brand";
 export const metadata: Metadata = { title: "Masuk" };
 
 const highlights = [
-  { icon: Trophy, text: "Manajemen kompetisi Cup, Liga, Hybrid & Knockout" },
+  { icon: Trophy, text: "Turnamen dengan banyak KU — format Liga & Cup, jadwal manual atau unggah" },
   { icon: Activity, text: "Operasional pertandingan real-time — klik pemain, catat kejadian" },
   { icon: Radar, text: "Player Intelligence dengan radar performa" },
   { icon: Users, text: "Satu sumber data untuk pemain, klub, pelatih, wasit & venue" },
@@ -18,18 +18,20 @@ const highlights = [
 export default function LoginPage() {
   return (
     <main className="grid min-h-screen bg-base lg:grid-cols-[1.05fr_1fr]">
-      {/* Brand panel — the white-on-red version of the logo */}
-      <div className="relative hidden overflow-hidden bg-brand text-white lg:block">
+      {/* Brand panel — dark, so the white lettering of the logo stays readable */}
+      <div className="relative hidden overflow-hidden bg-night text-white lg:block">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-40 -top-40 size-[34rem] rounded-full bg-brand/30 blur-3xl"
+        />
         <Logo
-          variant="mark"
-          mono
           title=""
-          className="pointer-events-none absolute -bottom-40 -right-28 h-[620px] text-white opacity-15"
+          className="pointer-events-none absolute -bottom-36 -right-32 h-[620px] opacity-[0.07]"
         />
         <div className="relative flex h-full flex-col justify-between p-12">
           <div className="flex items-center justify-between">
             <Link href="/" aria-label={`Beranda ${BRAND.name}`}>
-              <Logo variant="full" mono className="h-20 text-white" />
+              <Logo className="h-24" />
             </Link>
             <Link
               href="/"

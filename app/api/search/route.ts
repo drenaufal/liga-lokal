@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { like, or, sql } from "drizzle-orm";
+import { like, or } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { clubs, coaches, players, referees, tournaments, venues } from "@/lib/db/schema";
+import { clubs, coaches, competitions, players, referees, venues } from "@/lib/db/schema";
 import { getCurrentUser } from "@/lib/auth/session";
 
 export async function GET(req: Request) {
@@ -40,10 +40,10 @@ export async function GET(req: Request) {
       .where(or(like(coaches.fullName, pattern), like(coaches.licenseNumber, pattern)))
       .limit(3),
     db
-      .select({ id: tournaments.id, name: tournaments.name })
-      .from(tournaments)
-      .where(like(tournaments.name, pattern))
-      .limit(3),
+      .select({ id: competitions.id, name: competitions.name, season: competitions.season })
+      .from(competitions)
+      .where(or(like(competitions.name, pattern), like(competitions.organizer, pattern)))
+      .limit(4),
     db
       .select({ id: venues.id, name: venues.name })
       .from(venues)
@@ -51,7 +51,6 @@ export async function GET(req: Request) {
       .limit(3),
   ]);
 
-  void sql;
   const results = [
     ...pl.map((r) => ({
       type: "Pemain",
@@ -68,7 +67,7 @@ export async function GET(req: Request) {
     ...tn.map((r) => ({
       type: "Turnamen",
       label: r.name,
-      sub: "",
+      sub: `Musim ${r.season}`,
       href: `/kompetisi/${r.id}`,
     })),
     ...rf.map((r) => ({

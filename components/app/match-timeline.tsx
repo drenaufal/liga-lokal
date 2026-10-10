@@ -27,6 +27,7 @@ export type TimelineEvent = {
   addedTime?: number | null;
   clubId: string | null;
   playerName?: string | null;
+  recorderName?: string | null;
   relatedPlayerId?: string | null;
   voided: boolean;
   detail?: Record<string, unknown> | null;
@@ -187,6 +188,7 @@ function EventBody({
             ? ` · assist ${playerLookup[e.relatedPlayerId].split(" ").slice(-1)}`
             : ""}
         </p>
+        {e.recorderName && <p className="truncate text-[9px] text-ink-muted">Dicatat oleh {e.recorderName}</p>}
       </div>
       {canEdit && (
         <button

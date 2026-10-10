@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 const TABS = [
   { href: "/registry/pemain", label: "Pemain", icon: Users },
-  { href: "/registry/klub", label: "Klub & Akademi", icon: Shield },
+  { href: "/registry/klub", label: "SSB", icon: Shield },
   { href: "/registry/pelatih", label: "Pelatih", icon: ClipboardList },
   { href: "/registry/wasit", label: "Wasit", icon: Flag },
   { href: "/registry/venue", label: "Venue", icon: MapPin },

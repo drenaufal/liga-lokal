@@ -20,11 +20,9 @@ export default async function NewCategoryPage() {
   const oldest = cats.reduce((m, c) => Math.max(m, c.category.maxAge), 0);
   const capped = oldest >= MAX_CATEGORY_AGE;
   const maxAge = Math.min(MAX_CATEGORY_AGE, oldest ? oldest + 2 : 8);
-  const minAge = capped ? maxAge - 1 : Math.min(maxAge, oldest ? oldest + 1 : 6);
   const defaults: CategoryDefaults = {
     code: capped ? "" : `KU-${maxAge}`,
     label: capped ? "" : `Kelompok Umur ${maxAge}`,
-    minAge,
     maxAge,
     halfDuration: maxAge >= 17 ? 45 : 40,
     playersOnField: 11,

@@ -5,12 +5,16 @@ import { ArrowLeft, Mail, Phone, MapPin, ScrollText, Pencil, Cake } from "lucide
 import { getCoachProfile } from "@/lib/queries/registry";
 import { getCurrentUser } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
+import { getMediaMeta } from "@/lib/media-store";
+import { COACH_DOCUMENTS, coachDocumentCompleteness } from "@/lib/coach-documents";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/misc";
 import { StatusBadge } from "@/components/app/status-badge";
 import { ClubCrest } from "@/components/app/club-crest";
+import { DocumentRow } from "@/components/app/document-row";
 import { ageFromDob, formatDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +40,11 @@ export default async function CoachProfilePage({
   const { coach: c, club, recentMatches, squadSize } = d;
   const user = await getCurrentUser();
   const canWrite = can(user?.role, "registry:write");
+  const canVerify = can(user?.role, "registry:verify");
+  const docMeta = canVerify
+    ? await Promise.all(COACH_DOCUMENTS.map((doc) => getMediaMeta(c[doc.key])))
+    : [];
+  const completeness = coachDocumentCompleteness(c);
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -53,7 +62,6 @@ export default async function CoachProfilePage({
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-lg font-semibold tracking-tight text-ink">{c.fullName}</h1>
               <Badge tone="violet">{c.licenseLevel}</Badge>
-              <StatusBadge kind="coach" value={c.status} dot />
               {canWrite && (
                 <Button variant="outline" size="sm" href={`/registry/pelatih/${c.id}/edit`} className="ml-auto">
                   <Pencil className="size-3.5" /> Ubah data
@@ -70,43 +78,67 @@ export default async function CoachProfilePage({
               {c.email && <span className="flex items-center gap-1"><Mail className="size-3" /> {c.email}</span>}
               {c.phone && <span className="flex items-center gap-1"><Phone className="size-3" /> {c.phone}</span>}
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
-              <Info label="Diterbitkan">{c.licenseIssuedAt ? formatDate(c.licenseIssuedAt) : "—"}</Info>
-              <Info label="Berlaku s.d.">{formatDate(c.licenseExpiry)}</Info>
-              <Info label="Pengalaman">{c.experienceYears} tahun</Info>
-            </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="mb-4">
-        <CardHeader>
-          <CardTitle>Klub Asuhan</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {club ? (
-            <Link
-              href={`/registry/klub/${club.id}`}
-              className="flex items-center gap-3 rounded-lg border border-line-soft bg-surface-2/40 p-3 transition-colors hover:border-brand/30"
-            >
-              <ClubCrest logoUrl={club.logoUrl} short={club.shortName} color={club.primaryColor} size={40} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium text-ink">{club.name}</span>
-                <span className="text-[11px] text-ink-muted">
-                  {club.city} · {squadSize} pemain terdaftar
+      <div className="mb-4 grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>SSB Asuhan</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {club ? (
+              <Link
+                href={`/registry/klub/${club.id}`}
+                className="flex items-center gap-3 rounded-lg border border-line-soft bg-surface-2/40 p-3 transition-colors hover:border-brand/30"
+              >
+                <ClubCrest logoUrl={club.logoUrl} short={club.shortName} size={40} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-ink">{club.name}</span>
+                  <span className="text-[11px] text-ink-muted">
+                    {club.city} · {squadSize} pemain terdaftar
+                  </span>
                 </span>
-              </span>
-            </Link>
-          ) : (
-            <p className="py-4 text-center text-xs text-ink-muted">Belum terikat dengan klub.</p>
-          )}
-        </CardContent>
-      </Card>
+              </Link>
+            ) : (
+              <p className="py-4 text-center text-xs text-ink-muted">Belum terikat dengan SSB.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Dokumen</CardTitle>
+            <span className="text-[11px] tabular-nums text-ink-muted">
+              {completeness.have}/{completeness.total} lengkap
+            </span>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Progress
+              value={(completeness.have / completeness.total) * 100}
+              tone={completeness.have === completeness.total ? "success" : "warn"}
+            />
+            <ul className="space-y-1.5">
+              {COACH_DOCUMENTS.map((doc, i) => (
+                <DocumentRow
+                  key={doc.key}
+                  label={doc.label}
+                  url={c[doc.key]}
+                  meta={docMeta[i] ?? null}
+                  canView={canVerify}
+                  editHref={canWrite ? `/registry/pelatih/${c.id}/edit` : null}
+                />
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      </div>
 
       {club && (
         <Card>
           <CardHeader>
-            <CardTitle>Pertandingan Klub</CardTitle>
+            <CardTitle>Pertandingan SSB</CardTitle>
           </CardHeader>
           <CardContent>
             {recentMatches.length ? (
@@ -141,15 +173,6 @@ export default async function CoachProfilePage({
           </CardContent>
         </Card>
       )}
-    </div>
-  );
-}
-
-function Info({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-lg border border-line-soft bg-surface-2/40 p-2.5">
-      <div className="text-[10px] uppercase tracking-wider text-ink-muted">{label}</div>
-      <div className="mt-0.5 text-ink-secondary">{children}</div>
     </div>
   );
 }

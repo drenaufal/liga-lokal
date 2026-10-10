@@ -7,7 +7,6 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { DEFAULT_MATCH_MINUTES, clockCap } from "@/lib/match-clock";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/app/status-badge";
 import { AutoRefresh } from "@/components/app/auto-refresh";
 import { MatchTimeline } from "@/components/app/match-timeline";
@@ -17,6 +16,7 @@ import { PlayerList } from "./player-list";
 import { AssignmentCard } from "./assignment-card";
 import { buildTallies } from "@/lib/match-tally";
 import { ResultControl } from "./result-control";
+import { isCupStage } from "@/lib/cup-advance";
 import { STAGE_LABEL } from "@/lib/status";
 import { LINE_ORDER, positionLine } from "@/lib/positions";
 import { formatDateTime } from "@/lib/utils";
@@ -48,7 +48,7 @@ export default async function MatchConsolePage({
   const canOperate = can(user?.role, "match:operate");
   const canConfirm = can(user?.role, "match:confirm");
   const canAssign = can(user?.role, "match:assign");
-  const assigned = !!(m.refereeId && m.operatorId);
+  const assigned = !!m.refereeId && d.operators.length > 0;
   const officialOptions = canAssign && m.status === "scheduled" ? await getOfficialOptions() : null;
 
   const duration = m.durationMinutes ?? d.ageDuration?.matchDuration ?? DEFAULT_MATCH_MINUTES;
@@ -111,7 +111,7 @@ export default async function MatchConsolePage({
 
   return (
     <div>
-      {m.status === "live" && <AutoRefresh seconds={12} />}
+      {(m.status === "scheduled" || m.status === "live" || m.status === "halftime") && <AutoRefresh seconds={5} />}
       <Link
         href="/match-ops"
         className="mb-4 inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink"
@@ -131,8 +131,6 @@ export default async function MatchConsolePage({
         awayShort={d.awayShort}
         homeName={d.homeName}
         awayName={d.awayName}
-        homeColor={d.homeColor}
-        awayColor={d.awayColor}
         homeLogo={d.homeLogo}
         awayLogo={d.awayLogo}
         homeScore={m.homeScore}
@@ -140,7 +138,7 @@ export default async function MatchConsolePage({
         canOperate={canOperate}
         canStart={assigned}
         startHint={
-          !m.refereeId && !m.operatorId
+          !m.refereeId && !d.operators.length
             ? "Tugaskan wasit dan operator terlebih dahulu"
             : !m.refereeId
               ? "Tugaskan wasit terlebih dahulu"
@@ -148,13 +146,13 @@ export default async function MatchConsolePage({
         }
         meta={
           <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-night-muted">
-            <Link href={`/kompetisi/${d.tournamentId}`} className="font-semibold text-white hover:underline">
+            <Link href={`/kompetisi/ku/${d.tournamentId}`} className="font-semibold text-white hover:underline">
               {d.tournamentName}
             </Link>
             <span>· {STAGE_LABEL[m.stage] ?? m.stage}{m.groupLabel ? ` Grup ${m.groupLabel}` : ""}</span>
             {d.venue && <span className="flex items-center gap-1"><MapPin className="size-3" />{d.venue}</span>}
             {d.referee && <span className="flex items-center gap-1"><FlagIcon className="size-3" />{d.referee}</span>}
-            {d.operator && <span className="flex items-center gap-1"><UserCog className="size-3" />{d.operator}</span>}
+            {d.operators.length > 0 && <span className="flex items-center gap-1"><UserCog className="size-3" />{d.operators.map((o) => o.name).join(", ")}</span>}
             <span className="flex items-center gap-1"><CalendarClock className="size-3" />{formatDateTime(m.scheduledAt)}</span>
             <StatusBadge kind="result" value={m.resultStatus} />
           </div>
@@ -164,10 +162,10 @@ export default async function MatchConsolePage({
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-4">
           <AssignmentCard
-            key={`${m.refereeId ?? "-"}:${m.operatorId ?? "-"}`}
+            key={`${m.refereeId ?? "-"}:${d.operators.map((o) => o.id).sort().join(":")}`}
             matchId={id}
             referee={m.refereeId && d.referee ? { id: m.refereeId, name: d.referee } : null}
-            operator={m.operatorId && d.operator ? { id: m.operatorId, name: d.operator } : null}
+            operators={d.operators}
             options={officialOptions}
             scheduled={m.status === "scheduled"}
           />
@@ -178,13 +176,13 @@ export default async function MatchConsolePage({
               matchId={id}
               clock={clock}
               home={{
-                club: { id: m.homeClubId, short: d.homeShort ?? "H", name: d.homeName ?? "Tuan rumah", color: d.homeColor, logo: d.homeLogo },
+                club: { id: m.homeClubId, short: d.homeShort ?? "H", name: d.homeName ?? "Tuan rumah", logo: d.homeLogo },
                 formation: m.homeFormation,
                 side: "home",
                 players: rosterFor(m.homeClubId),
               }}
               away={{
-                club: { id: m.awayClubId, short: d.awayShort ?? "A", name: d.awayName ?? "Tamu", color: d.awayColor, logo: d.awayLogo },
+                club: { id: m.awayClubId, short: d.awayShort ?? "A", name: d.awayName ?? "Tamu", logo: d.awayLogo },
                 formation: m.awayFormation,
                 side: "away",
                 players: rosterFor(m.awayClubId),
@@ -217,8 +215,8 @@ export default async function MatchConsolePage({
                         <span className="font-semibold tabular-nums text-ink">{a}</span>
                       </div>
                       <div className="mt-1.5 flex h-2 gap-0.5 overflow-hidden rounded-full bg-surface-2">
-                        <div style={{ width: `${((h as number) / total) * 100}%`, background: d.homeColor ?? "var(--color-brand)" }} />
-                        <div style={{ width: `${((a as number) / total) * 100}%`, background: d.awayColor ?? "var(--color-info)" }} className="ml-auto" />
+                        <div style={{ width: `${((h as number) / total) * 100}%`, background: "var(--color-brand)" }} />
+                        <div style={{ width: `${((a as number) / total) * 100}%`, background: "var(--color-info)" }} className="ml-auto" />
                       </div>
                     </div>
                   );
@@ -236,6 +234,11 @@ export default async function MatchConsolePage({
               awayScore={m.awayScore}
               canConfirm={canConfirm}
               amendmentReason={m.amendmentReason}
+              isCup={isCupStage(m.stage)}
+              homeShort={d.homeShort}
+              awayShort={d.awayShort}
+              homePenalties={m.homePenalties}
+              awayPenalties={m.awayPenalties}
             />
           )}
         </div>

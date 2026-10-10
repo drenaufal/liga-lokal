@@ -14,10 +14,8 @@ import { formError, optionalInt, type FormState } from "@/lib/form";
 import { slugify } from "@/lib/utils";
 import { insertReturning } from "@/lib/db/returning";
 
-const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Warna harus format #RRGGBB");
-
 const clubSchema = z.object({
-  name: z.string().trim().min(3, "Nama klub minimal 3 karakter"),
+  name: z.string().trim().min(3, "Nama SSB minimal 3 karakter"),
   shortName: z
     .string()
     .trim()
@@ -26,15 +24,14 @@ const clubSchema = z.object({
   type: z.enum(["club", "academy"], "Pilih jenis"),
   city: z.string().trim().min(2, "Kota wajib diisi"),
   province: z.string().trim().optional(),
+  address: z.string().trim().max(500, "Alamat maksimal 500 karakter").optional(),
+  askot: z.string().trim().max(120, "Askot maksimal 120 karakter").optional(),
+  asprov: z.string().trim().max(120, "Asprov maksimal 120 karakter").optional(),
   foundedYear: optionalInt(1900, new Date().getFullYear(), "Tahun berdiri tidak valid"),
   logoUrl: imageUrlField,
-  primaryColor: hex,
-  secondaryColor: hex,
-  homeVenueId: z.string().optional(),
   contactName: z.string().trim().optional(),
   contactEmail: z.union([z.literal(""), z.email("Email tidak valid")]).optional(),
   contactPhone: z.string().trim().optional(),
-  accreditation: z.string().trim().optional(),
 });
 
 type ClubInput = z.infer<typeof clubSchema>;
@@ -46,15 +43,14 @@ function toRow(v: ClubInput) {
     type: v.type,
     city: v.city,
     province: v.province || null,
+    address: v.address || null,
+    askot: v.askot || null,
+    asprov: v.asprov || null,
     foundedYear: v.foundedYear ?? null,
     logoUrl: v.logoUrl || null,
-    primaryColor: v.primaryColor,
-    secondaryColor: v.secondaryColor,
-    homeVenueId: v.homeVenueId || null,
     contactName: v.contactName || null,
     contactEmail: v.contactEmail || null,
     contactPhone: v.contactPhone || null,
-    accreditation: v.accreditation || null,
   };
 }
 
@@ -96,7 +92,7 @@ export async function createClub(_prev: FormState, formData: FormData): Promise<
     action: "club.create",
     entityType: "club",
     entityId: created.id,
-    summary: `Registrasi ${row.type === "academy" ? "akademi" : "klub"} baru: ${row.name} (${row.shortName})`,
+    summary: `Registrasi SSB baru: ${row.name} (${row.shortName})`,
   });
 
   revalidatePath("/registry/klub");
@@ -110,7 +106,7 @@ export async function updateClub(
 ): Promise<FormState> {
   const user = await actionUser("registry:write");
   const before = await db.query.clubs.findFirst({ where: eq(clubs.id, id) });
-  if (!before) return { error: "Klub tidak ditemukan." };
+  if (!before) return { error: "SSB tidak ditemukan." };
 
   const parsed = clubSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return formError(parsed.error, formData);
@@ -132,7 +128,7 @@ export async function updateClub(
     action: before.logoUrl !== row.logoUrl ? "club.logo" : "club.update",
     entityType: "club",
     entityId: id,
-    summary: `Data klub ${row.name} diperbarui${changedSuffix(changed)}`,
+    summary: `Data SSB ${row.name} diperbarui${changedSuffix(changed)}`,
     before: Object.fromEntries(changed.map((k) => [k, before[k]])),
     after: Object.fromEntries(changed.map((k) => [k, row[k]])),
   });

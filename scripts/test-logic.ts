@@ -5,6 +5,11 @@
 import { buildMatchLines } from "@/lib/match-lines";
 import { expandPosition, parsePosition, positionLine } from "@/lib/positions";
 import { parseSchedule, summarizeSchedule, type ScheduleContext } from "@/lib/schedule-import";
+import { checkManualMatch, type ManualMatchContext } from "@/lib/match-schedule";
+import { cupBracket, cupNextSlot, matchWinnerSide } from "@/lib/fixtures";
+import { competitionStatus, dateSpan, defaultStage, firstCupStage, kuLabel } from "@/lib/ku";
+import { crestTint } from "@/lib/crest";
+import { resolveMatchSquads } from "@/lib/match-squad";
 
 let failures = 0;
 const ok = (cond: unknown, label: string) => {
@@ -121,6 +126,116 @@ ok(sum.importable === 3 && sum.errors === 5 && sum.duplicates === 2, `summary co
 r = parseSchedule("home_short,away_short,date,time,round\nGMF,CPF,2026-11-07,15:30,2\nGMF,BSA,2026-11-07,16:30,2\n", ctx);
 ok(r.rows[0].status === "ok" && r.rows[1].status === "warning", "the same club 60 minutes apart is flagged");
 ok(!!parseSchedule("", ctx).error && !!parseSchedule("a,b,c\n1,2,3\n", ctx).error, "an empty file and missing columns are rejected as a whole");
+
+r = parseSchedule("home_short,away_short,date,time\nGMF,CPF,2026-11-07,15:30\n", { ...ctx, format: "cup" });
+ok(r.rows[0].status === "ok" && r.rows[0].stage === "semi", "a Cup row without a stage starts where its bracket does (3 SSB → semi-final)");
+r = parseSchedule("home_short,away_short,date,time,stage\nGMF,CPF,2026-11-07,15:30,final\n", { ...ctx, format: "cup" });
+ok(r.rows[0].stage === "final", "an explicit stage still wins over the default");
+
+/* ── manual match ──────────────────────────────────────────────────────── */
+console.log("\n[manual match]");
+const mctx: ManualMatchContext = {
+  format: "league",
+  hasGroups: false,
+  teamIds: ["c-gmf", "c-cpf", "c-bsa"],
+  venueIds: ["v1"],
+  referees: [
+    { id: "r1", valid: true },
+    { id: "r2", valid: false },
+  ],
+  existing: [
+    { homeClubId: "c-gmf", awayClubId: "c-bsa", stage: "league", round: 1, scheduledAt: new Date(Date.UTC(2026, 9, 17, 8, 30)), status: "scheduled" },
+    { homeClubId: "c-cpf", awayClubId: "c-bsa", stage: "league", round: 1, scheduledAt: new Date(Date.UTC(2026, 9, 10, 8, 30)), status: "completed" },
+  ],
+};
+const base = { homeClubId: "c-gmf", awayClubId: "c-cpf", date: "2026-10-24", time: "15:30", stage: "league", round: 2 };
+let mm = checkManualMatch(base, mctx);
+ok(Object.keys(mm.errors).length === 0 && mm.warnings.length === 0, "a clean match passes");
+ok(mm.scheduledAt?.toISOString() === "2026-10-24T08:30:00.000Z", "15:30 WIB is stored as 08:30 UTC");
+ok(checkManualMatch({ ...base, awayClubId: "c-gmf" }, mctx).errors.awayClubId?.includes("sama") === true, "home = away is refused");
+ok(!!checkManualMatch({ ...base, homeClubId: "c-zzz" }, mctx).errors.homeClubId, "a club outside the KU is refused");
+mm = checkManualMatch({ ...base, date: "2026-13-45", time: "25:99" }, mctx);
+ok(!!mm.errors.date && !!mm.errors.time && mm.scheduledAt === null, "bad date and bad time are reported separately");
+ok(!!checkManualMatch({ ...base, stage: "final" }, mctx).errors.stage, "a cup stage is refused in a league");
+ok(!!checkManualMatch({ ...base, round: 0 }, mctx).errors.round && !!checkManualMatch({ ...base, round: 2.5 }, mctx).errors.round, "round must be a whole number 1–99");
+ok(!!checkManualMatch({ ...base, venueId: "nope" }, mctx).errors.venueId, "an unknown venue is refused");
+ok(!!checkManualMatch({ ...base, refereeId: "r2" }, mctx).errors.refereeId && !checkManualMatch({ ...base, refereeId: "r1" }, mctx).errors.refereeId, "an expired referee license is refused, a valid one passes");
+ok(!!checkManualMatch({ ...base, homeClubId: "c-gmf", awayClubId: "c-bsa", round: 1 }, mctx).errors.awayClubId, "the same fixture in the same round is a duplicate");
+ok(!checkManualMatch({ ...base, homeClubId: "c-gmf", awayClubId: "c-bsa", round: 2 }, mctx).errors.awayClubId, "the same pairing in another round is fine");
+mm = checkManualMatch({ ...base, homeClubId: "c-gmf", awayClubId: "c-cpf", date: "2026-10-17", time: "16:30" }, mctx);
+ok(Object.keys(mm.errors).length === 0 && mm.warnings.length === 1, "a club 60 minutes from another match is a warning, not an error");
+mm = checkManualMatch({ ...base, homeClubId: "c-cpf", awayClubId: "c-gmf", date: "2026-10-10", time: "15:30" }, mctx);
+ok(mm.warnings.length === 0, "a finished match does not clash");
+const cupCtx: ManualMatchContext = { ...mctx, format: "cup" };
+ok(!checkManualMatch({ ...base, stage: "semi", bracketSlot: "SF1" }, cupCtx).errors.stage && !!checkManualMatch({ ...base, stage: "league" }, cupCtx).errors.stage, "a cup takes knockout stages only");
+ok(!!checkManualMatch({ ...base, stage: "semi", bracketSlot: "bad slot!" }, cupCtx).errors.bracketSlot, "a malformed bracket slot is refused");
+ok(!checkManualMatch({ ...base, stage: "group" }, { ...cupCtx, hasGroups: true }).errors.stage, "an older cup with a group stage still accepts group matches");
+
+/* ── cup bracket ───────────────────────────────────────────────────────── */
+console.log("\n[cup bracket]");
+const teams = (n: number) => Array.from({ length: n }, (_, i) => `T${i + 1}`);
+for (const n of [2, 3, 4, 5, 6, 7, 8, 12, 16, 32]) {
+  const b = cupBracket(teams(n));
+  ok(b.length === n - 1, `${n} teams → ${n - 1} matches (every team but the winner loses once)`);
+}
+let bracket = cupBracket(teams(8));
+ok(bracket.filter((f) => f.round === 1).length === 4 && bracket.filter((f) => f.round === 1).every((f) => f.stage === "quarter"), "8 teams start with 4 quarter-finals");
+ok(bracket.at(-1)?.stage === "final" && bracket.at(-1)?.bracketSlot === "F1" && bracket.at(-1)?.homePlaceholder === "Pemenang SF1", "the final waits for the semi-final winners");
+ok(bracket[0].home === "T1" && bracket[0].away === "T8", "the first seed meets the last seed");
+const sideOf = (slot: string) => bracket.find((f) => f.bracketSlot === slot)!;
+ok(sideOf("QF1").home === "T1" && sideOf("QF3").home === "T2" && cupNextSlot("QF1")?.slot !== cupNextSlot("QF3")?.slot, "seeds 1 and 2 sit in opposite halves, so they can only meet in the final");
+bracket = cupBracket(teams(6));
+const r1 = bracket.filter((f) => f.round === 1);
+ok(r1.length === 2 && r1.every((f) => f.home && f.away), "6 teams: two real quarter-finals, no phantom ones");
+const semi = bracket.filter((f) => f.stage === "semi");
+ok(semi.length === 2 && semi.every((f) => [f.home, f.away].some((s) => s === "T1" || s === "T2")), "6 teams: the top two seeds get a bye into the semi-finals");
+ok(semi.every((f) => f.homePlaceholder || f.awayPlaceholder), "the other side of each semi-final is still a placeholder");
+ok(cupBracket(["A"]).length === 0 && cupBracket([]).length === 0, "fewer than two teams → no bracket");
+ok((() => { try { cupBracket(teams(33)); return false; } catch { return true; } })(), "more than 32 teams is refused");
+
+ok(cupNextSlot("QF1")?.slot === "SF1" && cupNextSlot("QF1")?.side === "home" && cupNextSlot("QF2")?.side === "away", "QF1 and QF2 feed SF1");
+ok(cupNextSlot("QF3")?.slot === "SF2" && cupNextSlot("QF4")?.slot === "SF2", "QF3 and QF4 feed SF2");
+ok(cupNextSlot("SF1")?.slot === "F1" && cupNextSlot("SF1")?.side === "home" && cupNextSlot("SF2")?.side === "away", "the semi-finals feed the final");
+ok(cupNextSlot("R161")?.slot === "QF1" && cupNextSlot("R165")?.slot === "QF3" && cupNextSlot("R165")?.side === "home" && cupNextSlot("R322")?.slot === "R161" && cupNextSlot("R3216")?.slot === "R168", "round-of-16 and round-of-32 slots chain correctly");
+ok(cupNextSlot("F1") === null && cupNextSlot("F") === null && cupNextSlot("3P") === null && cupNextSlot(null) === null, "the final, the third-place match and unknown names have no next slot");
+
+ok(matchWinnerSide({ homeScore: 2, awayScore: 1 }) === "home" && matchWinnerSide({ homeScore: 0, awayScore: 3 }) === "away", "the higher score wins");
+ok(matchWinnerSide({ homeScore: 1, awayScore: 1 }) === null && matchWinnerSide({ homeScore: 1, awayScore: 1, homePenalties: 3, awayPenalties: 3 }) === null, "level with no (or a tied) shoot-out is undecided");
+ok(matchWinnerSide({ homeScore: 1, awayScore: 1, homePenalties: 4, awayPenalties: 5 }) === "away", "a level match is decided by the shoot-out");
+ok(matchWinnerSide({ homeScore: 2, awayScore: 1, homePenalties: 0, awayPenalties: 9 }) === "home", "penalties are ignored when the score is not level");
+
+/* ── turnamen / KU helpers ─────────────────────────────────────────────── */
+console.log("\n[turnamen & KU]");
+ok(competitionStatus([]) === "draft", "a Turnamen without KUs is a draft");
+ok(competitionStatus(["completed", "registration"]) === "registration", "an unfinished KU outweighs finished ones");
+ok(competitionStatus(["ongoing", "registration", "completed"]) === "ongoing", "ongoing wins over registration and completed");
+ok(competitionStatus(["completed", "completed"]) === "completed" && competitionStatus(["completed", "archived"]) === "completed", "all finished → completed");
+ok(competitionStatus(["archived", "archived"]) === "archived", "all archived → archived");
+ok(kuLabel("Liga Pelajar", "KU-14") === "Liga Pelajar · KU-14" && kuLabel("Liga Pelajar", null) === "Liga Pelajar", "a KU is named after its Turnamen and age group");
+ok(firstCupStage(2) === "final" && firstCupStage(4) === "semi" && firstCupStage(6) === "quarter" && firstCupStage(8) === "quarter" && firstCupStage(12) === "round_of_16" && firstCupStage(32) === "round_of_32", "a Cup starts in the stage its bracket size implies");
+ok(defaultStage("league", 8) === "league" && defaultStage("cup", 4) === "semi" && defaultStage("cup", 0) === "final", "a new match defaults to the KU's first stage");
+const span = dateSpan([null, "2026-10-05", "2026-09-01", undefined, "2026-12-31"]);
+ok(span.from === "2026-09-01" && span.to === "2026-12-31" && dateSpan([null]).from === null, "the date span ignores empty dates");
+
+/* ── SSB crest tint ────────────────────────────────────────────────────── */
+console.log("\n[crest tint]");
+ok(crestTint("GMF").bg === crestTint(" gmf ").bg, "the same SSB always gets the same tint, whatever the case or spacing");
+ok(/^#[0-9a-f]{6}$/i.test(crestTint("DBJ").bg) && /^#[0-9a-f]{6}$/i.test(crestTint(null).fg), "tints are hex colours, also for a missing code");
+ok(new Set(["GMF", "DBJ", "CPF", "RBS", "TEM", "JTU", "PJD", "CRF", "BKF", "BSA"].map((s) => crestTint(s).bg)).size >= 4, "different SSBs spread over several tints");
+
+console.log("\n[match squads]");
+const squadRegistry = [
+  { id: "P1", name: "One", clubId: "H", secondClubId: "A", position: "GK", jersey: 1 },
+  { id: "P2", name: "Two", clubId: "X", secondClubId: "A", position: "ST", jersey: 9 },
+];
+const fallbackSquad = resolveMatchSquads(["H", "A"], squadRegistry, []);
+ok(fallbackSquad.length === 2 && fallbackSquad[0].clubId === "H" && fallbackSquad[1].clubId === "A", "registry fallback supports secondary clubs and prefers the main club in a head-to-head match");
+const explicitSquad = resolveMatchSquads(["H", "A"], squadRegistry, [
+  { id: "P1", name: "One", clubId: "A", position: "GK", jersey: 12 },
+  { id: "P3", name: "Transferred", clubId: "A", position: "ST", jersey: 10 },
+]);
+ok(explicitSquad.length === 2 && explicitSquad.every((p) => p.clubId === "A") && explicitSquad[0].jersey === 12, "tournament squad preserves its club and shirt numbers, excludes unregistered extras and avoids duplicate fallback players");
+ok(resolveMatchSquads([], squadRegistry, explicitSquad).length === 0, "an unresolved match has no roster");
 
 console.log(failures ? `\n${failures} CHECK(S) FAILED` : "\nAll checks passed");
 process.exit(failures ? 1 : 0);

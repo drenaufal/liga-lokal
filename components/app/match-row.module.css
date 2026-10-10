@@ -1,0 +1,41 @@
+.ticket {
+  border-radius: 24px;
+  background: var(--folder-fill, var(--color-block-rose));
+  /* Recess between the raised round and date tabs, like a file folder. */
+  mask-image: radial-gradient(ellipse 48px 14px at 50% 0, transparent 98%, black 100%);
+}
+
+.stack > * {
+  position: relative;
+  --folder-fill: var(--color-block-rose);
+}
+
+.stack > :nth-child(6n + 2) {
+  --folder-fill: var(--color-block-iris);
+}
+
+.stack > :nth-child(6n + 3) {
+  --folder-fill: var(--color-block-jade);
+}
+
+.stack > :nth-child(6n + 4) {
+  --folder-fill: var(--color-block-coral);
+}
+
+.stack > :nth-child(6n + 5) {
+  --folder-fill: var(--color-block-sky);
+}
+
+.stack > :nth-child(6n + 6) {
+  --folder-fill: var(--color-block-yellow);
+}
+
+.stack > * + * {
+  margin-top: -20px;
+}
+
+/* The next folder covers only this empty tail, keeping every control visible. */
+.stack > .ticket:not(:last-child),
+.stack > :not(:last-child) .ticket {
+  padding-bottom: 28px;
+}

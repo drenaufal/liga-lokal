@@ -33,7 +33,7 @@ export default async function ReportPage({
       : report.subjectType === "match"
         ? `/match-ops/${report.subjectId}`
         : report.subjectType === "tournament"
-          ? `/kompetisi/${report.subjectId}`
+          ? `/kompetisi/ku/${report.subjectId}`
           : null;
 
   return (

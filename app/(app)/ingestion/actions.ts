@@ -382,6 +382,9 @@ export async function commitBatch(formData: FormData) {
             slug: String(n.name).toLowerCase().replace(/[^\w]+/g, "-") + "-" + Date.now().toString(36),
             city: String(n.city),
             province: (n.province as string) || null,
+            address: (n.address as string) || null,
+            askot: (n.askot as string) || null,
+            asprov: (n.asprov as string) || null,
             type: (n.type as "club" | "academy") || "club",
             foundedYear: (n.foundedYear as number) ?? null,
             contactEmail: (n.contactEmail as string) || null,
@@ -394,6 +397,7 @@ export async function commitBatch(formData: FormData) {
             licenseNumber: String(n.licenseNumber),
             licenseExpiry: String(n.licenseExpiry),
             city: (n.city as string) || null,
+            askot: (n.askot as string) || null,
             phone: (n.phone as string) || null,
             email: (n.email as string) || null,
           });
