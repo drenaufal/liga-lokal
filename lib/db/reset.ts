@@ -12,6 +12,7 @@ const TABLES = [
   "import_batches",
   "match_lineups",
   "match_events",
+  "match_operators",
   "matches",
   "standings",
   "tournament_squad",

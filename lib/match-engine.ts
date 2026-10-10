@@ -42,18 +42,18 @@ export function liveMinute(
 
 const GOAL_TYPES = ["goal", "penalty_goal"];
 
-/** Recompute a match's scoreline from its non-voided events. */
-export async function recomputeMatchScore(matchId: string) {
-  const evs = await db
+/** Serialize score refreshes so concurrent recorders cannot overwrite a newer total. */
+export async function recomputeMatchScore(matchId: string, tx?: Tx): Promise<void> {
+  if (!tx) return db.transaction((transaction) => recomputeMatchScore(matchId, transaction));
+  const [m] = await tx.select().from(matches).where(eq(matches.id, matchId)).for("update");
+  if (!m) return;
+  const evs = await tx
     .select({
       type: matchEvents.type,
       clubId: matchEvents.clubId,
     })
     .from(matchEvents)
     .where(and(eq(matchEvents.matchId, matchId), eq(matchEvents.voided, false)));
-
-  const m = await db.query.matches.findFirst({ where: eq(matches.id, matchId) });
-  if (!m) return;
 
   let home = 0;
   let away = 0;
@@ -68,7 +68,7 @@ export async function recomputeMatchScore(matchId: string) {
     }
   }
 
-  await db
+  await tx
     .update(matches)
     .set({ homeScore: home, awayScore: away, updatedAt: new Date() })
     .where(eq(matches.id, matchId));

@@ -1,19 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, gte, inArray, lte, ne, or } from "drizzle-orm";
-import { alias } from "drizzle-orm/mysql-core";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
-  clubs,
   matchEvents,
   matches,
-  referees,
   scoringFormulas,
   standings,
   tournamentTeams,
-  users,
 } from "@/lib/db/schema";
 import { actionUser } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/audit";
@@ -34,13 +30,11 @@ import {
 } from "@/lib/standings";
 import { DEFAULT_WEIGHTS } from "@/lib/scoring";
 import {
-  MAX_MATCH_MINUTES,
-  MIN_MATCH_MINUTES,
   clockCap,
   halfOf,
 } from "@/lib/match-clock";
-import { EVENT_LABEL, licenseStatus } from "@/lib/status";
-import { formatDateTime } from "@/lib/utils";
+import { EVENT_LABEL } from "@/lib/status";
+import { officialAssignmentConflicts, saveMatchOfficials, startAssignedMatch } from "@/lib/match-officials";
 
 async function loadMatch(id: string) {
   const m = await db.query.matches.findFirst({ where: eq(matches.id, id) });
@@ -61,80 +55,15 @@ function rev(id: string, tournamentId?: string) {
 
 /* ── Penugasan wasit & operator ─────────────────────────────────────────── */
 
-/** Other matches within two hours that already use this referee or operator. */
-async function assignmentConflicts(
-  m: { id: string; scheduledAt: Date },
-  refereeId: string | null,
-  operatorId: string | null,
-) {
-  if (!refereeId && !operatorId) return [];
-  const hc = alias(clubs, "hc");
-  const ac = alias(clubs, "ac");
-  const lo = new Date(m.scheduledAt.getTime() - 2 * 3_600_000);
-  const hi = new Date(m.scheduledAt.getTime() + 2 * 3_600_000);
-  const rows = await db
-    .select({
-      scheduledAt: matches.scheduledAt,
-      refereeId: matches.refereeId,
-      operatorId: matches.operatorId,
-      home: hc.shortName,
-      away: ac.shortName,
-    })
-    .from(matches)
-    .leftJoin(hc, eq(hc.id, matches.homeClubId))
-    .leftJoin(ac, eq(ac.id, matches.awayClubId))
-    .where(
-      and(
-        ne(matches.id, m.id),
-        gte(matches.scheduledAt, lo),
-        lte(matches.scheduledAt, hi),
-        inArray(matches.status, ["scheduled", "live", "halftime"]),
-        or(
-          refereeId ? eq(matches.refereeId, refereeId) : undefined,
-          operatorId ? eq(matches.operatorId, operatorId) : undefined,
-        ),
-      ),
-    );
-  const out: string[] = [];
-  for (const r of rows) {
-    const where = `${r.home ?? "?"} vs ${r.away ?? "?"} (${formatDateTime(r.scheduledAt)})`;
-    if (refereeId && r.refereeId === refereeId) out.push(`Wasit juga bertugas di ${where}`);
-    if (operatorId && r.operatorId === operatorId) out.push(`Operator juga bertugas di ${where}`);
-  }
-  return out;
-}
-
-/** Assign (or change) the referee and operator. Allowed until the match kicks off. */
+/** Assign one referee and any number of operators before kick-off. */
 export async function assignOfficials(formData: FormData) {
   const user = await actionUser("match:assign");
-  const matchId = String(formData.get("matchId"));
+  const matchId = String(formData.get("matchId") ?? "");
   const refereeId = String(formData.get("refereeId") ?? "") || null;
-  const operatorId = String(formData.get("operatorId") ?? "") || null;
-  const m = await loadMatch(matchId);
-  if (m.status !== "scheduled") throw new Error("Penugasan hanya bisa diubah sebelum pertandingan dimulai");
-
-  let refereeName: string | null = null;
-  if (refereeId) {
-    const [r] = await db.select().from(referees).where(eq(referees.id, refereeId));
-    if (!r) throw new Error("Wasit tidak ditemukan");
-    const st = licenseStatus(r.licenseExpiry, r.status === "revoked");
-    if (st === "expired" || st === "revoked")
-      throw new Error(`Lisensi ${r.fullName} ${st === "expired" ? "sudah kedaluwarsa" : "telah dicabut"}`);
-    refereeName = r.fullName;
-  }
-  let operatorName: string | null = null;
-  if (operatorId) {
-    const [o] = await db
-      .select({ name: users.name, role: users.role, active: users.active })
-      .from(users)
-      .where(eq(users.id, operatorId));
-    if (!o || !o.active) throw new Error("Operator tidak ditemukan");
-    if (o.role !== "operator" && o.role !== "admin") throw new Error("Pengguna ini bukan operator kompetisi");
-    operatorName = o.name;
-  }
-
-  await db.update(matches).set({ refereeId, operatorId, updatedAt: new Date() }).where(eq(matches.id, matchId));
-
+  // Accept the former field as well for a console that was opened before an update.
+  const values = formData.has("operatorIds") ? formData.getAll("operatorIds") : formData.getAll("operatorId");
+  const operatorIds = values.map(String).filter(Boolean);
+  const result = await saveMatchOfficials({ matchId, refereeId, operatorIds });
   await recordAudit({
     actorId: user.id,
     actorName: user.name,
@@ -142,39 +71,19 @@ export async function assignOfficials(formData: FormData) {
     action: "match.assign",
     entityType: "match",
     entityId: matchId,
-    summary: `Penugasan: wasit ${refereeName ?? "—"}, operator ${operatorName ?? "—"}`,
-    before: { refereeId: m.refereeId, operatorId: m.operatorId },
-    after: { refereeId, operatorId },
+    summary: `Penugasan: wasit ${result.refereeName ?? "—"}, operator ${result.operators.map((o) => o.name).join(", ") || "—"}`,
+    before: result.before,
+    after: result.after,
   });
-  rev(matchId, m.tournamentId);
-  return { warnings: await assignmentConflicts(m, refereeId, operatorId) };
+  rev(matchId, result.match.tournamentId);
+  return { warnings: await officialAssignmentConflicts(result.match, refereeId, result.operators) };
 }
 
 /* ── Jalannya pertandingan ──────────────────────────────────────────────── */
 
 export async function startMatch(id: string, durationMinutes: number) {
   const user = await actionUser("match:operate");
-  const m = await loadMatch(id);
-  if (m.status === "completed") throw new Error("Pertandingan sudah selesai");
-  if (m.status !== "scheduled") throw new Error("Pertandingan sudah dimulai");
-  if (!m.refereeId || !m.operatorId)
-    throw new Error("Tugaskan wasit dan operator terlebih dahulu sebelum memulai pertandingan.");
-  const duration = Math.round(Number(durationMinutes));
-  if (!Number.isFinite(duration) || duration < MIN_MATCH_MINUTES || duration > MAX_MATCH_MINUTES) {
-    throw new Error(`Durasi harus antara ${MIN_MATCH_MINUTES} dan ${MAX_MATCH_MINUTES} menit`);
-  }
-
-  await db
-    .update(matches)
-    .set({
-      status: "live",
-      period: "first_half",
-      clockStartedAt: new Date(),
-      currentMinute: 0,
-      durationMinutes: duration,
-      updatedAt: new Date(),
-    })
-    .where(eq(matches.id, id));
+  const m = await startAssignedMatch(id, durationMinutes);
 
   await recordAudit({
     actorId: user.id,
@@ -183,7 +92,7 @@ export async function startMatch(id: string, durationMinutes: number) {
     action: "match.start",
     entityType: "match",
     entityId: id,
-    summary: `Pertandingan dimulai (kick-off), durasi ${duration} menit`,
+    summary: `Pertandingan dimulai (kick-off), durasi ${m.durationMinutes} menit`,
   });
   rev(id, m.tournamentId);
 }

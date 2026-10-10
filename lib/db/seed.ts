@@ -1039,6 +1039,10 @@ async function main() {
     .update(s.matches)
     .set({ operatorId: operator.id })
     .where(inArray(s.matches.status, ["live", "halftime", "completed"]));
+  const operatedMatches = insertedMatches.filter((m) => ["live", "halftime", "completed"].includes(m.status));
+  if (operatedMatches.length) {
+    await db.insert(s.matchOperators).values(operatedMatches.map((m) => ({ matchId: m.id, userId: operator.id })));
+  }
 
   console.log(`→ Simulasi ${insertedMatches.length} pertandingan`);
   const scoreUpdates: {

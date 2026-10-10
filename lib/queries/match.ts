@@ -3,6 +3,7 @@ import { alias } from "drizzle-orm/mysql-core";
 import { db } from "@/lib/db";
 import { MATCH_DURATION_SQL } from "@/lib/match-clock";
 import { resolveMatchSquads } from "@/lib/match-squad";
+import { getAssignedOperators } from "@/lib/match-officials";
 import {
   ageCategories,
   clubs,
@@ -131,6 +132,8 @@ export async function getMatchConsole(id: string) {
   if (!rows.length) return null;
   const row = rows[0];
   const m = row.m;
+  const operators = await getAssignedOperators(id, m.operatorId);
+  const recorder = alias(users, "event_recorder");
 
   const events = await db
     .select({
@@ -145,10 +148,12 @@ export async function getMatchConsole(id: string) {
       voided: matchEvents.voided,
       detail: matchEvents.detail,
       playerName: players.fullName,
+      recorderName: recorder.name,
       createdAt: matchEvents.createdAt,
     })
     .from(matchEvents)
     .leftJoin(players, eq(players.id, matchEvents.playerId))
+    .leftJoin(recorder, eq(recorder.id, matchEvents.createdBy))
     .where(eq(matchEvents.matchId, id))
     .orderBy(asc(matchEvents.minute), asc(matchEvents.createdAt));
 
@@ -213,7 +218,7 @@ export async function getMatchConsole(id: string) {
     : [];
   const squads = resolveMatchSquads(squadIds, squadRows, registered);
 
-  return { ...row, m, events, lineups, squads };
+  return { ...row, m, operators, events, lineups, squads };
 }
 
 /** Referees with a valid license and the people who can run a match console. */

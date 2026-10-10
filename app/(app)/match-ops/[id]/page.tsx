@@ -7,7 +7,6 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { DEFAULT_MATCH_MINUTES, clockCap } from "@/lib/match-clock";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/app/status-badge";
 import { AutoRefresh } from "@/components/app/auto-refresh";
 import { MatchTimeline } from "@/components/app/match-timeline";
@@ -49,7 +48,7 @@ export default async function MatchConsolePage({
   const canOperate = can(user?.role, "match:operate");
   const canConfirm = can(user?.role, "match:confirm");
   const canAssign = can(user?.role, "match:assign");
-  const assigned = !!(m.refereeId && m.operatorId);
+  const assigned = !!m.refereeId && d.operators.length > 0;
   const officialOptions = canAssign && m.status === "scheduled" ? await getOfficialOptions() : null;
 
   const duration = m.durationMinutes ?? d.ageDuration?.matchDuration ?? DEFAULT_MATCH_MINUTES;
@@ -112,7 +111,7 @@ export default async function MatchConsolePage({
 
   return (
     <div>
-      {m.status === "live" && <AutoRefresh seconds={12} />}
+      {(m.status === "scheduled" || m.status === "live" || m.status === "halftime") && <AutoRefresh seconds={5} />}
       <Link
         href="/match-ops"
         className="mb-4 inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink"
@@ -139,7 +138,7 @@ export default async function MatchConsolePage({
         canOperate={canOperate}
         canStart={assigned}
         startHint={
-          !m.refereeId && !m.operatorId
+          !m.refereeId && !d.operators.length
             ? "Tugaskan wasit dan operator terlebih dahulu"
             : !m.refereeId
               ? "Tugaskan wasit terlebih dahulu"
@@ -153,7 +152,7 @@ export default async function MatchConsolePage({
             <span>· {STAGE_LABEL[m.stage] ?? m.stage}{m.groupLabel ? ` Grup ${m.groupLabel}` : ""}</span>
             {d.venue && <span className="flex items-center gap-1"><MapPin className="size-3" />{d.venue}</span>}
             {d.referee && <span className="flex items-center gap-1"><FlagIcon className="size-3" />{d.referee}</span>}
-            {d.operator && <span className="flex items-center gap-1"><UserCog className="size-3" />{d.operator}</span>}
+            {d.operators.length > 0 && <span className="flex items-center gap-1"><UserCog className="size-3" />{d.operators.map((o) => o.name).join(", ")}</span>}
             <span className="flex items-center gap-1"><CalendarClock className="size-3" />{formatDateTime(m.scheduledAt)}</span>
             <StatusBadge kind="result" value={m.resultStatus} />
           </div>
@@ -163,10 +162,10 @@ export default async function MatchConsolePage({
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-4">
           <AssignmentCard
-            key={`${m.refereeId ?? "-"}:${m.operatorId ?? "-"}`}
+            key={`${m.refereeId ?? "-"}:${d.operators.map((o) => o.id).sort().join(":")}`}
             matchId={id}
             referee={m.refereeId && d.referee ? { id: m.refereeId, name: d.referee } : null}
-            operator={m.operatorId && d.operator ? { id: m.operatorId, name: d.operator } : null}
+            operators={d.operators}
             options={officialOptions}
             scheduled={m.status === "scheduled"}
           />

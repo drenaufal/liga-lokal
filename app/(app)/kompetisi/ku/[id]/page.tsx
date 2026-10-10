@@ -4,7 +4,7 @@ import { getTournamentOverview } from "@/lib/queries/competition";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { StatCard } from "@/components/app/page-header";
 import { BarList } from "@/components/charts/bar-list";
-import { MatchRow } from "@/components/app/match-row";
+import { MatchRow, MatchStack } from "@/components/app/match-row";
 import { EmptyState } from "@/components/ui/misc";
 import { GenerateFixturesButton, RecomputeStandingsButton } from "./fixture-actions";
 import { crestTint } from "@/lib/crest";
@@ -88,11 +88,11 @@ export default async function TournamentOverviewPage({
             </CardHeader>
             <CardContent>
               {recentResults.length ? (
-                <div className="space-y-2">
+                <MatchStack>
                   {recentResults.map((m) => (
                     <MatchRow key={m.id} m={m} />
                   ))}
-                </div>
+                </MatchStack>
               ) : (
                 <EmptyState
                   title="Belum ada hasil"
@@ -108,11 +108,11 @@ export default async function TournamentOverviewPage({
                 <CardTitle>Jadwal Mendatang</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
+                <MatchStack>
                   {upcoming.map((m) => (
                     <MatchRow key={m.id} m={m} />
                   ))}
-                </div>
+                </MatchStack>
               </CardContent>
             </Card>
           )}

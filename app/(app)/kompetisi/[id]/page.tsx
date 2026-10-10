@@ -9,7 +9,7 @@ import { StatCard } from "@/components/app/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState, Progress } from "@/components/ui/misc";
-import { MatchRow } from "@/components/app/match-row";
+import { MatchRow, MatchStack } from "@/components/app/match-row";
 import { StatusBadge } from "@/components/app/status-badge";
 import { formatLabel } from "@/lib/ku";
 import { formatDate } from "@/lib/utils";
@@ -146,11 +146,11 @@ export default async function CompetitionOverviewPage({
             </CardHeader>
             <CardContent>
               {recentResults.length ? (
-                <div className="space-y-2">
+                <MatchStack>
                   {recentResults.map((m) => (
                     <MatchRow key={m.id} m={m} />
                   ))}
-                </div>
+                </MatchStack>
               ) : (
                 <p className="py-6 text-center text-xs text-ink-muted">Belum ada hasil dikonfirmasi.</p>
               )}
@@ -162,11 +162,11 @@ export default async function CompetitionOverviewPage({
             </CardHeader>
             <CardContent>
               {upcoming.length ? (
-                <div className="space-y-2">
+                <MatchStack>
                   {upcoming.map((m) => (
                     <MatchRow key={m.id} m={m} />
                   ))}
-                </div>
+                </MatchStack>
               ) : (
                 <p className="py-6 text-center text-xs text-ink-muted">Tidak ada pertandingan terjadwal.</p>
               )}

@@ -40,6 +40,14 @@
   --color-block-lime: #d9f95e;
   --color-block-orange: #ff6b2c;
 
+  /* Solid Matchday accents — pair with ink text. These extend the warm red
+     brand with rose/coral, cool iris/sky, and fresh jade for stacked cards. */
+  --color-block-rose: #ff72ab;
+  --color-block-coral: #ff916b;
+  --color-block-iris: #9990fa;
+  --color-block-sky: #74b7fa;
+  --color-block-jade: #51d8a5;
+
   /* Status — every tone clears 4.5:1 as text on white */
   --color-pitch: #16a34a;
   --color-info: #2457d6;

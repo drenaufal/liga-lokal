@@ -9,7 +9,7 @@ import {
 import { getCurrentUser } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { Card, CardContent } from "@/components/ui/card";
-import { MatchRow } from "@/components/app/match-row";
+import { MatchRow, MatchStack } from "@/components/app/match-row";
 import { EmptyState } from "@/components/ui/misc";
 import { STAGE_LABEL } from "@/lib/status";
 import { ScheduleUpload } from "../../../schedule-upload";
@@ -85,7 +85,7 @@ export default async function FixturesPage({
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-secondary">
               {label}
             </h3>
-            <div className="space-y-2">
+            <MatchStack>
               {list.map((m) => (
                 <div key={m.id} className="flex items-center gap-2">
                   <div className="min-w-0 flex-1">
@@ -96,7 +96,7 @@ export default async function FixturesPage({
                   )}
                 </div>
               ))}
-            </div>
+            </MatchStack>
           </CardContent>
         </Card>
       ))}

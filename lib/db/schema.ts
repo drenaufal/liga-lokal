@@ -659,7 +659,7 @@ export const matches = mysqlTable("matches", {
   refereeId: uuid("referee_id").references(() => referees.id, {
     onDelete: "set null",
   }),
-  /** Operator assigned to run the match console; kick-off needs both a referee and an operator. */
+  /** Legacy single assignment, mirrored to the first member of matchOperators. */
   operatorId: uuid("operator_id").references(() => users.id, { onDelete: "set null" }),
   scheduledAt: timestamp("scheduled_at").notNull(),
   status: mysqlEnum("status", matchStatus).notNull().default("scheduled"),
@@ -688,6 +688,20 @@ export const matches = mysqlTable("matches", {
   createdAt: timestamp("created_at").default(NOW).notNull(),
   updatedAt: timestamp("updated_at").default(NOW).notNull(),
 });
+
+/** All assigned operators share the console and may record events for either team. */
+export const matchOperators = mysqlTable(
+  "match_operators",
+  {
+    matchId: uuid("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").default(NOW).notNull(),
+  },
+  (t) => [
+    uniqueIndex("match_operator_idx").on(t.matchId, t.userId),
+    index("match_operator_user_idx").on(t.userId),
+  ],
+);
 
 export const matchEvents = mysqlTable("match_events", {
   id: id(),

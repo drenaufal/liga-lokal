@@ -9,7 +9,7 @@ import {
 import { getCurrentUser } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { Card, CardContent } from "@/components/ui/card";
-import { MatchRow } from "@/components/app/match-row";
+import { MatchRow, MatchStack } from "@/components/app/match-row";
 import { EmptyState } from "@/components/ui/misc";
 import { APP_TIME_ZONE, cn, formatDate } from "@/lib/utils";
 import { AddMatch } from "../../add-match";
@@ -129,7 +129,7 @@ export default async function CompetitionSchedulePage({
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-secondary">
                 {formatDate(list[0].scheduledAt, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
               </h3>
-              <div className="space-y-2">
+              <MatchStack>
                 {list.map((m) => (
                   <div key={m.id} className="flex items-center gap-2">
                     <div className="min-w-0 flex-1">
@@ -140,7 +140,7 @@ export default async function CompetitionSchedulePage({
                     )}
                   </div>
                 ))}
-              </div>
+              </MatchStack>
             </CardContent>
           </Card>
         ))
