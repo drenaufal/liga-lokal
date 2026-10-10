@@ -2,21 +2,20 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { crestTint } from "@/lib/crest";
 
 /**
- * Club logo when one has been uploaded, otherwise the short name on the club
- * colour (the previous look). Falls back automatically if the image fails.
+ * SSB logo when one has been uploaded, otherwise the short name on a tint
+ * picked from it (see lib/crest.ts). Falls back automatically if the image fails.
  */
 export function ClubCrest({
   logoUrl,
   short,
-  color,
   size = 24,
   className,
 }: {
   logoUrl?: string | null;
   short?: string | null;
-  color?: string | null;
   size?: number;
   className?: string;
 }) {
@@ -36,7 +35,7 @@ export function ClubCrest({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={logoUrl}
-          alt={short ?? "Logo klub"}
+          alt={short ?? "Logo SSB"}
           className="max-h-full max-w-full object-contain"
           onError={() => setErrored(true)}
         />
@@ -44,14 +43,16 @@ export function ClubCrest({
     );
   }
 
+  const tint = crestTint(short);
   return (
     <span
-      className={cn("grid shrink-0 place-items-center font-bold text-ink", radius, className)}
+      className={cn("grid shrink-0 place-items-center font-bold", radius, className)}
       style={{
         width: size,
         height: size,
         fontSize: Math.max(8, Math.round(size * 0.36)),
-        background: color ?? "var(--color-elevated)",
+        background: tint.bg,
+        color: tint.fg,
       }}
     >
       {short ?? "?"}

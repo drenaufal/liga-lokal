@@ -4,20 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-export function TournamentTabs({ id, format }: { id: string; format: string }) {
+export function CompetitionTabs({ id }: { id: string }) {
   const pathname = usePathname();
   const base = `/kompetisi/${id}`;
-
   const tabs = [
-    { href: base, label: "Ringkasan" },
-    { href: `${base}/jadwal`, label: "Jadwal & Hasil" },
-    ...(format !== "knockout"
-      ? [{ href: `${base}/klasemen`, label: "Klasemen" }]
-      : []),
-    ...(format === "cup" || format === "knockout" || format === "hybrid"
-      ? [{ href: `${base}/bagan`, label: "Bagan Gugur" }]
-      : []),
-    { href: `${base}/peserta`, label: "Peserta" },
+    { href: base, label: "KU & Ringkasan" },
+    { href: `${base}/jadwal`, label: "Jadwal Turnamen" },
   ];
 
   return (

@@ -45,8 +45,6 @@ export function ConsoleControls({
   awayShort,
   homeName,
   awayName,
-  homeColor,
-  awayColor,
   homeLogo,
   awayLogo,
   homeScore,
@@ -67,8 +65,6 @@ export function ConsoleControls({
   awayShort: string | null;
   homeName: string | null;
   awayName: string | null;
-  homeColor: string | null;
-  awayColor: string | null;
   homeLogo?: string | null;
   awayLogo?: string | null;
   homeScore: number;
@@ -102,7 +98,7 @@ export function ConsoleControls({
         className="pointer-events-none absolute -top-24 left-1/2 size-72 -translate-x-1/2 rounded-full bg-brand/25 blur-3xl"
       />
       <div className="relative grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4">
-        <TeamCol name={homeName} short={homeShort} color={homeColor} logo={homeLogo} align="right" />
+        <TeamCol name={homeName} short={homeShort} logo={homeLogo} align="right" />
         <div className="flex flex-col items-center">
           {status === "live" && (
             <span className="mb-2 flex items-center gap-1 rounded-full bg-brand px-2.5 py-1 text-[10px] font-bold text-white">
@@ -126,7 +122,7 @@ export function ConsoleControls({
             </span>
           )}
         </div>
-        <TeamCol name={awayName} short={awayShort} color={awayColor} logo={awayLogo} align="left" />
+        <TeamCol name={awayName} short={awayShort} logo={awayLogo} align="left" />
       </div>
 
       {timeUp && (
@@ -282,13 +278,11 @@ function StartForm({
 function TeamCol({
   name,
   short,
-  color,
   logo,
   align,
 }: {
   name: string | null;
   short: string | null;
-  color: string | null;
   logo?: string | null;
   align: "left" | "right";
 }) {
@@ -302,7 +296,6 @@ function TeamCol({
       <ClubCrest
         logoUrl={logo}
         short={short}
-        color={color}
         size={56}
         className="text-sm ring-4 ring-white/10"
       />

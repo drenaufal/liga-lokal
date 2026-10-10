@@ -11,14 +11,29 @@ Lingkungan demo, siap ditunjukkan ke calon klien.
 | Modul | Rute | Isi |
 |-------|------|-----|
 | Command Center | `/command-center` | Dasbor operasional real-time, live match monitor, papan peringkat, kepatuhan verifikasi |
-| Master Data & Registry | `/registry/*` | Pemain (13 posisi, NISN wajib & unik, hingga 2 klub, kaki dominan, foto, 5 dokumen privat), klub (logo tim), pelatih, wasit, venue, aturan kategori usia (KU-8…KU-20, bisa ditambah sendiri) |
+| Master Data & Registry | `/registry/*` | Pemain (13 posisi, NISN wajib & unik, hingga 2 klub, kaki dominan, foto, 5 dokumen privat), SSB (logo, alamat, Askot & Asprov), pelatih (foto, lisensi & KTP privat), wasit (lisensi, asal Askot), venue, aturan kategori usia (KU-8…KU-16, bisa ditambah sendiri) |
 | Data Ingestion & Staging | `/ingestion` | Impor CSV dengan pipeline **8 tahap** — validasi skema, fuzzy dedupe, antrian tinjauan, commit + audit |
-| Competition & Rules | `/kompetisi` | Format Cup / League / Hybrid / Knockout, fixture otomatis atau **unggah jadwal CSV**, klasemen real-time + tie-breaker, bagan gugur, hapus turnamen |
+| Competition & Rules | `/kompetisi` | **Turnamen → KU**: satu turnamen berisi banyak KU (kategori usia); tiap KU berformat **Liga** (round-robin) atau **Cup** (sistem gugur + adu penalti). Jadwal otomatis, manual, atau **unggah CSV**; klasemen real-time + tie-breaker; bagan Cup; hapus KU / turnamen |
 | Match Operations | `/match-ops` | Konsol pertandingan langsung: penugasan wasit & operator, timer, skor, daftar pemain per klub dengan **8 tombol kejadian sekali ketuk**, lini masa, validasi hasil |
-| Player Intelligence & Radar | `/player-intelligence` | Radar performa, perbandingan head-to-head, **mesin formula penilaian**, galeri lencana |
+| Player Intelligence & Radar | `/player-intelligence` | Radar performa, perbandingan head-to-head, **mesin formula penilaian**, galeri lencana (bisa disaring per turnamen & KU) |
 | AI Scout & Insights | `/ai-scout` | Pencarian talenta bahasa natural, laporan analisis pemain / laga / kompetisi |
 
 ## Menjalankan
+
+`npm run dev` menggunakan Webpack agar tidak terkena crash proses PostCSS
+Turbopack di Windows saat alokasi memori gagal. Setelah mengubah bundler,
+hentikan server lama dengan Ctrl+C, lalu jalankan ulang `npm run dev`.
+
+Untuk memeriksa daftar pemain pertandingan tanpa mengubah database:
+
+```bash
+npx tsx scripts/check-match-roster.ts MATCH_ID
+```
+
+Gunakan ID dari URL `/match-ops/MATCH_ID`. Pemeriksaan memakai `DATABASE_URL`
+dan membandingkan jumlah pemain klub, kecocokan kategori usia, skuad yang
+dimuat, serta susunan pemain pertandingan. Skuad turnamen diprioritaskan;
+tanpa skuad tersebut, konsol memakai klub utama / klub kedua dan KU pemain.
 
 Database: **MariaDB** (kompatibel MySQL) — sama dengan yang dipakai hosting
 Hostinger. Untuk lokal di Windows, pasang MariaDB sebagai service:
@@ -45,6 +60,33 @@ npm run db:migrate   # buat skema
 npm run db:seed      # isi data demo lengkap
 npm run dev          # http://localhost:3000
 ```
+
+### Memperbarui database yang sudah berisi data (migrasi 0004)
+
+Migrasi `0004_turnamen_ku` mengubah struktur turnamen dan menghapus beberapa
+kolom. **Cadangkan dulu** (`mysqldump -u ligalokal -p ligalokal > cadangan.sql`),
+lalu jalankan `npm run db:migrate`.
+
+Untuk database di Hostinger: izinkan IP komputer Anda di hPanel → Databases →
+Remote MySQL, lalu
+`mysqldump -h HOST -u USER -p --single-transaction --skip-lock-tables --no-tablespaces NAMA_DB > cadangan-produksi.sql`
+(atau ekspor lewat phpMyAdmin / unduh dari hPanel → Backups). **Periksa ukuran
+berkasnya**: 0 byte berarti dump gagal dan belum ada cadangan. DDL MariaDB tidak
+bisa di-rollback — bila `db:migrate` terhenti di tengah, jangan jalankan ulang
+begitu saja (`competitions` sudah ada); pulihkan dari cadangan atau lanjutkan
+dari pernyataan yang gagal.
+
+- Setiap turnamen lama menjadi satu *Turnamen* berisi satu KU, dengan id yang
+  sama — tautan `/kompetisi/<id>` lama tetap membuka turnamen yang benar. Laga,
+  klasemen, skuad, statistik, dan lencana tidak disentuh.
+- Format `knockout` dan `hybrid` menjadi `cup`.
+- **Kolom yang dihapus (isinya hilang):** SSB — akreditasi, warna tim, venue
+  kandang; pelatih — pengalaman, tanggal lisensi, status lisensi; kategori usia —
+  usia minimal dan batas tahun lahir terbaru; lencana — tingkat (tier).
+- Kolom baru: SSB — alamat, Askot, Asprov; wasit — Askot; pelatih — berkas
+  lisensi dan KTP.
+
+Database kosong tidak perlu langkah khusus: `db:migrate` lalu `db:seed`.
 
 ## Deploy ke Hostinger (paket Unlimited / Node.js Web App)
 
@@ -94,6 +136,15 @@ Kata sandi semua akun: **`ligalokal123`**
 
 ## Alur kerja
 
+**Turnamen & KU.** Buat *Turnamen* dulu di `/kompetisi/baru` (nama, musim,
+penyelenggara, deskripsi). Buka turnamennya, lalu tekan **Tambah KU**: pilih
+kategori usia, format (**Liga** atau **Cup**), formula penilaian, tanggal mulai,
+dan SSB pesertanya. Satu turnamen boleh punya banyak KU, tetapi tiap kategori
+usia hanya sekali. Setiap KU punya jadwal, klasemen / bagan, peserta, dan status
+sendiri (Draf → Registrasi → Verifikasi → Siap → Berlangsung → Selesai); status
+turnamen mengikuti KU yang masih berjalan. Di seluruh aplikasi sebuah KU ditulis
+`<turnamen> · KU-14`.
+
 **Pemain.** Posisi memakai 13 peran (GK · CB RB LB WB · DMF CMF AMF WF · ST CF LW RW);
 kelompok Kiper/Bertahan/Tengah/Depan diturunkan darinya (`lib/positions.ts`) dan
 dipakai untuk persentil & filter AI. NISN wajib 10 digit dan unik (dicek langsung
@@ -114,25 +165,47 @@ melihat pertandingan pemain di kompetisi itu.
 3. Setelah laga selesai, *Konfirmasi Hasil* memperbarui klasemen dan statistik
    pemain **per klub**. Konfirmasi ulang atau koreksi hanya menerapkan selisihnya
    (buku besar `player_match_stats`), jadi tidak ada hitungan ganda.
+4. Di **Cup**, hasil seri tidak bisa dikonfirmasi: isi skor *adu penalti* dulu
+   (harus ada pemenangnya). Setelah dikonfirmasi, pemenang otomatis maju ke slot
+   babak berikutnya di bagan.
 
-**Jadwal.** Di tab *Jadwal & Hasil* sebuah turnamen, tombol **Unggah Jadwal** membaca
-CSV (kolom wajib `home_short, away_short, date, time`; opsional `round, stage,
-group, venue, referee_license`; boleh dipisah `,` atau `;`). Setiap baris dicek
-terhadap peserta turnamen sebelum diimpor; waktu dibaca sebagai WIB. Templat
-bisa diunduh dari dialognya.
+**Jadwal.** Ada tiga cara, semuanya di tab *Jadwal & Hasil* sebuah KU dan di tab
+*Jadwal Turnamen* (semua KU sekaligus — pilih KU-nya):
+- **Buat Jadwal Otomatis** — Liga: round-robin; Cup: bagan berunggulan, unggulan
+  teratas mendapat *bye* bila jumlah SSB bukan pangkat dua, slot yang menunggu
+  pemenang tampil sebagai "Pemenang SF1" dst.
+- **Tambah Pertandingan** — satu per satu (waktu WIB; bentrok jadwal SSB atau
+  wasit diberi peringatan). Cup boleh diberi slot bagan, mis. `QF1`.
+- **Unggah Jadwal** — CSV (kolom wajib `home_short, away_short, date, time`;
+  opsional `round, stage, venue, referee_license, bracket_slot`; boleh dipisah
+  `,` atau `;`). Setiap baris dicek terhadap peserta KU sebelum diimpor; waktu
+  dibaca sebagai WIB. Templat bisa diunduh dari dialognya.
 
-**Hapus turnamen.** Di header turnamen (admin & operator). Perlu mengetik nama
-turnamen; ditolak selama ada laga berlangsung; statistik turnamen itu dikurangkan
-dari total karier pemain.
+**Hapus KU / turnamen.** *Hapus KU* ada di header KU, *Hapus turnamen* di header
+turnamen (admin & operator). Perlu mengetik kode KU / nama turnamen; ditolak
+selama ada laga berlangsung; statistik terkait dikurangkan dari total karier
+pemain, sedangkan klasemen, lencana, dan laporan AI ikut terhapus. Menghapus
+turnamen menghapus semua KU di dalamnya.
 
 ## Unggahan berkas
 
-Foto pemain & pelatih, logo tim, dan dokumen pemain (KIA, KK, akta kelahiran,
-ijazah, rapor) diunggah langsung dari formulir dan disimpan di database (tabel
-`media`), disajikan lewat `/api/media/[id]` — tidak butuh layanan eksternal. Gambar
-diperkecil otomatis di browser sebelum diunggah (maks 5 MB per berkas). Dokumen
-pemain bersifat privat: hanya peran dengan izin verifikasi (admin & operator)
-yang dapat membukanya, dan tidak disimpan di cache browser.
+Foto pemain & pelatih, logo tim, dokumen pemain (KIA, KK, akta kelahiran, ijazah,
+rapor), serta lisensi dan KTP pelatih diunggah langsung dari formulir dan disimpan
+di database (tabel `media`), disajikan lewat `/api/media/[id]` — tidak butuh layanan
+eksternal. Gambar diperkecil otomatis di browser sebelum diunggah (maks 5 MB per
+berkas). Dokumen pemain dan pelatih bersifat privat: hanya peran dengan izin
+verifikasi (admin & operator) yang dapat membukanya, dan tidak disimpan di cache
+browser.
+
+## Logo & ikon
+
+Logo aplikasi adalah `public/logo-font-putih.png` (huruf putih, latar transparan);
+di permukaan terang ia dipasang di dalam pil gelap (`LogoChip` di
+`components/brand/logo.tsx`). Set ikon — favicon, apple-touch-icon, android-chrome,
+ms-icon, dan `manifest.json` — ada di `public/Web/` dan dipasang lewat metadata di
+`app/layout.tsx`; `next.config.ts` meneruskan `/favicon.ico`,
+`/apple-touch-icon.png`, dan `/manifest.json` ke berkas itu. Nama berkas dan warna
+merek terkumpul di `lib/brand.ts`.
 
 ## Integrasi opsional
 
@@ -152,11 +225,12 @@ recharts + SVG kustom · unggahan berkas di database · Google Gemini (opsional)
 |----------|--------|
 | `npm run dev` / `build` / `start` | Next.js |
 | `npm run db:generate` | Buat berkas migrasi dari perubahan skema |
-| `npm run db:migrate` | Terapkan migrasi ke database (jalankan setelah menarik perubahan skema) |
+| `npm run db:migrate` | Terapkan migrasi ke database (jalankan setelah menarik perubahan skema; cadangkan dulu bila sudah berisi data — lihat catatan migrasi 0004) |
 | `npm run db:seed` | Reset + isi ulang seluruh data demo |
 | `npm run db:copy-from-neon` | **Dinonaktifkan** — skema berubah (13 posisi, NISN wajib, klub kedua). Pindahkan data dengan `mysqldump` + impor SQL |
 | `npm run db:studio` | Drizzle Studio |
 | `npm run typecheck` | `tsc --noEmit` |
+| `npm run test:logic` | Uji logika murni: klasemen, bagan Cup, impor jadwal, jadwal manual, status Turnamen / KU |
 
 > Catatan: `npm run db:seed` melakukan `TRUNCATE` seluruh tabel lalu mengisi ulang.
 > Setelah re-seed, sesi login lama tetap valid (identitas diselesaikan via email),

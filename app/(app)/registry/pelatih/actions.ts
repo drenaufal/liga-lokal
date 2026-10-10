@@ -8,10 +8,11 @@ import { db } from "@/lib/db";
 import { coaches } from "@/lib/db/schema";
 import { actionUser } from "@/lib/auth/session";
 import { changedSuffix, recordAudit } from "@/lib/audit";
-import { imageUrlField } from "@/lib/media";
+import { documentUrlField, imageUrlField } from "@/lib/media";
 import { releaseReplaced } from "@/lib/media-store";
-import { formError, optionalInt, type FormState } from "@/lib/form";
-import { COACH_LICENSE_LEVELS, COACH_SPECIALTIES, licenseStatus } from "@/lib/status";
+import { COACH_DOCUMENT_KEYS } from "@/lib/coach-documents";
+import { formError, type FormState } from "@/lib/form";
+import { COACH_LICENSE_LEVELS, COACH_SPECIALTIES } from "@/lib/status";
 import { insertReturning } from "@/lib/db/returning";
 
 const optionalDate = z
@@ -19,32 +20,25 @@ const optionalDate = z
   .refine((v) => v === "" || /^\d{4}-\d{2}-\d{2}$/.test(v), "Tanggal tidak valid")
   .optional();
 
-const coachSchema = z
-  .object({
-    fullName: z.string().trim().min(3, "Nama minimal 3 karakter"),
-    dob: optionalDate,
-    city: z.string().trim().optional(),
-    clubId: z.string().optional(),
-    specialty: z
-      .string()
-      .refine((v) => v === "" || COACH_SPECIALTIES.includes(v), "Peran tidak dikenali")
-      .optional(),
-    licenseLevel: z
-      .string()
-      .refine((v) => COACH_LICENSE_LEVELS.includes(v), "Pilih tingkat lisensi"),
-    licenseNumber: z.string().trim().toUpperCase().min(3, "Nomor lisensi wajib diisi").max(40),
-    licenseIssuedAt: optionalDate,
-    licenseExpiry: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal berlaku wajib diisi"),
-    revoked: z.literal("on").optional(),
-    experienceYears: optionalInt(0, 60, "Pengalaman 0–60 tahun"),
-    photoUrl: imageUrlField,
-    phone: z.string().trim().optional(),
-    email: z.union([z.literal(""), z.email("Email tidak valid")]).optional(),
-  })
-  .refine((v) => !v.licenseIssuedAt || v.licenseIssuedAt < v.licenseExpiry, {
-    path: ["licenseExpiry"],
-    message: "Masa berlaku harus setelah tanggal terbit",
-  });
+const coachSchema = z.object({
+  fullName: z.string().trim().min(3, "Nama minimal 3 karakter"),
+  dob: optionalDate,
+  city: z.string().trim().optional(),
+  clubId: z.string().optional(),
+  specialty: z
+    .string()
+    .refine((v) => v === "" || COACH_SPECIALTIES.includes(v), "Peran tidak dikenali")
+    .optional(),
+  licenseLevel: z
+    .string()
+    .refine((v) => COACH_LICENSE_LEVELS.includes(v), "Pilih tingkat lisensi"),
+  licenseNumber: z.string().trim().toUpperCase().min(3, "Nomor lisensi wajib diisi").max(40),
+  licenseDocUrl: documentUrlField,
+  ktpUrl: documentUrlField,
+  photoUrl: imageUrlField,
+  phone: z.string().trim().optional(),
+  email: z.union([z.literal(""), z.email("Email tidak valid")]).optional(),
+});
 
 type CoachInput = z.infer<typeof coachSchema>;
 
@@ -57,10 +51,8 @@ function toRow(v: CoachInput) {
     specialty: v.specialty || null,
     licenseLevel: v.licenseLevel,
     licenseNumber: v.licenseNumber,
-    licenseIssuedAt: v.licenseIssuedAt || null,
-    licenseExpiry: v.licenseExpiry,
-    status: licenseStatus(v.licenseExpiry, v.revoked === "on"),
-    experienceYears: v.experienceYears ?? 0,
+    licenseDocUrl: v.licenseDocUrl || null,
+    ktpUrl: v.ktpUrl || null,
     photoUrl: v.photoUrl || null,
     phone: v.phone || null,
     email: v.email || null,
@@ -125,7 +117,11 @@ export async function updateCoach(
   if (taken) return formError({ licenseNumber: taken }, formData);
 
   await db.update(coaches).set(row).where(eq(coaches.id, id));
-  await releaseReplaced(before.photoUrl, row.photoUrl);
+  // a replaced or removed scan / photo no longer needs its stored file
+  await Promise.all([
+    releaseReplaced(before.photoUrl, row.photoUrl),
+    ...COACH_DOCUMENT_KEYS.map((k) => releaseReplaced(before[k], row[k])),
+  ]);
 
   const changed = (Object.keys(row) as (keyof typeof row)[]).filter(
     (k) => (before[k] ?? null) !== (row[k] ?? null),
@@ -134,12 +130,13 @@ export async function updateCoach(
     actorId: user.id,
     actorName: user.name,
     actorRole: user.role,
-    action: before.status !== "revoked" && row.status === "revoked" ? "coach.revoke" : "coach.update",
+    action: "coach.update",
     entityType: "coach",
     entityId: id,
     summary: `Data pelatih ${row.fullName} diperbarui${changedSuffix(changed)}`,
-    before: Object.fromEntries(changed.map((k) => [k, before[k]])),
-    after: Object.fromEntries(changed.map((k) => [k, row[k]])),
+    // documents are private: record that they changed, never the file ids
+    before: Object.fromEntries(changed.filter((k) => !COACH_DOCUMENT_KEYS.includes(k as never)).map((k) => [k, before[k]])),
+    after: Object.fromEntries(changed.filter((k) => !COACH_DOCUMENT_KEYS.includes(k as never)).map((k) => [k, row[k]])),
   });
 
   revalidateCoach(id, [before.clubId, row.clubId]);

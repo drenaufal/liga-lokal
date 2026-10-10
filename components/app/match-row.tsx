@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Radio } from "lucide-react";
 import { cn, formatDateTime } from "@/lib/utils";
 import { STAGE_LABEL } from "@/lib/status";
+import { matchWinnerSide } from "@/lib/fixtures";
 import { ClubCrest } from "./club-crest";
 import { LiveCountdown } from "./match-countdown";
 
@@ -18,24 +19,32 @@ export type MatchRowData = {
   duration?: number;
   homeScore: number;
   awayScore: number;
+  /** Shoot-out score of a level Cup match. */
+  homePenalties?: number | null;
+  awayPenalties?: number | null;
   homeShort?: string | null;
   homeName?: string | null;
-  homeColor?: string | null;
   homeLogo?: string | null;
   awayShort?: string | null;
   awayName?: string | null;
-  awayColor?: string | null;
   awayLogo?: string | null;
   homePlaceholder?: string | null;
   awayPlaceholder?: string | null;
   venue?: string | null;
+  /** Age group of the KU, when the list spans several. */
+  ageCode?: string | null;
 };
 
 export function MatchRow({ m, showMeta = true }: { m: MatchRowData; showMeta?: boolean }) {
   const live = m.status === "live";
   const done = m.status === "completed";
-  const homeWon = done && m.homeScore > m.awayScore;
-  const awayWon = done && m.awayScore > m.homeScore;
+  const winner = done ? matchWinnerSide(m) : null;
+  const homeWon = winner === "home";
+  const awayWon = winner === "away";
+  const shootout =
+    done && m.homeScore === m.awayScore && m.homePenalties != null && m.awayPenalties != null
+      ? `${m.homePenalties}–${m.awayPenalties} pen`
+      : null;
 
   return (
     <Link
@@ -45,7 +54,6 @@ export function MatchRow({ m, showMeta = true }: { m: MatchRowData; showMeta?: b
       <Side
         name={m.homeName ?? m.homePlaceholder}
         short={m.homeShort}
-        color={m.homeColor}
         logo={m.homeLogo}
         align="right"
         dim={awayWon}
@@ -60,6 +68,7 @@ export function MatchRow({ m, showMeta = true }: { m: MatchRowData; showMeta?: b
             )}
           >
             {m.homeScore}<span className="mx-0.5 text-ink-muted">-</span>{m.awayScore}
+            {shootout && <span className="mt-0.5 block text-center font-sans text-[9px] font-semibold tracking-normal text-ink-muted">{shootout}</span>}
           </span>
         ) : (
           <span className="text-[10px] font-semibold text-ink-secondary">
@@ -85,7 +94,6 @@ export function MatchRow({ m, showMeta = true }: { m: MatchRowData; showMeta?: b
       <Side
         name={m.awayName ?? m.awayPlaceholder}
         short={m.awayShort}
-        color={m.awayColor}
         logo={m.awayLogo}
         align="left"
         dim={homeWon}
@@ -93,6 +101,7 @@ export function MatchRow({ m, showMeta = true }: { m: MatchRowData; showMeta?: b
       />
       {showMeta && (
         <div className="col-span-3 mt-0.5 flex items-center justify-center gap-2 text-[10px] text-ink-muted">
+          {m.ageCode && <span className="rounded-full bg-surface px-1.5 py-0.5 font-semibold text-ink-secondary">{m.ageCode}</span>}
           <span>
             {STAGE_LABEL[m.stage] ?? m.stage}
             {m.groupLabel ? ` · Grup ${m.groupLabel}` : ""}
@@ -108,7 +117,6 @@ export function MatchRow({ m, showMeta = true }: { m: MatchRowData; showMeta?: b
 function Side({
   name,
   short,
-  color,
   logo,
   align,
   dim,
@@ -116,7 +124,6 @@ function Side({
 }: {
   name?: string | null;
   short?: string | null;
-  color?: string | null;
   logo?: string | null;
   align: "left" | "right";
   dim?: boolean;
@@ -129,7 +136,7 @@ function Side({
         align === "right" ? "flex-row-reverse text-right" : "text-left",
       )}
     >
-      <ClubCrest logoUrl={logo} short={short} color={color} size={28} />
+      <ClubCrest logoUrl={logo} short={short} size={28} />
       <span
         className={cn(
           "min-w-0 truncate text-xs",

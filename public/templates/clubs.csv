@@ -1,3 +1,3 @@
-name,short_name,city,province,type,founded_year,contact_email
-Contoh Klub FC,CKF,Depok,Jawa Barat,club,2015,sekretariat@contohklub.or.id
-Akademi Contoh Muda,ACM,Bekasi,Jawa Barat,academy,2018,info@akademicontoh.id
+name,short_name,city,province,address,askot,asprov,type,founded_year,contact_email
+SSB Contoh Muda,SCM,Depok,Jawa Barat,"Jl. Contoh No. 12, Depok",Askot PSSI Depok,Asprov PSSI Jawa Barat,club,2015,sekretariat@contohssb.or.id
+Akademi Contoh Bekasi,ACB,Bekasi,Jawa Barat,"Jl. Akademi No. 5, Bekasi",Askot PSSI Bekasi,Asprov PSSI Jawa Barat,academy,2018,info@akademicontoh.id

@@ -6,7 +6,6 @@ export type StandingRowData = {
   clubId: string;
   name: string;
   short: string;
-  color?: string | null;
   logo?: string | null;
   group: string;
   played: number;
@@ -85,7 +84,7 @@ export function StandingsTable({
                             href={`/registry/klub/${r.clubId}`}
                             className="flex items-center gap-2 hover:text-brand"
                           >
-                            <ClubCrest logoUrl={r.logo} short={r.short} color={r.color} size={20} />
+                            <ClubCrest logoUrl={r.logo} short={r.short} size={20} />
                             <span className="truncate font-medium text-ink">{r.name}</span>
                           </Link>
                         </td>

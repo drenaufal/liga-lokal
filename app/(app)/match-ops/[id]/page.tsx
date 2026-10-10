@@ -17,6 +17,7 @@ import { PlayerList } from "./player-list";
 import { AssignmentCard } from "./assignment-card";
 import { buildTallies } from "@/lib/match-tally";
 import { ResultControl } from "./result-control";
+import { isCupStage } from "@/lib/cup-advance";
 import { STAGE_LABEL } from "@/lib/status";
 import { LINE_ORDER, positionLine } from "@/lib/positions";
 import { formatDateTime } from "@/lib/utils";
@@ -131,8 +132,6 @@ export default async function MatchConsolePage({
         awayShort={d.awayShort}
         homeName={d.homeName}
         awayName={d.awayName}
-        homeColor={d.homeColor}
-        awayColor={d.awayColor}
         homeLogo={d.homeLogo}
         awayLogo={d.awayLogo}
         homeScore={m.homeScore}
@@ -148,7 +147,7 @@ export default async function MatchConsolePage({
         }
         meta={
           <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-night-muted">
-            <Link href={`/kompetisi/${d.tournamentId}`} className="font-semibold text-white hover:underline">
+            <Link href={`/kompetisi/ku/${d.tournamentId}`} className="font-semibold text-white hover:underline">
               {d.tournamentName}
             </Link>
             <span>· {STAGE_LABEL[m.stage] ?? m.stage}{m.groupLabel ? ` Grup ${m.groupLabel}` : ""}</span>
@@ -178,13 +177,13 @@ export default async function MatchConsolePage({
               matchId={id}
               clock={clock}
               home={{
-                club: { id: m.homeClubId, short: d.homeShort ?? "H", name: d.homeName ?? "Tuan rumah", color: d.homeColor, logo: d.homeLogo },
+                club: { id: m.homeClubId, short: d.homeShort ?? "H", name: d.homeName ?? "Tuan rumah", logo: d.homeLogo },
                 formation: m.homeFormation,
                 side: "home",
                 players: rosterFor(m.homeClubId),
               }}
               away={{
-                club: { id: m.awayClubId, short: d.awayShort ?? "A", name: d.awayName ?? "Tamu", color: d.awayColor, logo: d.awayLogo },
+                club: { id: m.awayClubId, short: d.awayShort ?? "A", name: d.awayName ?? "Tamu", logo: d.awayLogo },
                 formation: m.awayFormation,
                 side: "away",
                 players: rosterFor(m.awayClubId),
@@ -217,8 +216,8 @@ export default async function MatchConsolePage({
                         <span className="font-semibold tabular-nums text-ink">{a}</span>
                       </div>
                       <div className="mt-1.5 flex h-2 gap-0.5 overflow-hidden rounded-full bg-surface-2">
-                        <div style={{ width: `${((h as number) / total) * 100}%`, background: d.homeColor ?? "var(--color-brand)" }} />
-                        <div style={{ width: `${((a as number) / total) * 100}%`, background: d.awayColor ?? "var(--color-info)" }} className="ml-auto" />
+                        <div style={{ width: `${((h as number) / total) * 100}%`, background: "var(--color-brand)" }} />
+                        <div style={{ width: `${((a as number) / total) * 100}%`, background: "var(--color-info)" }} className="ml-auto" />
                       </div>
                     </div>
                   );
@@ -236,6 +235,11 @@ export default async function MatchConsolePage({
               awayScore={m.awayScore}
               canConfirm={canConfirm}
               amendmentReason={m.amendmentReason}
+              isCup={isCupStage(m.stage)}
+              homeShort={d.homeShort}
+              awayShort={d.awayShort}
+              homePenalties={m.homePenalties}
+              awayPenalties={m.awayPenalties}
             />
           )}
         </div>

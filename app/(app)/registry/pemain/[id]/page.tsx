@@ -12,12 +12,7 @@ import {
   Phone,
   Pencil,
   Hash,
-  FileText,
-  ExternalLink,
-  Lock,
   ChevronRight,
-  Check,
-  Upload,
 } from "lucide-react";
 import { getPlayerProfile } from "@/lib/queries/registry";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -29,7 +24,8 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/misc";
 import { FootPreference } from "@/components/app/foot-icon";
 import { getMediaMeta } from "@/lib/media-store";
-import { formatBytes } from "@/lib/media";
+import { DocumentRow } from "@/components/app/document-row";
+import { crestTint } from "@/lib/crest";
 import { StatusBadge } from "@/components/app/status-badge";
 import { Icon } from "@/components/app/icon";
 import { Radar } from "@/components/charts/radar";
@@ -138,7 +134,7 @@ export default async function PlayerProfilePage({
                 <Link key={c.id} href={`/registry/klub/${c.id}`} className="flex items-center gap-1.5 hover:text-ink">
                   <span
                     className="size-2 rounded-full"
-                    style={{ background: c.primaryColor ?? "var(--color-brand)" }}
+                    style={{ background: crestTint(c.shortName).bg }}
                   />
                   {c.name}
                   {i === 1 && (
@@ -188,7 +184,7 @@ export default async function PlayerProfilePage({
               key={c.id}
               href={`/registry/pemain/${id}?klub=${c.id}`}
               active={selectedClub === c.id}
-              color={c.color}
+              color={crestTint(c.short || c.name).bg}
               note={c.tag === "utama" ? "utama" : c.tag === "kedua" ? "kedua" : undefined}
             >
               {c.short || c.name}
@@ -357,7 +353,7 @@ export default async function PlayerProfilePage({
                               <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-ink-muted">
                                 <span
                                   className="size-1.5 rounded-full"
-                                  style={{ background: st.clubColor ?? "var(--color-brand)" }}
+                                  style={{ background: crestTint(st.clubShort).bg }}
                                 />
                                 Membela {st.clubName}
                               </span>
@@ -499,80 +495,6 @@ function Detail({
       </span>
       <span className="mt-0.5 block text-ink-secondary">{children}</span>
     </div>
-  );
-}
-
-/** One line of the document checklist. Files open only for people who verify registrations. */
-function DocumentRow({
-  label,
-  url,
-  meta,
-  canView,
-  editHref,
-}: {
-  label: string;
-  url: string | null;
-  meta: { fileName: string | null; mimeType: string; size: number } | null;
-  canView: boolean;
-  editHref: string | null;
-}) {
-  if (!url) {
-    return (
-      <li className="flex items-center gap-2.5 rounded-lg border border-dashed border-line px-2.5 py-2">
-        <span className="grid size-6 shrink-0 place-items-center rounded-full bg-surface-2 text-ink-muted/60">
-          <Upload className="size-3" />
-        </span>
-        <span className="min-w-0 flex-1 text-xs text-ink-muted">
-          <span className="font-medium text-ink-secondary">{label}</span> · belum diunggah
-        </span>
-        {editHref && (
-          <Link href={editHref} className="shrink-0 text-[11px] text-brand hover:underline">
-            Unggah
-          </Link>
-        )}
-      </li>
-    );
-  }
-
-  const detail = meta
-    ? `${meta.fileName ?? (meta.mimeType === "application/pdf" ? "PDF" : "Gambar")} · ${formatBytes(meta.size)}`
-    : "Terunggah";
-
-  if (!canView) {
-    return (
-      <li className="flex items-center gap-2.5 rounded-lg bg-surface-2/50 px-2.5 py-2">
-        <span className="grid size-6 shrink-0 place-items-center rounded-full bg-success/15 text-success">
-          <Check className="size-3.5" />
-        </span>
-        <span className="min-w-0 flex-1 text-xs">
-          <span className="font-medium text-ink">{label}</span>
-          <span className="flex items-center gap-1 text-[11px] text-ink-muted">
-            <Lock className="size-3" /> Hanya admin & operator yang dapat membuka
-          </span>
-        </span>
-      </li>
-    );
-  }
-
-  return (
-    <li>
-      <a
-        href={url}
-        target="_blank"
-        rel="noreferrer"
-        className="group flex items-center gap-2.5 rounded-lg bg-surface-2/50 px-2.5 py-2 transition-colors hover:bg-surface-2"
-      >
-        <span className="grid size-6 shrink-0 place-items-center rounded-full bg-success/15 text-success">
-          <Check className="size-3.5" />
-        </span>
-        <span className="min-w-0 flex-1 text-xs">
-          <span className="block font-medium text-ink">{label}</span>
-          <span className="block truncate text-[11px] text-ink-muted">{detail}</span>
-        </span>
-        <FileText className="size-3.5 shrink-0 text-ink-muted group-hover:hidden" />
-        <ExternalLink className="hidden size-3.5 shrink-0 text-ink group-hover:block" />
-      </a>
-    </li>
   );
 }
 

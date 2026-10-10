@@ -1,82 +1,146 @@
-import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getTournamentOverview } from "@/lib/queries/competition";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { StatCard } from "@/components/app/page-header";
-import { BarList } from "@/components/charts/bar-list";
-import { MatchRow } from "@/components/app/match-row";
-import { EmptyState } from "@/components/ui/misc";
-import { GenerateFixturesButton, RecomputeStandingsButton } from "./fixture-actions";
+import { notFound } from "next/navigation";
+import { Plus, Radio, CalendarDays, Users2, Layers, Trophy, MapPin } from "lucide-react";
+import { getCompetitionOverview } from "@/lib/queries/competition";
 import { getCurrentUser } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { StatCard } from "@/components/app/page-header";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { EmptyState, Progress } from "@/components/ui/misc";
+import { MatchRow } from "@/components/app/match-row";
+import { StatusBadge } from "@/components/app/status-badge";
+import { formatLabel } from "@/lib/ku";
+import { formatDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-export default async function TournamentOverviewPage({
+export default async function CompetitionOverviewPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const d = await getTournamentOverview(id);
+  const d = await getCompetitionOverview(id);
   if (!d) notFound();
-  const { tournament: t, teams, matchAgg, topScorers, recentResults, upcoming } = d;
+  const { kus, totals, recentResults, upcoming } = d;
   const user = await getCurrentUser();
   const canManage = can(user?.role, "competition:write");
-  const hasFixtures = Number(matchAgg.total) > 0;
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Tim Peserta" value={teams.length} block="red" />
+        <StatCard label="KU" value={totals.kus} block="red" />
+        <StatCard label="SSB Peserta" value={totals.clubs} block="blue" hint="di semua KU" />
         <StatCard
           label="Pertandingan"
-          block="blue"
-          value={Number(matchAgg.total)}
-          hint={`${Number(matchAgg.completed)} selesai`}
-        />
-        <StatCard
-          label="Total Gol"
           block="yellow"
-          value={Number(matchAgg.goals)}
-          hint={
-            Number(matchAgg.completed) > 0
-              ? `${(Number(matchAgg.goals) / Number(matchAgg.completed)).toFixed(1)} / laga`
-              : "—"
-          }
+          value={totals.matches}
+          hint={`${totals.completed} selesai · ${totals.goals} gol`}
         />
         <StatCard
           label="Sedang Berlangsung"
           block="night"
-          value={Number(matchAgg.live)}
-          tone={Number(matchAgg.live) > 0 ? "danger" : "default"}
+          value={totals.live}
+          tone={totals.live > 0 ? "danger" : "default"}
         />
       </div>
 
-      {canManage && (
-        <Card>
-          <CardContent className="flex flex-wrap items-center gap-3">
-            <span className="text-xs text-ink-muted">Aksi operator:</span>
-            {!hasFixtures && <GenerateFixturesButton tournamentId={id} />}
-            {t.format !== "knockout" && <RecomputeStandingsButton tournamentId={id} />}
-            {hasFixtures && (
-              <span className="text-[11px] text-ink-muted">
-                Jadwal sudah dibuat — {Number(matchAgg.total)} pertandingan.
-              </span>
-            )}
-          </CardContent>
-        </Card>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-ink">KU dalam turnamen ini</h2>
+        {canManage && kus.length > 0 && (
+          <Button size="sm" variant="outline" href={`/kompetisi/${id}/ku/baru`}>
+            <Plus className="size-3.5" /> Tambah KU
+          </Button>
+        )}
+      </div>
+
+      {kus.length === 0 ? (
+        <EmptyState
+          icon={Layers}
+          title="Belum ada KU"
+          description="Tambahkan KU pertama — pilih kategori usia, format Liga atau Cup, tanggal mulai, dan SSB pesertanya."
+          action={
+            canManage ? (
+              <Button size="sm" href={`/kompetisi/${id}/ku/baru`}>
+                <Plus className="size-3.5" /> Tambah KU
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {kus.map((k) => {
+            const progress = k.totalMatches > 0 ? (k.playedMatches / k.totalMatches) * 100 : 0;
+            return (
+              <Link
+                key={k.id}
+                href={`/kompetisi/ku/${k.id}`}
+                className="group rounded-xl border border-line bg-surface/70 p-4 transition-colors hover:border-brand/40"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-display text-3xl leading-none tracking-wide text-ink group-hover:text-brand">
+                        {k.ageCode ?? "—"}
+                      </span>
+                      {k.liveMatches > 0 && (
+                        <span className="flex items-center gap-1 text-[10px] font-semibold text-danger">
+                          <Radio className="size-3 animate-live" /> {k.liveMatches} LANGSUNG
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-ink-muted">{k.ageLabel ?? "Tanpa kategori usia"}</p>
+                  </div>
+                  <StatusBadge kind="tournament" value={k.status} dot />
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-muted">
+                  <Badge tone={k.format === "cup" ? "violet" : "info"} className="!py-0">
+                    {formatLabel(k.format)}
+                  </Badge>
+                  <span className="flex items-center gap-1">
+                    <Users2 className="size-3" /> {k.teams} SSB
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <CalendarDays className="size-3" />
+                    {k.startDate ? formatDate(k.startDate) : "Belum dijadwalkan"}
+                  </span>
+                  {k.city && (
+                    <span className="flex items-center gap-1">
+                      <MapPin className="size-3" /> {k.city}
+                    </span>
+                  )}
+                </div>
+
+                {k.totalMatches > 0 ? (
+                  <div className="mt-3">
+                    <div className="mb-1 flex justify-between text-[10px] text-ink-muted">
+                      <span>Progres pertandingan</span>
+                      <span className="tabular-nums">
+                        {k.playedMatches} / {k.totalMatches}
+                      </span>
+                    </div>
+                    <Progress value={progress} tone={progress === 100 ? "success" : "brand"} />
+                  </div>
+                ) : (
+                  <p className="mt-3 text-[11px] text-ink-muted">Jadwal belum dibuat</p>
+                )}
+              </Link>
+            );
+          })}
+        </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
+      {(recentResults.length > 0 || upcoming.length > 0) && (
+        <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>Hasil Terakhir</CardTitle>
-              <Link
-                href={`/kompetisi/${id}/jadwal`}
-                className="text-[11px] text-ink-muted hover:text-ink"
-              >
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="size-4" /> Hasil Terakhir
+              </CardTitle>
+              <Link href={`/kompetisi/${id}/jadwal`} className="text-[11px] text-ink-muted hover:text-ink">
                 Semua jadwal
               </Link>
             </CardHeader>
@@ -88,79 +152,28 @@ export default async function TournamentOverviewPage({
                   ))}
                 </div>
               ) : (
-                <EmptyState
-                  title="Belum ada hasil"
-                  description="Hasil pertandingan akan muncul di sini setelah dikonfirmasi."
-                />
+                <p className="py-6 text-center text-xs text-ink-muted">Belum ada hasil dikonfirmasi.</p>
               )}
             </CardContent>
           </Card>
-
-          {upcoming.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Jadwal Mendatang</CardTitle>
-              </CardHeader>
-              <CardContent>
+          <Card>
+            <CardHeader>
+              <CardTitle>Jadwal Mendatang</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {upcoming.length ? (
                 <div className="space-y-2">
                   {upcoming.map((m) => (
                     <MatchRow key={m.id} m={m} />
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Pencetak Gol</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {topScorers.length ? (
-                <BarList
-                  accent="var(--color-chart-1)"
-                  items={topScorers.map((p) => ({
-                    label: p.name,
-                    sublabel: `${p.club ?? "—"} · ${p.assists}A`,
-                    value: p.goals ?? 0,
-                    href: `/registry/pemain/${p.id}`,
-                  }))}
-                />
               ) : (
-                <p className="py-6 text-center text-xs text-ink-muted">Belum ada gol tercatat.</p>
+                <p className="py-6 text-center text-xs text-ink-muted">Tidak ada pertandingan terjadwal.</p>
               )}
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Peserta</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-1.5">
-                {teams.map((tm) => (
-                  <Link
-                    key={tm.id}
-                    href={`/registry/klub/${tm.clubId}`}
-                    className="flex items-center gap-1.5 rounded-full border border-line px-2 py-1 text-[11px] text-ink-secondary transition-colors hover:border-brand/40"
-                  >
-                    <span
-                      className="size-2 rounded-full"
-                      style={{ background: tm.color ?? "var(--color-brand)" }}
-                    />
-                    {tm.short}
-                    {tm.group && (
-                      <span className="text-ink-muted">· {tm.group}</span>
-                    )}
-                  </Link>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
         </div>
-      </div>
+      )}
     </div>
   );
 }

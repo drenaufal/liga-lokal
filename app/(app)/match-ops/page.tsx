@@ -48,8 +48,13 @@ export default async function MatchOpsPage({
           />
           <FilterSelect
             param="tournament"
-            placeholder="Semua turnamen"
-            options={tournamentOpts.map((t) => ({ value: t.id, label: t.name }))}
+            placeholder="Semua turnamen & KU"
+            groups={Object.entries(
+              tournamentOpts.reduce<Record<string, { value: string; label: string }[]>>((acc, t) => {
+                (acc[t.competition] ??= []).push({ value: t.id, label: t.ageCode ?? "Tanpa KU" });
+                return acc;
+              }, {}),
+            ).map(([label, options]) => ({ label, options }))}
           />
         </CardContent>
       </Card>
@@ -130,7 +135,7 @@ function ConsoleMatchRow({
       <div className="grid flex-1 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
         <span className="flex items-center justify-end gap-2 text-right">
           <span className="truncate text-xs font-medium text-ink">{m.homeName}</span>
-          <ClubCrest logoUrl={m.homeLogo} short={m.homeShort} color={m.homeColor} size={24} />
+          <ClubCrest logoUrl={m.homeLogo} short={m.homeShort} size={24} />
         </span>
         <span className="shrink-0 text-center font-mono text-sm font-bold tabular-nums text-ink">
           {m.status === "scheduled" ? (
@@ -144,7 +149,7 @@ function ConsoleMatchRow({
           )}
         </span>
         <span className="flex items-center gap-2">
-          <ClubCrest logoUrl={m.awayLogo} short={m.awayShort} color={m.awayColor} size={24} />
+          <ClubCrest logoUrl={m.awayLogo} short={m.awayShort} size={24} />
           <span className="truncate text-xs font-medium text-ink">{m.awayName}</span>
         </span>
       </div>

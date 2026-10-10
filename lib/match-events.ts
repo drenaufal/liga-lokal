@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { ageCategories, matchEvents, matchLineups, matches, players, tournaments } from "@/lib/db/schema";
+import { ageCategories, matchEvents, matchLineups, matches, players, tournaments, tournamentSquad, tournamentTeams } from "@/lib/db/schema";
 import { DEFAULT_MATCH_MINUTES, clockCap, halfOf } from "@/lib/match-clock";
 import { liveMinute, recomputeMatchScore } from "@/lib/match-engine";
 import type { QuickType } from "@/lib/quick-events";
@@ -67,7 +67,15 @@ export async function recordQuickEvent(input: {
     .select({ clubId: matchLineups.clubId, shirt: matchLineups.shirtNumber })
     .from(matchLineups)
     .where(and(eq(matchLineups.matchId, matchId), eq(matchLineups.playerId, playerId)));
-  const eligible = lineup ? lineup.clubId === clubId : pl.clubId === clubId || pl.secondClubId === clubId;
+  const registrations = await db
+    .select({ clubId: tournamentTeams.clubId, shirt: tournamentSquad.jerseyNumber })
+    .from(tournamentSquad)
+    .innerJoin(tournamentTeams, eq(tournamentTeams.id, tournamentSquad.tournamentTeamId))
+    .where(and(eq(tournamentTeams.tournamentId, m.tournamentId), eq(tournamentSquad.playerId, playerId)));
+  const registration = registrations.find((r) => r.clubId === clubId);
+  const eligible = lineup
+    ? lineup.clubId === clubId
+    : registrations.length ? !!registration : pl.clubId === clubId || pl.secondClubId === clubId;
   if (!eligible) throw new Error("Pemain tidak terdaftar pada klub ini");
 
   // A player who has been sent off cannot do anything more.
@@ -170,7 +178,7 @@ export async function recordQuickEvent(input: {
     minute,
     linked: !!(linkedGoalId || linkedAssistId),
     playerName: pl.fullName,
-    jerseyNumber: lineup?.shirt ?? pl.jerseyNumber,
+    jerseyNumber: lineup?.shirt ?? registration?.shirt ?? pl.jerseyNumber,
     tournamentId: m.tournamentId,
   };
 }

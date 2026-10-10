@@ -63,19 +63,27 @@ export function FilterSelect({
   options,
   groups,
   placeholder,
+  resets,
 }: {
   param: string;
   options?: { value: string; label: string }[];
   /** Grouped options, rendered as <optgroup>s. */
   groups?: { label: string; options: { value: string; label: string }[] }[];
   placeholder: string;
+  /** Other filters that depend on this one and are cleared when it changes. */
+  resets?: string[];
 }) {
   const params = useSearchParams();
   const update = useUpdateParams();
   return (
     <Select
       value={params.get(param) ?? ""}
-      onChange={(e) => update({ [param]: e.target.value || null })}
+      onChange={(e) =>
+        update({
+          [param]: e.target.value || null,
+          ...Object.fromEntries((resets ?? []).map((k) => [k, null])),
+        })
+      }
       className="h-10 w-[calc(50%-0.25rem)] min-w-0 rounded-full text-xs sm:w-auto sm:min-w-[150px]"
     >
       <option value="">{placeholder}</option>

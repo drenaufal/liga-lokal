@@ -47,11 +47,11 @@ export function DeleteCategoryButton({
         {inUse ? (
           <p className="text-sm text-ink-secondary">
             {code} masih dipakai oleh <strong className="text-ink">{inUse}</strong>. Pindahkan pemain /
-            kompetisi ke kategori lain terlebih dahulu.
+            KU ke kategori lain terlebih dahulu.
           </p>
         ) : (
           <p className="text-sm text-ink-secondary">
-            Kategori ini tidak dipakai pemain maupun kompetisi dan dapat dihapus dengan aman.
+            Kategori ini tidak dipakai pemain maupun turnamen dan dapat dihapus dengan aman.
           </p>
         )}
         <div className="mt-4 flex justify-end gap-2">

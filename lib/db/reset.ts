@@ -17,6 +17,7 @@ const TABLES = [
   "tournament_squad",
   "tournament_teams",
   "tournaments",
+  "competitions",
   "player_badges",
   "player_season_history",
   "player_stats",

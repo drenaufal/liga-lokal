@@ -32,7 +32,7 @@ export const NAV: NavItem[] = [
     capability: "registry:read",
     children: [
       { label: "Pemain", href: "/registry/pemain" },
-      { label: "Klub & Akademi", href: "/registry/klub" },
+      { label: "SSB", href: "/registry/klub" },
       { label: "Pelatih", href: "/registry/pelatih" },
       { label: "Wasit", href: "/registry/wasit" },
       { label: "Venue", href: "/registry/venue" },
@@ -54,7 +54,7 @@ export const NAV: NavItem[] = [
     short: "Kompetisi",
     href: "/kompetisi",
     icon: "Trophy",
-    hint: "Pengelolaan turnamen",
+    hint: "Turnamen & KU, jadwal, klasemen",
     capability: "competition:read",
   },
   {

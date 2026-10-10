@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   ageCategories,
+  competitions,
   matchEvents,
   matchLineups,
   matches,
@@ -154,8 +155,9 @@ export async function syncMatchStats(matchId: string, weights: FormulaWeights) {
     if (!m) return { players: 0 };
 
     const [tour] = await tx
-      .select({ season: tournaments.season, rules: ageCategories.rules })
+      .select({ season: competitions.season, rules: ageCategories.rules })
       .from(tournaments)
+      .innerJoin(competitions, eq(competitions.id, tournaments.competitionId))
       .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
       .where(eq(tournaments.id, m.tournamentId));
     const duration = m.durationMinutes ?? tour?.rules?.matchDuration ?? DEFAULT_MATCH_MINUTES;

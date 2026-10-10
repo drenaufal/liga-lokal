@@ -85,7 +85,7 @@ export default async function PlayerCompetitionPage({
             </div>
           </div>
           <div className="min-w-0 rounded-2xl bg-surface-2 p-3 sm:max-w-xs">
-            <Link href={`/kompetisi/${t.id}`} className="block truncate text-sm font-semibold text-ink hover:text-brand">
+            <Link href={`/kompetisi/ku/${t.id}`} className="block truncate text-sm font-semibold text-ink hover:text-brand">
               {t.name}
             </Link>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-ink-muted">
@@ -97,7 +97,7 @@ export default async function PlayerCompetitionPage({
                 href={`/registry/klub/${club.id}`}
                 className="mt-2 flex items-center gap-2 text-xs text-ink-secondary hover:text-ink"
               >
-                <ClubCrest logoUrl={club.logoUrl} short={club.shortName} color={club.primaryColor} size={22} />
+                <ClubCrest logoUrl={club.logoUrl} short={club.shortName} size={22} />
                 Membela <span className="font-semibold text-ink">{club.name}</span>
               </Link>
             )}
@@ -167,7 +167,7 @@ function MatchLine({ m }: { m: PlayerMatchRow }) {
         )}
       >
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <ClubCrest logoUrl={m.opponentLogo} short={m.opponentShort} color={m.opponentColor} size={36} />
+          <ClubCrest logoUrl={m.opponentLogo} short={m.opponentShort} size={36} />
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-ink">
               <span className="font-normal text-ink-muted">{m.isHome ? "vs" : "@"}</span> {m.opponentName ?? "—"}

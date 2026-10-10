@@ -9,7 +9,7 @@ import { NAV, SETTINGS_NAV, type NavItem } from "@/lib/nav";
 import { can, ROLE_LABEL, type Role } from "@/lib/auth/rbac";
 import { logoutAction } from "@/app/(app)/actions";
 import { Avatar } from "@/components/ui/avatar";
-import { Logo } from "@/components/brand/logo";
+import { LogoChip } from "@/components/brand/logo";
 import { Icon } from "./icon";
 import { cn } from "@/lib/utils";
 
@@ -102,7 +102,7 @@ export function MobileNav({
             <div className="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto rounded-t-[2rem] bg-surface px-4 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-3 animate-sheet-up">
               <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-elevated" />
               <div className="flex items-center justify-between gap-3">
-                <Logo variant="wordmark" className="h-10 text-ink" />
+                <LogoChip logoClassName="h-11" />
                 <button
                   type="button"
                   onClick={() => setOpen(false)}

@@ -73,13 +73,6 @@ export const refereeStatus = [
   "revoked",
 ] as const;
 
-export const coachStatus = [
-  "active",
-  "expiring",
-  "expired",
-  "revoked",
-] as const;
-
 /** image = photos / logos (any signed-in user); document = identity papers (verifiers only). */
 export const mediaKind = ["image", "document"] as const;
 
@@ -94,12 +87,8 @@ export const venueSurface = [
 export const playerPosition = PLAYER_POSITIONS;
 export const preferredFoot = ["left", "right", "both"] as const;
 
-export const tournamentFormat = [
-  "cup",
-  "league",
-  "hybrid",
-  "knockout",
-] as const;
+/** league = round-robin table; cup = single-elimination knockout. */
+export const tournamentFormat = ["league", "cup"] as const;
 export const tournamentStatus = [
   "draft",
   "registration",
@@ -214,12 +203,6 @@ export const aiReportStatus = [
   "cached",
   "failed",
 ] as const;
-export const badgeTier = [
-  "bronze",
-  "silver",
-  "gold",
-  "platinum",
-] as const;
 
 /* ═══════════════════════════ Auth ═══════════════════════════════════ */
 
@@ -254,10 +237,10 @@ export const ageCategories = mysqlTable("age_categories", {
   id: id(),
   code: varchar("code", { length: 12 }).notNull().unique(), // KU-8 … KU-16
   label: text("label").notNull(),
-  minAge: int("min_age").notNull(),
+  /** A category is defined by its upper age limit; younger players may always play up. */
   maxAge: int("max_age").notNull(),
+  /** Oldest eligible birth year (season year − maxAge): born in or after it = eligible. */
   birthYearFrom: int("birth_year_from"),
-  birthYearTo: int("birth_year_to"),
   rules: json("rules").$type<AgeCategoryRules>().notNull(),
   sortOrder: int("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").default(NOW).notNull(),
@@ -309,6 +292,7 @@ export const venues = mysqlTable("venues", {
   createdAt: timestamp("created_at").default(NOW).notNull(),
 });
 
+/** An SSB (sekolah sepak bola) — the "club" of the app. `name` is shown as "Nama SSB". */
 export const clubs = mysqlTable("clubs", {
   id: id(),
   name: text("name").notNull(),
@@ -317,17 +301,17 @@ export const clubs = mysqlTable("clubs", {
   type: mysqlEnum("type", clubType).notNull().default("club"),
   city: text("city").notNull(),
   province: text("province"),
+  /** Street address of the SSB (free text). */
+  address: text("address"),
+  /** Asosiasi Kota PSSI the SSB belongs to (free text). */
+  askot: text("askot"),
+  /** Asosiasi Provinsi PSSI the SSB belongs to (free text). */
+  asprov: text("asprov"),
   foundedYear: int("founded_year"),
   logoUrl: text("logo_url"),
-  primaryColor: varchar("primary_color", { length: 9 }).default("#00e28a"),
-  secondaryColor: varchar("secondary_color", { length: 9 }).default("#0f1620"),
-  homeVenueId: uuid("home_venue_id").references(() => venues.id, {
-    onDelete: "set null",
-  }),
   contactName: text("contact_name"),
   contactEmail: text("contact_email"),
   contactPhone: text("contact_phone"),
-  accreditation: text("accreditation"),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at").default(NOW).notNull(),
 });
@@ -337,6 +321,8 @@ export const referees = mysqlTable("referees", {
   fullName: text("full_name").notNull(),
   dob: date("dob"),
   city: text("city"),
+  /** Asosiasi Kota PSSI the referee comes from (free text). */
+  askot: text("askot"),
   licenseLevel: varchar("license_level", { length: 24 }).notNull(), // C-3, C-2, C-1, Nasional
   licenseNumber: varchar("license_number", { length: 40 }).notNull().unique(),
   licenseIssuedAt: date("license_issued_at"),
@@ -360,13 +346,12 @@ export const coaches = mysqlTable(
     clubId: uuid("club_id").references(() => clubs.id, { onDelete: "set null" }),
     licenseLevel: varchar("license_level", { length: 24 }).notNull(), // D Nasional … Pro AFC
     licenseNumber: varchar("license_number", { length: 40 }).notNull().unique(),
-    licenseIssuedAt: date("license_issued_at"),
-    licenseExpiry: date("license_expiry").notNull(),
-    status: mysqlEnum("status", coachStatus).notNull().default("active"),
+    // Private scans (see lib/coach-documents.ts): URLs of `document` media rows.
+    licenseDocUrl: text("license_doc_url"), // scan sertifikat lisensi kepelatihan
+    ktpUrl: text("ktp_url"), // KTP
     photoUrl: text("photo_url"),
     phone: text("phone"),
     email: text("email"),
-    experienceYears: int("experience_years").notNull().default(0),
     specialty: text("specialty"), // pelatih kepala / asisten / kiper / fisik
     createdAt: timestamp("created_at").default(NOW).notNull(),
   },
@@ -487,7 +472,6 @@ export const badges = mysqlTable("badges", {
   name: text("name").notNull(),
   description: text("description").notNull(),
   icon: varchar("icon", { length: 40 }).notNull().default("award"),
-  tier: mysqlEnum("tier", badgeTier).notNull().default("bronze"),
 });
 
 export const playerBadges = mysqlTable(
@@ -520,39 +504,71 @@ export type Tiebreaker =
   | "fairPlay"
   | "drawLots";
 
-export const tournaments = mysqlTable("tournaments", {
+/**
+ * Turnamen — the umbrella event. It carries only what is the same for every
+ * age group: name, season, description and organizer. Each age group (KU)
+ * that plays in it is one row of `tournaments` below.
+ */
+export const competitions = mysqlTable("competitions", {
   id: id(),
   name: text("name").notNull(),
   slug: varchar("slug", { length: 255 }).notNull().unique(),
   season: varchar("season", { length: 16 }).notNull(),
-  format: mysqlEnum("format", tournamentFormat).notNull(),
-  status: mysqlEnum("status", tournamentStatus).notNull().default("draft"),
-  ageCategoryId: uuid("age_category_id").references(() => ageCategories.id, {
-    onDelete: "set null",
-  }),
-  scoringFormulaId: uuid("scoring_formula_id").references(
-    () => scoringFormulas.id,
-    { onDelete: "set null" },
-  ),
   description: text("description"),
-  logoUrl: text("logo_url"),
-  host: text("host"),
-  city: text("city"),
-  startDate: date("start_date"),
-  endDate: date("end_date"),
-  groupCount: int("group_count").notNull().default(0),
-  teamsPerGroup: int("teams_per_group").notNull().default(0),
-  advancePerGroup: int("advance_per_group").notNull().default(2),
-  doubleRound: boolean("double_round").notNull().default(false),
-  knockoutLegs: int("knockout_legs").notNull().default(1),
-  pointsWin: int("points_win").notNull().default(3),
-  pointsDraw: int("points_draw").notNull().default(1),
-  pointsLoss: int("points_loss").notNull().default(0),
-  tiebreakers: json("tiebreakers").$type<Tiebreaker[]>().notNull(),
+  /** Penyelenggara. */
+  organizer: text("organizer"),
   createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").default(NOW).notNull(),
   updatedAt: timestamp("updated_at").default(NOW).notNull(),
 });
+
+/**
+ * One KU (age group) inside a Turnamen: its own format, dates, participants,
+ * fixtures, standings and statistics. The UI calls a row of this table a "KU";
+ * everything that used to hang off a tournament (matches, standings, squads,
+ * player stats, badges) still points here.
+ *
+ * Display name = `<turnamen name> · <age category code>` — see `kuName` in
+ * lib/queries/ku.ts.
+ */
+export const tournaments = mysqlTable(
+  "tournaments",
+  {
+    id: id(),
+    competitionId: uuid("competition_id")
+      .notNull()
+      .references(() => competitions.id, { onDelete: "cascade" }),
+    format: mysqlEnum("format", tournamentFormat).notNull(),
+    status: mysqlEnum("status", tournamentStatus).notNull().default("draft"),
+    ageCategoryId: uuid("age_category_id").references(() => ageCategories.id, {
+      onDelete: "set null",
+    }),
+    scoringFormulaId: uuid("scoring_formula_id").references(
+      () => scoringFormulas.id,
+      { onDelete: "set null" },
+    ),
+    city: text("city"),
+    startDate: date("start_date"),
+    endDate: date("end_date"),
+    // Group-stage settings: only rows created before the Piala/Hybrid formats were retired use them.
+    groupCount: int("group_count").notNull().default(0),
+    teamsPerGroup: int("teams_per_group").notNull().default(0),
+    advancePerGroup: int("advance_per_group").notNull().default(2),
+    doubleRound: boolean("double_round").notNull().default(false),
+    knockoutLegs: int("knockout_legs").notNull().default(1),
+    pointsWin: int("points_win").notNull().default(3),
+    pointsDraw: int("points_draw").notNull().default(1),
+    pointsLoss: int("points_loss").notNull().default(0),
+    tiebreakers: json("tiebreakers").$type<Tiebreaker[]>().notNull(),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").default(NOW).notNull(),
+    updatedAt: timestamp("updated_at").default(NOW).notNull(),
+  },
+  (t) => [
+    // an age group takes part in a turnamen once
+    uniqueIndex("tournaments_competition_age_idx").on(t.competitionId, t.ageCategoryId),
+  ],
+);
 
 export const tournamentTeams = mysqlTable(
   "tournament_teams",
@@ -889,11 +905,7 @@ export const scoutShortlists = mysqlTable("scout_shortlists", {
 
 /* ═══════════════════════════ Relations ════════════════════════════ */
 
-export const clubsRelations = relations(clubs, ({ one, many }) => ({
-  homeVenue: one(venues, {
-    fields: [clubs.homeVenueId],
-    references: [venues.id],
-  }),
+export const clubsRelations = relations(clubs, ({ many }) => ({
   players: many(players),
   coaches: many(coaches),
 }));
@@ -942,7 +954,15 @@ export const playerBadgesRelations = relations(playerBadges, ({ one }) => ({
   }),
 }));
 
+export const competitionsRelations = relations(competitions, ({ many }) => ({
+  kus: many(tournaments),
+}));
+
 export const tournamentsRelations = relations(tournaments, ({ one, many }) => ({
+  competition: one(competitions, {
+    fields: [tournaments.competitionId],
+    references: [competitions.id],
+  }),
   ageCategory: one(ageCategories, {
     fields: [tournaments.ageCategoryId],
     references: [ageCategories.id],
@@ -1039,6 +1059,9 @@ export type Media = typeof media.$inferSelect;
 export type Venue = typeof venues.$inferSelect;
 export type AgeCategory = typeof ageCategories.$inferSelect;
 export type ScoringFormula = typeof scoringFormulas.$inferSelect;
+/** Turnamen (the umbrella event). */
+export type Competition = typeof competitions.$inferSelect;
+/** KU — one age group inside a Turnamen. */
 export type Tournament = typeof tournaments.$inferSelect;
 export type TournamentTeam = typeof tournamentTeams.$inferSelect;
 export type Standing = typeof standings.$inferSelect;

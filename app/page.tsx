@@ -23,7 +23,7 @@ import {
   BarChart3,
   X,
 } from "lucide-react";
-import { Logo } from "@/components/brand/logo";
+import { Logo, LogoChip } from "@/components/brand/logo";
 import { LandingNav, type LandingLink } from "@/components/landing/landing-nav";
 import { PhoneMockup } from "@/components/landing/phone-mockup";
 import { BRAND } from "@/lib/brand";
@@ -64,7 +64,7 @@ const CHALLENGES = [
 
 const STEPS = [
   { icon: UserPlus, block: BLOCK.red, title: "Daftarkan", body: "Registrasi pemain, klub, pelatih, dan wasit — lengkap dengan verifikasi dokumen KIA." },
-  { icon: CalendarDays, block: BLOCK.blue, title: "Jadwalkan", body: "Buat turnamen dan dapatkan fixture otomatis untuk format Liga, Cup, Hybrid, atau Knockout." },
+  { icon: CalendarDays, block: BLOCK.blue, title: "Jadwalkan", body: "Buat turnamen, tambahkan KU-nya, lalu dapatkan fixture otomatis untuk format Liga atau Cup — atau susun jadwal sendiri." },
   { icon: Goal, block: BLOCK.yellow, title: "Pertandingkan", body: "Konsol laga langsung: klik pemain untuk mencatat gol, kartu, dan pergantian dari pinggir lapangan." },
   { icon: BarChart3, block: BLOCK.night, title: "Analisis", body: "Klasemen, radar performa, dan laporan AI Scout diperbarui seketika dari setiap kejadian." },
 ];
@@ -73,7 +73,7 @@ const MODULES = [
   { icon: LayoutDashboard, block: BLOCK.red, name: "Command Center", desc: "Dasbor operasional real-time: status sistem, live match monitor, dan papan peringkat." },
   { icon: Database, block: "bg-surface text-ink", name: "Master Data & Registry", desc: "Basis data terpusat untuk pemain, klub, pelatih, wasit, venue, dan aturan kategori usia." },
   { icon: FileInput, block: BLOCK.lavender, name: "Data Ingestion & Staging", desc: "Impor CSV dengan 8 tahap penjaminan kualitas, deteksi duplikasi, dan antrian tinjauan." },
-  { icon: Trophy, block: BLOCK.yellow, name: "Competition & Rules", desc: "Format Cup, League, Hybrid & Knockout — fixture otomatis dan klasemen real-time." },
+  { icon: Trophy, block: BLOCK.yellow, name: "Competition & Rules", desc: "Turnamen dengan banyak KU, format Liga & Cup — fixture otomatis atau manual, klasemen dan bagan real-time." },
   { icon: Radio, block: BLOCK.blue, name: "Match Operations", desc: "Konsol pertandingan langsung: klik pemain untuk mencatat kejadian, lalu validasi hasil." },
   { icon: Radar, block: BLOCK.mint, name: "Player Intelligence", desc: "Grafik radar performa, perbandingan head-to-head, dan mesin formula penilaian." },
   { icon: Sparkles, block: BLOCK.pink, name: "AI Scout & Insights", desc: "Pencarian talenta bahasa natural dan laporan analisis pemain otomatis." },
@@ -175,7 +175,6 @@ export default function LandingPage() {
       <section className="relative overflow-hidden pt-28 sm:pt-32">
         <div aria-hidden className="pointer-events-none absolute -right-32 top-10 size-[38rem] rounded-full bg-brand/10 blur-3xl" />
         <Logo
-          variant="mark"
           title=""
           className="pointer-events-none absolute -left-40 bottom-0 h-[520px] opacity-[0.05]"
         />
@@ -580,14 +579,8 @@ export default function LandingPage() {
       {/* ── CTA ────────────────────────────────────────────────────────── */}
       <section className="mx-auto max-w-6xl px-5 pb-20">
         <div className="reveal relative overflow-hidden rounded-[2.5rem] bg-brand px-6 py-14 text-white sm:px-14">
-          <Logo
-            variant="mark"
-            mono
-            title=""
-            className="pointer-events-none absolute -bottom-24 -right-16 h-[420px] text-white opacity-15"
-          />
           <div className="relative max-w-xl">
-            <Logo variant="wordmark" mono className="h-14 text-white" />
+            <LogoChip logoClassName="h-14" />
             <h2 className="mt-8 font-display text-[44px] uppercase leading-[0.95] tracking-wide sm:text-6xl">
               Siap melihat {BRAND.name} bekerja?
             </h2>
@@ -618,7 +611,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-6xl px-5 pb-10 pt-14">
           <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr]">
             <div>
-              <Logo variant="full" className="h-20 text-white" />
+              <Logo className="h-28" />
               <p className="mt-5 max-w-sm text-sm leading-relaxed">
                 {BRAND.tagline} — sistem operasi terpadu untuk kompetisi, data pemain, dan talenta
                 sepak bola akar rumput Indonesia.

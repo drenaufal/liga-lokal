@@ -1,10 +1,25 @@
-import { and, asc, count, desc, eq, inArray, like, or, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+  isNotNull,
+  isNull,
+  like,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   ageCategories,
   badges,
   clubs,
   coaches,
+  competitions,
   matchEvents,
   matchLineups,
   matches,
@@ -24,6 +39,7 @@ import { LICENSE_EXPIRING_DAYS } from "@/lib/status";
 import { expandPosition, positionLine, rolesOfLine } from "@/lib/positions";
 import { sumStats, type StatTotals } from "@/lib/player-stats";
 import { ascNullsLast, descNullsFirst } from "@/lib/db/order";
+import { kuNameSql } from "@/lib/queries/ku";
 
 export type PlayerListParams = {
   q?: string;
@@ -97,10 +113,8 @@ export async function listPlayers(params: PlayerListParams) {
         dob: players.dob,
         clubName: clubs.name,
         clubShort: clubs.shortName,
-        clubColor: clubs.primaryColor,
         secondClubName: sc.name,
         secondClubShort: sc.shortName,
-        secondClubColor: sc.primaryColor,
         ageCode: ageCategories.code,
       })
       .from(players)
@@ -135,7 +149,6 @@ export async function getRegistryFilters() {
         id: ageCategories.id,
         code: ageCategories.code,
         birthYearFrom: ageCategories.birthYearFrom,
-        birthYearTo: ageCategories.birthYearTo,
       })
       .from(ageCategories)
       .orderBy(asc(ageCategories.sortOrder)),
@@ -151,7 +164,6 @@ export type ClubChip = {
   id: string;
   name: string;
   short: string;
-  color: string | null;
   /** Where the player is registered: primary club, second club, or only seen in older stats. */
   tag: "utama" | "kedua" | "riwayat";
 };
@@ -162,10 +174,9 @@ export type ClubChip = {
  */
 export async function getPlayerProfile(id: string, clubFilter?: string) {
   const [row] = await db
-    .select({ player: players, club: clubs, homeVenue: venues, ageCategory: ageCategories })
+    .select({ player: players, club: clubs, ageCategory: ageCategories })
     .from(players)
     .leftJoin(clubs, eq(clubs.id, players.clubId))
-    .leftJoin(venues, eq(venues.id, clubs.homeVenueId))
     .leftJoin(ageCategories, eq(ageCategories.id, players.ageCategoryId))
     .where(eq(players.id, id));
   if (!row) return null;
@@ -183,15 +194,16 @@ export async function getPlayerProfile(id: string, clubFilter?: string) {
     db
       .select({
         stat: playerStats,
-        tournamentName: tournaments.name,
+        tournamentName: kuNameSql,
         tournamentStatus: tournaments.status,
         tournamentStart: tournaments.startDate,
         clubName: clubs.name,
         clubShort: clubs.shortName,
-        clubColor: clubs.primaryColor,
       })
       .from(playerStats)
       .leftJoin(tournaments, eq(tournaments.id, playerStats.tournamentId))
+      .leftJoin(competitions, eq(competitions.id, tournaments.competitionId))
+      .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
       .leftJoin(clubs, eq(clubs.id, playerStats.clubId))
       .where(eq(playerStats.playerId, id)),
   ]);
@@ -199,7 +211,7 @@ export async function getPlayerProfile(id: string, clubFilter?: string) {
 
   const player = {
     ...row.player,
-    club: row.club && { ...row.club, homeVenue: row.homeVenue },
+    club: row.club,
     secondClub,
     ageCategory: row.ageCategory,
     badges: badgeRows.map((b) => ({ ...b.playerBadge, badge: b.badge })),
@@ -216,13 +228,11 @@ export async function getPlayerProfile(id: string, clubFilter?: string) {
   const addChip = (c: ClubChip) => {
     if (!chips.some((x) => x.id === c.id)) chips.push(c);
   };
-  if (row.club)
-    addChip({ id: row.club.id, name: row.club.name, short: row.club.shortName, color: row.club.primaryColor, tag: "utama" });
-  if (secondClub)
-    addChip({ id: secondClub.id, name: secondClub.name, short: secondClub.shortName, color: secondClub.primaryColor, tag: "kedua" });
+  if (row.club) addChip({ id: row.club.id, name: row.club.name, short: row.club.shortName, tag: "utama" });
+  if (secondClub) addChip({ id: secondClub.id, name: secondClub.name, short: secondClub.shortName, tag: "kedua" });
   for (const r of tournamentRows) {
     if (r.stat.clubId && r.clubName)
-      addChip({ id: r.stat.clubId, name: r.clubName, short: r.clubShort ?? "", color: r.clubColor, tag: "riwayat" });
+      addChip({ id: r.stat.clubId, name: r.clubName, short: r.clubShort ?? "", tag: "riwayat" });
   }
 
   const selectedClub = clubFilter && chips.some((c) => c.id === clubFilter) ? clubFilter : null;
@@ -266,7 +276,6 @@ export async function getPlayerProfile(id: string, clubFilter?: string) {
       tournamentStatus: r.tournamentStatus,
       clubName: r.clubName,
       clubShort: r.clubShort,
-      clubColor: r.clubColor,
     })),
     peers,
   };
@@ -284,7 +293,6 @@ export type PlayerMatchRow = {
   isHome: boolean;
   opponentName: string | null;
   opponentShort: string | null;
-  opponentColor: string | null;
   opponentLogo: string | null;
   scoreFor: number;
   scoreAgainst: number;
@@ -325,13 +333,15 @@ export async function getPlayerTournamentDetail(playerId: string, tournamentId: 
   const [t] = await db
     .select({
       id: tournaments.id,
-      name: tournaments.name,
+      competitionId: tournaments.competitionId,
+      name: kuNameSql,
       status: tournaments.status,
       format: tournaments.format,
-      season: tournaments.season,
+      season: competitions.season,
       ageCode: ageCategories.code,
     })
     .from(tournaments)
+    .innerJoin(competitions, eq(competitions.id, tournaments.competitionId))
     .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
     .where(eq(tournaments.id, tournamentId));
   if (!t) return null;
@@ -341,7 +351,6 @@ export async function getPlayerTournamentDetail(playerId: string, tournamentId: 
       stat: playerStats,
       clubName: clubs.name,
       clubShort: clubs.shortName,
-      clubColor: clubs.primaryColor,
     })
     .from(playerStats)
     .leftJoin(clubs, eq(clubs.id, playerStats.clubId))
@@ -378,11 +387,9 @@ export async function getPlayerTournamentDetail(playerId: string, tournamentId: 
       awayScore: matches.awayScore,
       homeName: hc.name,
       homeShort: hc.shortName,
-      homeColor: hc.primaryColor,
       homeLogo: hc.logoUrl,
       awayName: ac.name,
       awayShort: ac.shortName,
-      awayColor: ac.primaryColor,
       awayLogo: ac.logoUrl,
     })
     .from(matches)
@@ -434,7 +441,6 @@ export async function getPlayerTournamentDetail(playerId: string, tournamentId: 
       isHome,
       opponentName: isHome ? m.awayName : m.homeName,
       opponentShort: isHome ? m.awayShort : m.homeShort,
-      opponentColor: isHome ? m.awayColor : m.homeColor,
       opponentLogo: isHome ? m.awayLogo : m.homeLogo,
       scoreFor: isHome ? m.homeScore : m.awayScore,
       scoreAgainst: isHome ? m.awayScore : m.homeScore,
@@ -466,7 +472,12 @@ export async function listClubs(params: { q?: string; type?: string; city?: stri
   const conds: SQL[] = [];
   if (params.q)
     conds.push(
-      or(like(clubs.name, `%${params.q}%`), like(clubs.shortName, `%${params.q}%`))!,
+      or(
+        like(clubs.name, `%${params.q}%`),
+        like(clubs.shortName, `%${params.q}%`),
+        like(clubs.askot, `%${params.q}%`),
+        like(clubs.asprov, `%${params.q}%`),
+      )!,
     );
   if (params.type) conds.push(eq(clubs.type, params.type as "club" | "academy"));
   if (params.city) conds.push(eq(clubs.city, params.city));
@@ -479,15 +490,15 @@ export async function listClubs(params: { q?: string; type?: string; city?: stri
       type: clubs.type,
       city: clubs.city,
       province: clubs.province,
+      address: clubs.address,
+      askot: clubs.askot,
+      asprov: clubs.asprov,
       foundedYear: clubs.foundedYear,
       logoUrl: clubs.logoUrl,
-      primaryColor: clubs.primaryColor,
-      accreditation: clubs.accreditation,
-      venue: venues.name,
-      squadSize: sql<number>`(select count(*) from ${players} p where p.club_id = ${clubs.id} or p.second_club_id = ${clubs.id})`,
+      // `${clubs}.id`: with no join Drizzle would print a bare `id`, which binds to the subquery's table.
+      squadSize: sql<number>`(select count(*) from ${players} p where p.club_id = ${clubs}.id or p.second_club_id = ${clubs}.id)`,
     })
     .from(clubs)
-    .leftJoin(venues, eq(venues.id, clubs.homeVenueId))
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(asc(clubs.name));
 
@@ -500,13 +511,8 @@ export async function listClubs(params: { q?: string; type?: string; city?: stri
 }
 
 export async function getClubProfile(id: string) {
-  const [row] = await db
-    .select({ club: clubs, homeVenue: venues })
-    .from(clubs)
-    .leftJoin(venues, eq(venues.id, clubs.homeVenueId))
-    .where(eq(clubs.id, id));
-  if (!row) return null;
-  const club = { ...row.club, homeVenue: row.homeVenue };
+  const [club] = await db.select().from(clubs).where(eq(clubs.id, id));
+  if (!club) return null;
 
   const squad = await db
     .select({
@@ -529,10 +535,10 @@ export async function getClubProfile(id: string) {
   const comps = await db
     .select({
       tournamentId: tournaments.id,
-      name: tournaments.name,
+      name: kuNameSql,
       status: tournaments.status,
       format: tournaments.format,
-      season: tournaments.season,
+      season: competitions.season,
       regStatus: tournamentTeams.registrationStatus,
       group: tournamentTeams.groupLabel,
       played: standings.played,
@@ -544,6 +550,8 @@ export async function getClubProfile(id: string) {
     })
     .from(tournamentTeams)
     .innerJoin(tournaments, eq(tournaments.id, tournamentTeams.tournamentId))
+    .innerJoin(competitions, eq(competitions.id, tournaments.competitionId))
+    .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
     .leftJoin(
       standings,
       and(
@@ -566,10 +574,12 @@ export async function getClubProfile(id: string) {
       homeClubId: matches.homeClubId,
       homeShort: hc.shortName,
       awayShort: ac.shortName,
-      tournament: tournaments.name,
+      tournament: kuNameSql,
     })
     .from(matches)
     .innerJoin(tournaments, eq(tournaments.id, matches.tournamentId))
+    .innerJoin(competitions, eq(competitions.id, tournaments.competitionId))
+    .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
     .leftJoin(hc, eq(hc.id, matches.homeClubId))
     .leftJoin(ac, eq(ac.id, matches.awayClubId))
     .where(or(eq(matches.homeClubId, id), eq(matches.awayClubId, id)))
@@ -583,7 +593,7 @@ export async function getClubProfile(id: string) {
       photoUrl: coaches.photoUrl,
       specialty: coaches.specialty,
       licenseLevel: coaches.licenseLevel,
-      status: coachLiveStatus,
+      docs: sql<number>`((${coaches.licenseDocUrl} is not null) + (${coaches.ktpUrl} is not null))`,
     })
     .from(coaches)
     .where(eq(coaches.clubId, id))
@@ -592,44 +602,30 @@ export async function getClubProfile(id: string) {
   return { club, squad, comps, recentMatches, staff };
 }
 
-/** Home-venue options for the club create / edit form. */
-export async function getClubFormOptions() {
-  return db
-    .select({ id: venues.id, name: venues.name, city: venues.city })
-    .from(venues)
-    .orderBy(asc(venues.name));
-}
-
 export async function getClub(id: string) {
   return (await db.query.clubs.findFirst({ where: eq(clubs.id, id) })) ?? null;
 }
 
 /* ─────────────────────────── Coaches ────────────────────────────── */
 
-/**
- * License status derived live from the expiry date, so the list never shows a
- * stale "Aktif" once a license lapses. `revoked` is the only stored override.
- */
-const coachLiveStatus = sql<"active" | "expiring" | "expired" | "revoked">`case
-  when ${coaches.status} = 'revoked' then 'revoked'
-  when ${coaches.licenseExpiry} < current_date then 'expired'
-  when ${coaches.licenseExpiry} < current_date + interval ${sql.raw(String(LICENSE_EXPIRING_DAYS))} day then 'expiring'
-  else 'active' end`;
-
 export async function listCoaches(params: {
   q?: string;
-  status?: string;
   level?: string;
   club?: string;
+  /** "lengkap" = license + KTP both uploaded, "kurang" = at least one missing. */
+  docs?: string;
 }) {
   const conds: SQL[] = [];
   if (params.q)
     conds.push(
       or(like(coaches.fullName, `%${params.q}%`), like(coaches.licenseNumber, `%${params.q}%`))!,
     );
-  if (params.status) conds.push(sql`${coachLiveStatus} = ${params.status}`);
   if (params.level) conds.push(eq(coaches.licenseLevel, params.level));
   if (params.club) conds.push(eq(coaches.clubId, params.club));
+  if (params.docs === "lengkap")
+    conds.push(and(isNotNull(coaches.licenseDocUrl), isNotNull(coaches.ktpUrl))!);
+  if (params.docs === "kurang")
+    conds.push(or(isNull(coaches.licenseDocUrl), isNull(coaches.ktpUrl))!);
 
   return db
     .select({
@@ -639,13 +635,11 @@ export async function listCoaches(params: {
       specialty: coaches.specialty,
       licenseLevel: coaches.licenseLevel,
       licenseNumber: coaches.licenseNumber,
-      licenseExpiry: coaches.licenseExpiry,
-      experienceYears: coaches.experienceYears,
-      status: coachLiveStatus,
+      hasLicenseDoc: sql<number>`(${coaches.licenseDocUrl} is not null)`,
+      hasKtp: sql<number>`(${coaches.ktpUrl} is not null)`,
       clubId: clubs.id,
       clubName: clubs.name,
       clubShort: clubs.shortName,
-      clubColor: clubs.primaryColor,
       clubLogo: clubs.logoUrl,
     })
     .from(coaches)
@@ -659,14 +653,11 @@ export async function getCoach(id: string) {
 }
 
 export async function getCoachProfile(id: string) {
-  const [coach] = await db
-    .select({ coach: coaches, status: coachLiveStatus })
-    .from(coaches)
-    .where(eq(coaches.id, id));
+  const [coach] = await db.select().from(coaches).where(eq(coaches.id, id));
   if (!coach) return null;
 
-  const club = coach.coach.clubId
-    ? ((await db.query.clubs.findFirst({ where: eq(clubs.id, coach.coach.clubId) })) ?? null)
+  const club = coach.clubId
+    ? ((await db.query.clubs.findFirst({ where: eq(clubs.id, coach.clubId) })) ?? null)
     : null;
 
   let recentMatches: {
@@ -693,10 +684,12 @@ export async function getCoachProfile(id: string) {
           awayShort: ac.shortName,
           homeScore: matches.homeScore,
           awayScore: matches.awayScore,
-          tournament: tournaments.name,
+          tournament: kuNameSql,
         })
         .from(matches)
         .innerJoin(tournaments, eq(tournaments.id, matches.tournamentId))
+        .innerJoin(competitions, eq(competitions.id, tournaments.competitionId))
+        .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
         .leftJoin(hc, eq(hc.id, matches.homeClubId))
         .leftJoin(ac, eq(ac.id, matches.awayClubId))
         .where(or(eq(matches.homeClubId, club.id), eq(matches.awayClubId, club.id)))
@@ -706,30 +699,63 @@ export async function getCoachProfile(id: string) {
     ]);
   }
 
-  return { coach: { ...coach.coach, status: coach.status }, club, recentMatches, squadSize };
+  return { coach, club, recentMatches, squadSize };
 }
 
 /* ─────────────────────────── Referees ───────────────────────────── */
 
-export async function listReferees(params: { q?: string; status?: string; level?: string }) {
+/**
+ * License status derived live from the expiry date, so the list never shows a
+ * stale "Aktif" once a license lapses. `revoked` is the only stored override.
+ */
+const refereeLiveStatus = sql<"active" | "expiring" | "expired" | "revoked">`case
+  when ${referees.status} = 'revoked' then 'revoked'
+  when ${referees.licenseExpiry} < current_date then 'expired'
+  when ${referees.licenseExpiry} < current_date + interval ${sql.raw(String(LICENSE_EXPIRING_DAYS))} day then 'expiring'
+  else 'active' end`;
+
+export async function listReferees(params: { q?: string; status?: string; level?: string; askot?: string }) {
   const conds: SQL[] = [];
-  if (params.q) conds.push(like(referees.fullName, `%${params.q}%`));
-  if (params.status)
+  if (params.q)
     conds.push(
-      eq(referees.status, params.status as "active" | "expiring" | "expired" | "revoked"),
+      or(
+        like(referees.fullName, `%${params.q}%`),
+        like(referees.licenseNumber, `%${params.q}%`),
+        like(referees.askot, `%${params.q}%`),
+      )!,
     );
+  if (params.status) conds.push(sql`${refereeLiveStatus} = ${params.status}`);
   if (params.level) conds.push(eq(referees.licenseLevel, params.level));
+  if (params.askot) conds.push(eq(referees.askot, params.askot));
 
   return db
-    .select()
+    .select({ ...getTableColumns(referees), status: refereeLiveStatus })
     .from(referees)
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(asc(referees.fullName));
 }
 
+/** The Askot values referees come from, for the list filter. */
+export async function listRefereeAskots() {
+  const rows = await db
+    .selectDistinct({ askot: referees.askot })
+    .from(referees)
+    .where(isNotNull(referees.askot))
+    .orderBy(asc(referees.askot));
+  return rows.map((r) => r.askot).filter((a): a is string => !!a && a.trim() !== "");
+}
+
+export async function getReferee(id: string) {
+  return (await db.query.referees.findFirst({ where: eq(referees.id, id) })) ?? null;
+}
+
 export async function getRefereeProfile(id: string) {
-  const referee = await db.query.referees.findFirst({ where: eq(referees.id, id) });
-  if (!referee) return null;
+  const [row] = await db
+    .select({ referee: referees, status: refereeLiveStatus })
+    .from(referees)
+    .where(eq(referees.id, id));
+  if (!row) return null;
+  const referee = { ...row.referee, status: row.status };
   const hc = alias(clubs, "hc");
   const ac = alias(clubs, "ac");
   const assignments = await db
@@ -741,10 +767,12 @@ export async function getRefereeProfile(id: string) {
       awayShort: ac.shortName,
       homeScore: matches.homeScore,
       awayScore: matches.awayScore,
-      tournament: tournaments.name,
+      tournament: kuNameSql,
     })
     .from(matches)
     .innerJoin(tournaments, eq(tournaments.id, matches.tournamentId))
+    .innerJoin(competitions, eq(competitions.id, tournaments.competitionId))
+    .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
     .leftJoin(hc, eq(hc.id, matches.homeClubId))
     .leftJoin(ac, eq(ac.id, matches.awayClubId))
     .where(eq(matches.refereeId, id))
@@ -775,8 +803,8 @@ export async function listVenues(params: { q?: string; surface?: string }) {
       surface: venues.surface,
       floodlights: venues.floodlights,
       photoUrl: venues.photoUrl,
-      clubs: sql<number>`(select count(*) from ${clubs} c where c.home_venue_id = ${venues.id})`,
-      matches: sql<number>`(select count(*) from ${matches} m where m.venue_id = ${venues.id})`,
+      // `${venues}.id`: with no join Drizzle would print a bare `id`, which binds to the subquery's table.
+      matches: sql<number>`(select count(*) from ${matches} m where m.venue_id = ${venues}.id)`,
     })
     .from(venues)
     .where(conds.length ? and(...conds) : undefined)

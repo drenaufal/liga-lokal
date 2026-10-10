@@ -32,8 +32,9 @@ export const REFEREE_STATUS: Record<string, Meta> = {
   revoked: { label: "Dicabut", tone: "neutral" },
 };
 
-/** Coaches use the same license lifecycle as referees. */
-export const COACH_STATUS = REFEREE_STATUS;
+/** Referee license levels, lowest to highest. */
+export const REFEREE_LICENSE_LEVELS = ["C-3", "C-2", "C-1", "Nasional"];
+export const REFEREE_SPECIALTIES = ["Wasit", "Asisten Wasit", "Wasit ke-4"];
 
 export const COACH_LICENSE_LEVELS = ["D Nasional", "C AFC", "B AFC", "A AFC", "Pro AFC"];
 export const COACH_SPECIALTIES = [

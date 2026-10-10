@@ -171,14 +171,14 @@ export default async function CommandCenterPage() {
         {/* Tournament status */}
         <Card>
           <CardHeader>
-            <CardTitle>Status Turnamen</CardTitle>
+            <CardTitle>Status KU</CardTitle>
             <Link href="/kompetisi" className="text-[11px] text-ink-muted hover:text-ink">
               Kelola
             </Link>
           </CardHeader>
           <CardContent>
             <Donut
-              centerLabel="Turnamen"
+              centerLabel="KU"
               centerValue={String(d.tournamentMix.reduce((a, r) => a + r.n, 0))}
               slices={d.tournamentMix.map((r) => ({
                 label: TOURNAMENT_STATUS[r.status]?.label ?? r.status,

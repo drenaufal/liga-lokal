@@ -7,7 +7,7 @@ import { Loader2, LogIn, ShieldCheck } from "lucide-react";
 import { loginAction, type LoginState } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input, Field } from "@/components/ui/input";
-import { Logo } from "@/components/brand/logo";
+import { LogoChip } from "@/components/brand/logo";
 import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/demo-accounts";
 import { ROLE_LABEL } from "@/lib/auth/rbac";
 import { cn } from "@/lib/utils";
@@ -24,7 +24,7 @@ export function LoginForm() {
 
   return (
     <div className="w-full max-w-md">
-      <Logo variant="wordmark" className="mb-8 h-12 text-ink lg:hidden" />
+      <LogoChip className="mb-8 lg:hidden" logoClassName="h-12" />
       <h1 className="font-display text-5xl uppercase leading-[0.95] tracking-wide text-ink">
         Masuk ke platform
       </h1>

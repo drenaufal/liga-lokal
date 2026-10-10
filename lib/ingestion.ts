@@ -110,11 +110,11 @@ export const ENTITY_SCHEMAS: Record<string, EntitySchema> = {
   },
   clubs: {
     required: ["name", "short_name", "city"],
-    optional: ["type", "province", "founded_year", "contact_email"],
+    optional: ["type", "province", "address", "askot", "asprov", "founded_year", "contact_email"],
     validate: (r) => {
       const issues: ImportIssue[] = [];
       if (!r.name || r.name.length < 3)
-        issues.push({ field: "name", code: "required", message: "Nama klub wajib", severity: "error" });
+        issues.push({ field: "name", code: "required", message: "Nama SSB wajib", severity: "error" });
       if (!r.short_name || r.short_name.length > 8)
         issues.push({ field: "short_name", code: "format", message: "Singkatan wajib (maks 8 karakter)", severity: "error" });
       if (!r.city)
@@ -128,6 +128,9 @@ export const ENTITY_SCHEMAS: Record<string, EntitySchema> = {
       shortName: r.short_name.toUpperCase(),
       city: r.city,
       province: r.province || null,
+      address: r.address || null,
+      askot: r.askot || null,
+      asprov: r.asprov || null,
       type: ({ klub: "club", akademi: "academy" }[r.type?.toLowerCase()] ?? r.type?.toLowerCase()) || "club",
       foundedYear: r.founded_year ? Number(r.founded_year) : null,
       contactEmail: r.contact_email || null,
@@ -136,7 +139,7 @@ export const ENTITY_SCHEMAS: Record<string, EntitySchema> = {
   },
   referees: {
     required: ["full_name", "license_level", "license_number", "license_expiry"],
-    optional: ["city", "phone", "email"],
+    optional: ["city", "askot", "phone", "email"],
     validate: (r) => {
       const issues: ImportIssue[] = [];
       if (!r.full_name) issues.push({ field: "full_name", code: "required", message: "Nama wajib", severity: "error" });
@@ -150,6 +153,7 @@ export const ENTITY_SCHEMAS: Record<string, EntitySchema> = {
       licenseNumber: r.license_number,
       licenseExpiry: r.license_expiry,
       city: r.city || null,
+      askot: r.askot || null,
       phone: r.phone || null,
       email: r.email || null,
     }),

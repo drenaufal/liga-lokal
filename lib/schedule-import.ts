@@ -1,17 +1,18 @@
 import { parseCsv } from "@/lib/ingestion";
+import { defaultStage } from "@/lib/ku";
 
 /**
  * Reads a match schedule from CSV and checks every row against the
- * tournament it is being uploaded into. Pure (no database): the caller
+ * KU it is being uploaded into. Pure (no database): the caller
  * supplies the participants, venues, referees and existing matches.
  */
 
 export const MAX_SCHEDULE_ROWS = 500;
 
 /** CSV times are wall-clock WIB (UTC+7), like everywhere else in the app. */
-const WIB_OFFSET_HOURS = 7;
+export const WIB_OFFSET_HOURS = 7;
 /** Two matches of one club closer than this are flagged as a clash. */
-const CLASH_MINUTES = 90;
+export const CLASH_MINUTES = 90;
 
 const COLUMN_ALIASES = {
   home_short: ["home_short", "home", "tuan_rumah", "kandang"],
@@ -121,7 +122,7 @@ function pickColumns(headers: string[]) {
 }
 
 /** "2026-10-17" or "17/10/2026" or "17-10-2026". */
-function parseDate(raw: string): { y: number; m: number; d: number } | null {
+export function parseDate(raw: string): { y: number; m: number; d: number } | null {
   const s = raw.trim();
   let y: number, m: number, d: number;
   let mt = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
@@ -135,7 +136,7 @@ function parseDate(raw: string): { y: number; m: number; d: number } | null {
 }
 
 /** "15:30", "15.30", "9:05", "15:30:00". */
-function parseTime(raw: string): { hh: number; mm: number } | null {
+export function parseTime(raw: string): { hh: number; mm: number } | null {
   const mt = raw.trim().match(/^(\d{1,2})[:.](\d{2})(?::\d{2})?$/);
   if (!mt) return null;
   const hh = +mt[1];
@@ -162,7 +163,7 @@ export function parseSchedule(csv: string, ctx: ScheduleContext): ScheduleParse 
   const teamByShort = new Map(ctx.teams.map((t) => [t.short.toLowerCase(), t]));
   const venueByName = new Map(ctx.venues.map((v) => [v.name.trim().toLowerCase(), v]));
   const refByLicense = new Map(ctx.referees.map((r) => [r.license.trim().toLowerCase(), r]));
-  const teamName = (id: string) => ctx.teams.find((t) => t.clubId === id)?.short ?? "klub";
+  const teamName = (id: string) => ctx.teams.find((t) => t.clubId === id)?.short ?? "SSB";
 
   const keyOf = (home: string, away: string, stage: string, round: number) => `${home}|${away}|${stage}|${round}`;
   const existingKeys = new Set(
@@ -201,10 +202,10 @@ export function parseSchedule(csv: string, ctx: ScheduleContext): ScheduleParse 
     const h = teamByShort.get(home.toLowerCase());
     const a = teamByShort.get(away.toLowerCase());
     if (!home) error("Tuan rumah kosong");
-    else if (!h) error(`Klub “${home}” bukan peserta turnamen ini`);
+    else if (!h) error(`SSB “${home}” bukan peserta KU ini`);
     if (!away) error("Tamu kosong");
-    else if (!a) error(`Klub “${away}” bukan peserta turnamen ini`);
-    if (h && a && h.clubId === a.clubId) error("Tuan rumah dan tamu tidak boleh klub yang sama");
+    else if (!a) error(`SSB “${away}” bukan peserta KU ini`);
+    if (h && a && h.clubId === a.clubId) error("Tuan rumah dan tamu tidak boleh SSB yang sama");
     if (h) {
       row.homeClubId = h.clubId;
       row.homeName = h.name;
@@ -228,7 +229,8 @@ export function parseSchedule(csv: string, ctx: ScheduleContext): ScheduleParse 
     // stage / round / group
     const group = get(r, "group").toUpperCase();
     const rawStage = get(r, "stage").toLowerCase();
-    let stage = group ? "group" : ctx.format === "knockout" ? "quarter" : "league";
+    // no stage column: a Cup starts where its bracket does (3–4 SSB → semi-final, 5–8 → quarter-final, …)
+    let stage = group ? "group" : defaultStage(ctx.format, ctx.teams.length);
     if (rawStage) {
       const s = STAGES[rawStage];
       if (!s) error(`Fase “${get(r, "stage")}” tidak dikenal (${[...new Set(Object.values(STAGES))].join(", ")})`);

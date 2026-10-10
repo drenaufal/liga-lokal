@@ -1,11 +1,15 @@
-import { and, desc, eq, gte, inArray, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { db } from "@/lib/db";
 import { positionLine, rolesOfLine } from "@/lib/positions";
+import { ascNullsLast } from "@/lib/db/order";
+import { kuNameSql } from "@/lib/queries/ku";
+import { getTournamentBase } from "@/lib/queries/competition";
 import {
   aiReports,
   ageCategories,
   clubs,
+  competitions,
   matchEvents,
   matches,
   players,
@@ -32,7 +36,6 @@ export async function runTalentSearch(filters: ScoutFilters, weights = DEFAULT_W
       position: players.position,
       ageCode: ageCategories.code,
       club: clubs.shortName,
-      clubColor: clubs.primaryColor,
       photoUrl: players.photoUrl,
       appearances: playerStats.appearances,
       minutesPlayed: playerStats.minutesPlayed,
@@ -162,7 +165,7 @@ export async function getMatchReportContext(matchId: string) {
 }
 
 export async function getCompetitionReportContext(tournamentId: string) {
-  const t = await db.query.tournaments.findFirst({ where: eq(tournaments.id, tournamentId) });
+  const t = await getTournamentBase(tournamentId);
   if (!t) return null;
   const agg = await db
     .select({
@@ -243,7 +246,12 @@ export async function getReportSubjectOptions() {
       .where(eq(matches.status, "completed"))
       .orderBy(desc(matches.scheduledAt))
       .limit(30),
-    db.select({ id: tournaments.id, name: tournaments.name }).from(tournaments),
+    db
+      .select({ id: tournaments.id, name: kuNameSql })
+      .from(tournaments)
+      .innerJoin(competitions, eq(competitions.id, tournaments.competitionId))
+      .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
+      .orderBy(asc(competitions.name), ascNullsLast(ageCategories.sortOrder)),
   ]);
   return {
     players: pl,

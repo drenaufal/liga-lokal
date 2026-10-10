@@ -2,20 +2,25 @@ import { and, asc, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { db } from "@/lib/db";
 import { MATCH_DURATION_SQL } from "@/lib/match-clock";
+import { resolveMatchSquads } from "@/lib/match-squad";
 import {
   ageCategories,
   clubs,
+  competitions,
   matchEvents,
   matchLineups,
   matches,
   players,
   referees,
   tournaments,
+  tournamentSquad,
+  tournamentTeams,
   users,
   venues,
 } from "@/lib/db/schema";
 import { ascNullsLast } from "@/lib/db/order";
 import { licenseStatus } from "@/lib/status";
+import { kuNameSql } from "@/lib/queries/ku";
 
 const hc = () => alias(clubs, "hc");
 const ac = () => alias(clubs, "ac");
@@ -56,17 +61,17 @@ export async function listMatches(params: MatchListParams) {
       resultStatus: matches.resultStatus,
       homeName: H.name,
       homeShort: H.shortName,
-      homeColor: H.primaryColor,
       homeLogo: H.logoUrl,
       awayName: A.name,
       awayShort: A.shortName,
-      awayColor: A.primaryColor,
       awayLogo: A.logoUrl,
-      tournamentName: tournaments.name,
+      tournamentName: kuNameSql,
       venue: venues.name,
     })
     .from(matches)
     .innerJoin(tournaments, eq(tournaments.id, matches.tournamentId))
+    .innerJoin(competitions, eq(competitions.id, tournaments.competitionId))
+    .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
     .leftJoin(H, eq(H.id, matches.homeClubId))
     .leftJoin(A, eq(A.id, matches.awayClubId))
     .leftJoin(venues, eq(venues.id, matches.venueId))
@@ -77,10 +82,17 @@ export async function listMatches(params: MatchListParams) {
     )
     .limit(120);
 
+  // One entry per KU, grouped by Turnamen in the filter.
   const tournamentOpts = await db
-    .select({ id: tournaments.id, name: tournaments.name })
+    .select({
+      id: tournaments.id,
+      competition: competitions.name,
+      ageCode: ageCategories.code,
+    })
     .from(tournaments)
-    .orderBy(asc(tournaments.name));
+    .innerJoin(competitions, eq(competitions.id, tournaments.competitionId))
+    .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
+    .orderBy(asc(competitions.name), ascNullsLast(ageCategories.sortOrder));
 
   return { rows, tournamentOpts };
 }
@@ -91,16 +103,14 @@ export async function getMatchConsole(id: string) {
   const rows = await db
     .select({
       m: matches,
-      tournamentName: tournaments.name,
+      tournamentName: kuNameSql,
       tournamentId: tournaments.id,
       ageDuration: ageCategories.rules,
       homeName: H.name,
       homeShort: H.shortName,
-      homeColor: H.primaryColor,
       homeLogo: H.logoUrl,
       awayName: A.name,
       awayShort: A.shortName,
-      awayColor: A.primaryColor,
       awayLogo: A.logoUrl,
       venue: venues.name,
       referee: referees.fullName,
@@ -109,6 +119,7 @@ export async function getMatchConsole(id: string) {
     })
     .from(matches)
     .innerJoin(tournaments, eq(tournaments.id, matches.tournamentId))
+    .innerJoin(competitions, eq(competitions.id, tournaments.competitionId))
     .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
     .leftJoin(H, eq(H.id, matches.homeClubId))
     .leftJoin(A, eq(A.id, matches.awayClubId))
@@ -186,13 +197,21 @@ export async function getMatchConsole(id: string) {
         )
         .orderBy(ascNullsLast(players.jerseyNumber))
     : [];
-  // One entry per (player, club in this match). Someone registered with BOTH clubs
-  // of the match plays for his main club only.
-  const squads = squadRows.flatMap((p) => {
-    const here = [p.clubId, p.secondClubId].filter((c): c is string => !!c && squadIds.includes(c));
-    const clubId = here.length === 2 ? p.clubId! : here[0];
-    return clubId ? [{ id: p.id, name: p.name, clubId, position: p.position, jersey: p.jersey }] : [];
-  });
+  const registered = squadIds.length
+    ? await db
+        .select({
+          id: players.id,
+          name: players.fullName,
+          clubId: tournamentTeams.clubId,
+          position: players.position,
+          jersey: sql<number | null>`coalesce(${tournamentSquad.jerseyNumber}, ${players.jerseyNumber})`,
+        })
+        .from(tournamentSquad)
+        .innerJoin(tournamentTeams, eq(tournamentTeams.id, tournamentSquad.tournamentTeamId))
+        .innerJoin(players, eq(players.id, tournamentSquad.playerId))
+        .where(and(eq(tournamentTeams.tournamentId, m.tournamentId), inArray(tournamentTeams.clubId, squadIds)))
+    : [];
+  const squads = resolveMatchSquads(squadIds, squadRows, registered);
 
   return { ...row, m, events, lineups, squads };
 }

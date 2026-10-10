@@ -26,7 +26,7 @@ export default async function AgeCategoriesPage() {
     <div>
       <PageHeader
         title="Aturan Kategori Usia"
-        description={`Konfigurasi durasi pertandingan, jumlah pemain, dan aturan khusus per kelompok umur (${range}). Kategori dapat ditambah sendiri hingga usia ${MAX_CATEGORY_AGE} tahun.`}
+        description={`Konfigurasi durasi pertandingan, jumlah pemain, dan aturan khusus per kelompok umur (${range}). Setiap kategori ditentukan oleh usia maksimalnya dan dapat ditambah sendiri hingga usia ${MAX_CATEGORY_AGE} tahun.`}
         actions={
           canWrite && (
             <Button size="sm" href="/registry/kategori-usia/baru">
@@ -44,7 +44,7 @@ export default async function AgeCategoriesPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {cats.map(({ category: c, players, tournaments }) => {
-            const inUse = [players && `${players} pemain`, tournaments && `${tournaments} kompetisi`]
+            const inUse = [players && `${players} pemain`, tournaments && `${tournaments} KU turnamen`]
               .filter(Boolean)
               .join(" dan ");
             return (
@@ -56,7 +56,7 @@ export default async function AgeCategoriesPage() {
                       <span className="truncate">{c.label}</span>
                     </CardTitle>
                     <span className="mt-1 block text-[11px] text-ink-muted">
-                      Usia {c.minAge}–{c.maxAge} · lahir {c.birthYearFrom}–{c.birthYearTo}
+                      Usia maks. {c.maxAge} · lahir {c.birthYearFrom} atau setelahnya
                     </span>
                   </div>
                   {canWrite && (
@@ -101,7 +101,7 @@ export default async function AgeCategoriesPage() {
                     </ul>
                   )}
                   <p className="border-t border-line-soft pt-2.5 text-[11px] text-ink-muted">
-                    {inUse ? `Dipakai ${inUse}` : "Belum dipakai pemain atau kompetisi"}
+                    {inUse ? `Dipakai ${inUse}` : "Belum dipakai pemain atau turnamen"}
                   </p>
                 </CardContent>
               </Card>

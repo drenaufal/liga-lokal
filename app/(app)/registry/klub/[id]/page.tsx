@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, MapPin, Mail, Phone, User, Pencil, UserPlus } from "lucide-react";
+import { ArrowLeft, MapPin, Mail, Phone, User, Pencil, UserPlus, Landmark } from "lucide-react";
 import { getClubProfile } from "@/lib/queries/registry";
 import { getCurrentUser } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
@@ -24,7 +24,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   const d = await getClubProfile(id);
-  return { title: d?.club.name ?? "Klub" };
+  return { title: d?.club.name ?? "SSB" };
 }
 
 export default async function ClubProfilePage({
@@ -51,24 +51,18 @@ export default async function ClubProfilePage({
         href="/registry/klub"
         className="mb-4 inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink"
       >
-        <ArrowLeft className="size-3.5" /> Kembali ke daftar klub
+        <ArrowLeft className="size-3.5" /> Kembali ke daftar SSB
       </Link>
 
       <Card className="mb-4">
         <CardContent className="flex flex-col gap-5 sm:flex-row sm:items-center">
-          <ClubCrest logoUrl={club.logoUrl} short={club.shortName} color={club.primaryColor} size={80} />
+          <ClubCrest logoUrl={club.logoUrl} short={club.shortName} size={80} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl font-semibold tracking-tight text-ink">{club.name}</h1>
               <Badge tone={club.type === "academy" ? "violet" : "info"}>
                 {club.type === "academy" ? "Akademi" : "Klub"}
               </Badge>
-              <span
-                className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-[10px] text-ink-muted"
-              >
-                <span className="size-2 rounded-full" style={{ background: club.primaryColor ?? "var(--color-brand)" }} />
-                Warna klub
-              </span>
               {canWrite && (
                 <Button variant="outline" size="sm" href={`/registry/klub/${club.id}/edit`} className="ml-auto">
                   <Pencil className="size-3.5" /> Ubah data & logo
@@ -77,16 +71,25 @@ export default async function ClubProfilePage({
             </div>
             <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-secondary">
               <span className="flex items-center gap-1.5">
-                <MapPin className="size-3" /> {club.city}, {club.province}
+                <MapPin className="size-3" /> {[club.city, club.province].filter(Boolean).join(", ")}
               </span>
-              {club.homeVenue && (
-                <Link href={`/registry/venue/${club.homeVenue.id}`} className="hover:text-ink">
-                  Kandang: {club.homeVenue.name}
-                </Link>
-              )}
               <span>Berdiri {club.foundedYear ?? "—"}</span>
-              {club.accreditation && <span className="text-brand">{club.accreditation}</span>}
+              {club.askot && (
+                <span className="flex items-center gap-1.5">
+                  <Landmark className="size-3" /> {club.askot}
+                </span>
+              )}
+              {club.asprov && (
+                <span className="flex items-center gap-1.5">
+                  <Landmark className="size-3" /> {club.asprov}
+                </span>
+              )}
             </div>
+            {club.address && (
+              <p className="mt-2 max-w-xl whitespace-pre-line text-xs leading-relaxed text-ink-muted">
+                {club.address}
+              </p>
+            )}
             <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-ink-muted">
               {club.contactName && (
                 <span className="flex items-center gap-1"><User className="size-3" /> {club.contactName}</span>
@@ -191,7 +194,12 @@ export default async function ClubProfilePage({
                             {c.specialty ?? "Pelatih"} · {c.licenseLevel}
                           </span>
                         </span>
-                        <StatusBadge kind="coach" value={c.status} />
+                        <span
+                          className={`shrink-0 text-[10px] tabular-nums ${Number(c.docs) === 2 ? "text-success" : "text-ink-muted"}`}
+                          title="Dokumen lisensi & KTP yang sudah diunggah"
+                        >
+                          {Number(c.docs)}/2 dok
+                        </span>
                       </Link>
                     </li>
                   ))}
@@ -212,7 +220,7 @@ export default async function ClubProfilePage({
                   {comps.map((c) => (
                     <li key={c.tournamentId}>
                       <Link
-                        href={`/kompetisi/${c.tournamentId}`}
+                        href={`/kompetisi/ku/${c.tournamentId}`}
                         className="block rounded-lg border border-line-soft bg-surface-2/40 p-2.5 transition-colors hover:border-brand/30"
                       >
                         <div className="flex items-center justify-between gap-2">

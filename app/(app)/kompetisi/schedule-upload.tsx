@@ -13,12 +13,21 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Field, Select } from "@/components/ui/input";
 import { toast } from "@/components/ui/toaster";
 import { cn, formatDateTime } from "@/lib/utils";
 import { STAGE_LABEL } from "@/lib/status";
-import { importSchedule, previewSchedule } from "./actions";
+import { importSchedule, previewSchedule } from "./ku/[id]/actions";
 
 type Preview = Awaited<ReturnType<typeof previewSchedule>>;
+
+export type UploadKu = {
+  id: string;
+  /** "KU-14" or the full name — what the picker shows. */
+  label: string;
+  /** Short codes of the SSBs taking part: how the CSV refers to them. */
+  shorts: string[];
+};
 
 const MAX_BYTES = 1024 * 1024;
 
@@ -29,9 +38,9 @@ const STATUS = {
   error: { icon: CircleX, tone: "text-danger", label: "Galat" },
 } as const;
 
-/** A CSV the user can fill in: header, then two example rows built from this tournament's clubs. */
+/** A CSV the user can fill in: header, then two example rows built from this KU's SSBs. */
 function downloadTemplate(shorts: string[]) {
-  const pick = (i: number) => shorts[i % Math.max(1, shorts.length)] ?? "KLUB";
+  const pick = (i: number) => shorts[i % Math.max(1, shorts.length)] ?? "SSB";
   const day = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
   const lines = [
     "home_short,away_short,date,time,round,stage,group,venue,referee_license,bracket_slot",
@@ -48,27 +57,29 @@ function downloadTemplate(shorts: string[]) {
 }
 
 /**
- * "Unggah Jadwal": pick a CSV, see every row checked against this tournament,
- * then import the valid ones. Lives inside the tournament only.
+ * "Unggah Jadwal": pick a CSV, see every row checked against the KU, then
+ * import the valid ones. With several KUs (the Turnamen's schedule) a picker
+ * chooses which KU the file belongs to.
  */
 export function ScheduleUpload({
-  tournamentId,
-  shorts,
+  kus,
   variant = "outline",
 }: {
-  tournamentId: string;
-  /** Club codes of the participants, shown as a hint and used in the template. */
-  shorts: string[];
+  kus: UploadKu[];
   variant?: "outline" | "primary";
 }) {
   const [open, setOpen] = React.useState(false);
   const [pending, start] = React.useTransition();
+  const [kuId, setKuId] = React.useState(kus[0]?.id ?? "");
   const [fileName, setFileName] = React.useState<string | null>(null);
   const [text, setText] = React.useState("");
   const [preview, setPreview] = React.useState<Preview | null>(null);
   const [replace, setReplace] = React.useState(false);
   const [drag, setDrag] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const ku = kus.find((k) => k.id === kuId) ?? kus[0];
+  const shorts = ku?.shorts ?? [];
 
   const reset = () => {
     setFileName(null);
@@ -78,10 +89,10 @@ export function ScheduleUpload({
     if (inputRef.current) inputRef.current.value = "";
   };
 
-  const check = (csv: string, replaceScheduled: boolean) =>
+  const check = (id: string, csv: string, replaceScheduled: boolean) =>
     start(async () => {
       try {
-        setPreview(await previewSchedule(tournamentId, csv, replaceScheduled));
+        setPreview(await previewSchedule(id, csv, replaceScheduled));
       } catch (e) {
         setPreview(null);
         toast.error("Gagal membaca berkas", e instanceof Error ? e.message : undefined);
@@ -89,7 +100,7 @@ export function ScheduleUpload({
     });
 
   const pickFile = async (file: File | undefined) => {
-    if (!file) return;
+    if (!file || !ku) return;
     if (file.size > MAX_BYTES) {
       toast.error("Berkas terlalu besar", "Maksimal 1 MB.");
       return;
@@ -97,18 +108,26 @@ export function ScheduleUpload({
     const content = await file.text();
     setFileName(file.name);
     setText(content);
-    check(content, replace);
+    check(ku.id, content, replace);
   };
 
   const toggleReplace = (v: boolean) => {
     setReplace(v);
-    if (text) check(text, v);
+    if (text && ku) check(ku.id, text, v);
+  };
+
+  const changeKu = (id: string) => {
+    setKuId(id);
+    setReplace(false);
+    setPreview(null);
+    if (text) check(id, text, false); // the same file, checked against the other KU
   };
 
   const submit = () =>
     start(async () => {
+      if (!ku) return;
       try {
-        const r = await importSchedule(tournamentId, text, replace);
+        const r = await importSchedule(ku.id, text, replace);
         toast.success(
           `${r.imported} pertandingan dijadwalkan`,
           [r.removed ? `${r.removed} jadwal lama diganti` : null, r.skipped ? `${r.skipped} baris dilewati` : null]
@@ -126,7 +145,7 @@ export function ScheduleUpload({
 
   return (
     <>
-      <Button size="sm" variant={variant} onClick={() => setOpen(true)}>
+      <Button size="sm" variant={variant} onClick={() => setOpen(true)} disabled={kus.length === 0}>
         <Upload className="size-3.5" /> Unggah Jadwal
       </Button>
 
@@ -143,15 +162,28 @@ export function ScheduleUpload({
           className="max-w-3xl"
         >
           <div className="space-y-4">
+            {kus.length > 1 && (
+              <Field label="Untuk KU">
+                <Select value={kuId} onChange={(e) => changeKu(e.target.value)} aria-label="Pilih KU">
+                  {kus.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-surface-2 px-4 py-3 text-xs text-ink-secondary">
               <div className="min-w-0 space-y-1">
                 <p>
                   Kolom wajib: <code className="font-mono text-ink">home_short</code>,{" "}
                   <code className="font-mono text-ink">away_short</code>, <code className="font-mono text-ink">date</code>,{" "}
-                  <code className="font-mono text-ink">time</code>. Opsional: round, stage, group, venue, referee_license.
+                  <code className="font-mono text-ink">time</code>. Opsional: round, stage, venue, referee_license, dan
+                  bracket_slot (khusus Cup, mis. QF1).
                 </p>
                 <p className="text-ink-muted">
-                  Dari Excel: <em>File → Simpan sebagai → CSV</em>. Kode klub peserta:{" "}
+                  Dari Excel: <em>File → Simpan sebagai → CSV</em>. Kode SSB peserta:{" "}
                   <span className="font-mono text-ink-secondary">{shorts.join(", ") || "—"}</span>
                 </p>
               </div>
@@ -201,7 +233,7 @@ export function ScheduleUpload({
             )}
             {preview?.archived && (
               <p className="rounded-xl border border-warn/30 bg-warn/10 px-3.5 py-2.5 text-xs text-warn">
-                Turnamen ini sudah diarsipkan, jadwalnya tidak dapat diubah. Pulihkan statusnya terlebih dahulu.
+                KU ini sudah diarsipkan, jadwalnya tidak dapat diubah. Pulihkan statusnya terlebih dahulu.
               </p>
             )}
 

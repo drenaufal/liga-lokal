@@ -78,58 +78,120 @@ export function groupStage(
   );
 }
 
-const BRACKET_NAMES: Record<number, string> = {
-  32: "round_of_32",
-  16: "round_of_16",
-  8: "quarter",
-  4: "semi",
-  2: "final",
+/* ── Cup (single elimination) ──────────────────────────────────────────── */
+
+export type CupStage = "round_of_32" | "round_of_16" | "quarter" | "semi" | "final";
+
+/** One match of the bracket. Later rounds name where each side comes from until it is known. */
+export type CupFixture = {
+  round: number;
+  stage: CupStage;
+  /** "QF1", "SF2", "F1" … — also how a winner finds its next match. */
+  bracketSlot: string;
+  home: string | null;
+  away: string | null;
+  homePlaceholder?: string;
+  awayPlaceholder?: string;
 };
 
-/** Single-elimination bracket. `entrants` may be real ids or placeholder labels. */
-export function knockoutBracket(
-  entrants: (string | { placeholder: string })[],
-): FixtureMatch[] {
+/** Bracket size → its stage and the prefix of its slot names. */
+const CUP_ROUNDS: Record<number, { stage: CupStage; prefix: string }> = {
+  32: { stage: "round_of_32", prefix: "R32" },
+  16: { stage: "round_of_16", prefix: "R16" },
+  8: { stage: "quarter", prefix: "QF" },
+  4: { stage: "semi", prefix: "SF" },
+  2: { stage: "final", prefix: "F" },
+};
+
+/** Slot prefixes from the first round to the final. */
+const CUP_PREFIXES = ["R32", "R16", "QF", "SF", "F"] as const;
+
+export const MAX_CUP_TEAMS = 32;
+
+/** Standard seeding: 1 meets the last seed, 2 the second to last …, and 1 and 2 only meet in the final. */
+function seedOrder(size: number): number[] {
+  let order = [1];
+  while (order.length < size) {
+    const n = order.length * 2;
+    order = order.flatMap((s) => [s, n + 1 - s]);
+  }
+  return order;
+}
+
+/**
+ * Single-elimination bracket for `teams`, best seed first. With a number of
+ * teams that is not a power of two the top seeds get a bye (they skip round 1);
+ * every later round starts as "Pemenang <slot>" placeholders.
+ */
+export function cupBracket(teams: string[]): CupFixture[] {
+  const n = teams.length;
+  if (n < 2) return [];
+  if (n > MAX_CUP_TEAMS) throw new Error(`Maksimal ${MAX_CUP_TEAMS} tim untuk format Cup`);
   let size = 2;
-  while (size < entrants.length) size *= 2;
-  const slots: (string | { placeholder: string } | null)[] = [...entrants];
-  while (slots.length < size) slots.push(null);
+  while (size < n) size *= 2;
 
-  const out: FixtureMatch[] = [];
+  type Side = { team: string | null; from?: string; bye?: boolean };
+  let current: Side[] = seedOrder(size).map((seed) =>
+    seed <= n ? { team: teams[seed - 1] } : { team: null, bye: true },
+  );
+
+  const out: CupFixture[] = [];
   let round = 1;
-  let current = slots;
-
   while (current.length > 1) {
-    const stageKey = BRACKET_NAMES[current.length] ?? "round_of_32";
-    const prefix =
-      stageKey === "final"
-        ? "F"
-        : stageKey === "semi"
-          ? "SF"
-          : stageKey === "quarter"
-            ? "QF"
-            : stageKey === "round_of_16"
-              ? "R16"
-              : "R32";
+    const meta = CUP_ROUNDS[current.length];
+    const next: Side[] = [];
     for (let i = 0; i < current.length; i += 2) {
       const a = current[i];
       const b = current[i + 1];
+      if (a.bye || b.bye) {
+        next.push(a.bye ? b : a); // the real side moves on without playing
+        continue;
+      }
+      const slot = `${meta.prefix}${i / 2 + 1}`;
       out.push({
         round,
-        stage: "knockout",
-        bracketSlot: `${prefix}${i / 2 + 1}`,
-        home: typeof a === "string" ? a : null,
-        away: typeof b === "string" ? b : null,
-        homePlaceholder:
-          a && typeof a !== "string" ? a.placeholder : undefined,
-        awayPlaceholder:
-          b && typeof b !== "string" ? b.placeholder : undefined,
+        stage: meta.stage,
+        bracketSlot: slot,
+        home: a.team,
+        away: b.team,
+        homePlaceholder: a.team ? undefined : `Pemenang ${a.from}`,
+        awayPlaceholder: b.team ? undefined : `Pemenang ${b.from}`,
       });
+      next.push({ team: null, from: slot });
     }
-    current = new Array(current.length / 2).fill(null);
+    current = next;
     round++;
   }
   return out;
+}
+
+/**
+ * Where the winner of `slot` plays next: the slot of the following round and
+ * which side of it ("QF3" → home of "SF2", "QF4" → away of "SF2"). The final
+ * has no next slot.
+ */
+export function cupNextSlot(slot: string | null | undefined): { slot: string; side: "home" | "away" } | null {
+  if (!slot) return null;
+  // "R161" = round of 16, match 1: match against the known prefixes, not a regex split
+  const at = CUP_PREFIXES.findIndex((p) => slot.startsWith(p) && /^\d+$/.test(slot.slice(p.length)));
+  const next = at >= 0 ? CUP_PREFIXES[at + 1] : undefined;
+  if (!next) return null; // unknown name, or the final
+  const i = Number(slot.slice(CUP_PREFIXES[at].length));
+  return { slot: `${next}${Math.ceil(i / 2)}`, side: i % 2 === 1 ? "home" : "away" };
+}
+
+/** Winner of a finished match: the higher score, or the shoot-out when level. Null while undecided. */
+export function matchWinnerSide(m: {
+  homeScore: number;
+  awayScore: number;
+  homePenalties?: number | null;
+  awayPenalties?: number | null;
+}): "home" | "away" | null {
+  if (m.homeScore !== m.awayScore) return m.homeScore > m.awayScore ? "home" : "away";
+  const hp = m.homePenalties;
+  const ap = m.awayPenalties;
+  if (hp == null || ap == null || hp === ap) return null;
+  return hp > ap ? "home" : "away";
 }
 
 export function stageLabel(stage: string): string {
