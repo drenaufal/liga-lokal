@@ -230,10 +230,10 @@ export function PlayerList({
         </div>
 
         {groups.length === 0 && (
-          <p className="rounded-2xl bg-surface-2 px-3 py-10 text-center text-xs text-ink-muted">
+          <div className="rounded-2xl bg-surface-2 px-3 py-10 text-center text-xs text-ink-muted">
             <p>Belum ada pemain terdaftar untuk {team.club.name} pada kategori usia pertandingan ini.</p>
-            <p className="mt-2">Periksa skuad turnamen atau klub utama / klub kedua dan kategori usia pemain di Master Data → Pemain.</p>
-          </p>
+            <p className="mt-2">Periksa skuad KU atau klub utama / klub kedua dan kategori usia pemain di Master Data → Pemain.</p>
+          </div>
         )}
 
         {groups.map((g) => (

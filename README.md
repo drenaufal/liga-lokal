@@ -67,6 +67,15 @@ Migrasi `0004_turnamen_ku` mengubah struktur turnamen dan menghapus beberapa
 kolom. **Cadangkan dulu** (`mysqldump -u ligalokal -p ligalokal > cadangan.sql`),
 lalu jalankan `npm run db:migrate`.
 
+Untuk database di Hostinger: izinkan IP komputer Anda di hPanel → Databases →
+Remote MySQL, lalu
+`mysqldump -h HOST -u USER -p --single-transaction --skip-lock-tables --no-tablespaces NAMA_DB > cadangan-produksi.sql`
+(atau ekspor lewat phpMyAdmin / unduh dari hPanel → Backups). **Periksa ukuran
+berkasnya**: 0 byte berarti dump gagal dan belum ada cadangan. DDL MariaDB tidak
+bisa di-rollback — bila `db:migrate` terhenti di tengah, jangan jalankan ulang
+begitu saja (`competitions` sudah ada); pulihkan dari cadangan atau lanjutkan
+dari pernyataan yang gagal.
+
 - Setiap turnamen lama menjadi satu *Turnamen* berisi satu KU, dengan id yang
   sama — tautan `/kompetisi/<id>` lama tetap membuka turnamen yang benar. Laga,
   klasemen, skuad, statistik, dan lencana tidak disentuh.
