@@ -36,12 +36,14 @@ export function FormulaWorkbench({
   formulas,
   preview,
   canEdit,
+  canActivate,
   params,
   filterOptions,
 }: {
   formulas: Formula[];
   preview: PreviewPlayer[];
   canEdit: boolean;
+  canActivate: boolean;
   params: IntelligenceParams;
   filterOptions: PlayerFilterOptions;
 }) {
@@ -171,24 +173,28 @@ export function FormulaWorkbench({
                 </div>
               ))}
             </div>
-            {canEdit && (
+            {(canEdit || canActivate) && (
               <div className="flex gap-2 border-t border-line-soft pt-3">
-                <Button size="sm" disabled={!dirty || pending} onClick={doSave}>
-                  {pending ? <Loader2 className="animate-spin" /> : <Save className="size-3.5" />}
-                  Simpan
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={!dirty}
-                  onClick={() => {
-                    setDraft(selected.weights);
-                    setName(selected.name);
-                  }}
-                >
-                  <RotateCcw className="size-3.5" /> Reset
-                </Button>
-                {!selected.isActive && (
+                {canEdit && (
+                  <>
+                    <Button size="sm" disabled={!dirty || pending} onClick={doSave}>
+                      {pending ? <Loader2 className="animate-spin" /> : <Save className="size-3.5" />}
+                      Simpan
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={!dirty}
+                      onClick={() => {
+                        setDraft(selected.weights);
+                        setName(selected.name);
+                      }}
+                    >
+                      <RotateCcw className="size-3.5" /> Reset
+                    </Button>
+                  </>
+                )}
+                {canActivate && !selected.isActive && (
                   <Button
                     size="sm"
                     variant="outline"

@@ -17,7 +17,7 @@ export default async function EditPlayerPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireCapability("registry:write");
+  await requireCapability("registry.player:edit");
   const { id } = await params;
   const player = await getPlayer(id);
   if (!player) notFound();

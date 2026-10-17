@@ -9,7 +9,7 @@ import { VenueForm } from "../venue-form";
 export const metadata: Metadata = { title: "Registrasi Venue Baru" };
 
 export default async function NewVenuePage() {
-  await requireCapability("registry:write");
+  await requireCapability("registry.venue:create");
   return (
     <div className="mx-auto max-w-2xl">
       <Link href="/registry/venue" className="mb-5 inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink"><ArrowLeft className="size-3.5" /> Kembali ke venue</Link>

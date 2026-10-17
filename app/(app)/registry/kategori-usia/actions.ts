@@ -93,7 +93,7 @@ function revalidateAll() {
 }
 
 export async function createCategory(_prev: FormState, formData: FormData): Promise<FormState> {
-  const user = await actionUser("registry:write");
+  const user = await actionUser("registry.category:create");
   const parsed = categorySchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return formError(parsed.error, formData);
 
@@ -124,7 +124,7 @@ export async function updateCategory(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const user = await actionUser("registry:write");
+  const user = await actionUser("registry.category:edit");
   const before = await db.query.ageCategories.findFirst({ where: eq(ageCategories.id, id) });
   if (!before) return { error: "Kategori tidak ditemukan." };
 
@@ -155,7 +155,7 @@ export async function updateCategory(
 }
 
 export async function deleteCategory(id: string): Promise<{ error?: string }> {
-  const user = await actionUser("registry:write");
+  const user = await actionUser("registry.category:delete");
   const cat = await db.query.ageCategories.findFirst({ where: eq(ageCategories.id, id) });
   if (!cat) return { error: "Kategori tidak ditemukan." };
 

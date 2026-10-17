@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Kategori Usia Baru" };
 export const dynamic = "force-dynamic";
 
 export default async function NewCategoryPage() {
-  await requireCapability("registry:write");
+  await requireCapability("registry.category:create");
   const cats = await listAgeCategories();
 
   // Suggest the next two-year band above the oldest existing category (capped

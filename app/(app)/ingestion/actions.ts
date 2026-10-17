@@ -34,7 +34,7 @@ function rev(id?: string) {
 }
 
 export async function uploadCsv(formData: FormData) {
-  const user = await actionUser("ingestion:write");
+  const user = await actionUser("ingestion:upload");
   const entity = String(formData.get("entity"));
   const file = formData.get("file") as File | null;
   if (!file || !ENTITY_SCHEMAS[entity]) throw new Error("Berkas atau jenis entitas tidak valid");
@@ -83,7 +83,7 @@ export async function uploadCsv(formData: FormData) {
 }
 
 export async function runPipeline(formData: FormData) {
-  const user = await actionUser("ingestion:write");
+  const user = await actionUser("ingestion:review");
   const batchId = String(formData.get("batchId"));
   const batch = await db.query.importBatches.findFirst({
     where: eq(importBatches.id, batchId),
@@ -264,7 +264,7 @@ export async function runPipeline(formData: FormData) {
 }
 
 export async function resolveRow(formData: FormData) {
-  const user = await actionUser("ingestion:write");
+  const user = await actionUser("ingestion:review");
   const rowId = String(formData.get("rowId"));
   const batchId = String(formData.get("batchId"));
   const resolution = String(formData.get("resolution")); // approve | reject | merge
@@ -299,7 +299,7 @@ export async function resolveRow(formData: FormData) {
 }
 
 export async function bulkResolve(formData: FormData) {
-  const user = await actionUser("ingestion:write");
+  const user = await actionUser("ingestion:review");
   const batchId = String(formData.get("batchId"));
   const resolution = String(formData.get("resolution"));
 
@@ -323,7 +323,7 @@ export async function bulkResolve(formData: FormData) {
 }
 
 export async function commitBatch(formData: FormData) {
-  const user = await actionUser("ingestion:write");
+  const user = await actionUser("ingestion:commit");
   const batchId = String(formData.get("batchId"));
   const batch = await db.query.importBatches.findFirst({
     where: eq(importBatches.id, batchId),

@@ -15,7 +15,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { getPlayerProfile } from "@/lib/queries/registry";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
@@ -55,6 +55,7 @@ export default async function PlayerProfilePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ klub?: string; returnTo?: string }>;
 }) {
+  const user = await requireCapability("registry.player:view");
   const { id } = await params;
   const { klub, returnTo } = await searchParams;
   const backHref = typeof returnTo === "string" && (returnTo === "/registry/pemain" || returnTo.startsWith("/registry/pemain?")) ? returnTo : "/registry/pemain";
@@ -62,10 +63,10 @@ export default async function PlayerProfilePage({
   if (!data) notFound();
   const { player, clubChips, selectedClub, peers } = data;
   const t = data.totals ?? emptyTotals();
-  const user = await getCurrentUser();
-  const canVerify = can(user?.role, "registry:verify");
-  const canWrite = can(user?.role, "registry:write");
-  const docMeta = canVerify
+  const canVerify = can(user, "registry.player:verify");
+  const canWrite = can(user, "registry.player:edit");
+  const canDocs = can(user, "registry:documents");
+  const docMeta = canDocs
     ? await Promise.all(PLAYER_DOCUMENTS.map((d) => getMediaMeta(player[d.key])))
     : [];
 
@@ -290,7 +291,7 @@ export default async function PlayerProfilePage({
                     label={d.label}
                     url={player[d.key]}
                     meta={docMeta[i] ?? null}
-                    canView={canVerify}
+                    canView={canDocs}
                     editHref={canWrite ? `/registry/pemain/${player.id}/edit` : null}
                   />
                 ))}

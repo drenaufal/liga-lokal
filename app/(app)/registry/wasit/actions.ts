@@ -77,7 +77,7 @@ async function licenseTaken(licenseNumber: string, exceptId?: string) {
 }
 
 export async function createReferee(_prev: FormState, formData: FormData): Promise<FormState> {
-  const user = await actionUser("registry:write");
+  const user = await actionUser("registry.referee:create");
   const parsed = refereeSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return formError(parsed.error, formData);
 
@@ -106,7 +106,7 @@ export async function updateReferee(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const user = await actionUser("registry:write");
+  const user = await actionUser("registry.referee:edit");
   const before = await db.query.referees.findFirst({ where: eq(referees.id, id) });
   if (!before) return { error: "Wasit tidak ditemukan." };
 

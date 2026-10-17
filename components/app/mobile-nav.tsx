@@ -5,8 +5,8 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { LayoutGrid, LogOut, X } from "lucide-react";
-import { NAV, SETTINGS_NAV, type NavItem } from "@/lib/nav";
-import { can, ROLE_LABEL, type Role } from "@/lib/auth/rbac";
+import { navFor, type NavItem } from "@/lib/nav";
+import { ROLE_LABEL, type Capability, type Role } from "@/lib/auth/rbac";
 import { logoutAction } from "@/app/(app)/actions";
 import { Avatar } from "@/components/ui/avatar";
 import { LogoChip } from "@/components/brand/logo";
@@ -30,15 +30,17 @@ function isActive(item: NavItem, pathname: string) {
  */
 export function MobileNav({
   role,
+  grants,
   user,
 }: {
   role: Role;
+  grants: readonly Capability[];
   user: { name: string; email: string; image?: string | null };
 }) {
   const pathname = usePathname();
   const [open, setOpen] = React.useState(false);
 
-  const items = [...NAV, SETTINGS_NAV].filter((n) => !n.capability || can(role, n.capability));
+  const items = navFor({ role, grants });
   const primaryKeys = role === "coach" ? ["dsp", "command-center", "kompetisi", "registry"] : PRIMARY;
   const primary = primaryKeys.map((k) => items.find((i) => i.key === k))
     .filter((i): i is NavItem => !!i)

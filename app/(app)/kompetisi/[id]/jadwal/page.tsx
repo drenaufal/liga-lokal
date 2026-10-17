@@ -6,7 +6,7 @@ import {
   getCompetitionKuOptions,
   getScheduleOptions,
 } from "@/lib/queries/competition";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { Card, CardContent } from "@/components/ui/card";
 import { MatchRow, MatchStack } from "@/components/app/match-row";
@@ -34,24 +34,26 @@ export default async function CompetitionSchedulePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ ku?: string }>;
 }) {
+  const user = await requireCapability("competition:view");
   const { id } = await params;
   const { ku: kuFilter } = await searchParams;
   const competition = await getCompetition(id);
   if (!competition) notFound();
-  const user = await getCurrentUser();
-  const canManage = can(user?.role, "competition:write");
+  const canSchedule = can(user, "ku:schedule");
+  const canDeleteMatch = can(user, "ku:match-delete");
+  const canAddKu = can(user, "ku:create");
 
   const [all, kuOptions, options] = await Promise.all([
     getCompetitionFixtures(id),
     getCompetitionKuOptions(id),
-    canManage ? getScheduleOptions() : Promise.resolve(null),
+    canSchedule ? getScheduleOptions() : Promise.resolve(null),
   ]);
   const selected = kuOptions.find((k) => k.id === kuFilter)?.id ?? null;
   const matches = selected ? all.filter((m) => m.kuId === selected) : all;
 
   const label = (k: (typeof kuOptions)[number]) => k.ageCode ?? "Tanpa KU";
   const tools =
-    canManage && options && kuOptions.length > 0 ? (
+    canSchedule && options && kuOptions.length > 0 ? (
       <div className="flex flex-wrap items-center gap-2">
         <AddMatch
           kus={kuOptions.map((k) => ({
@@ -78,7 +80,7 @@ export default async function CompetitionSchedulePage({
         title="Belum ada KU"
         description="Jadwal dibuat per KU. Tambahkan KU dahulu, lalu susun jadwalnya otomatis, manual, atau lewat unggah CSV."
         action={
-          canManage ? (
+          canAddKu ? (
             <Link href={`/kompetisi/${id}/ku/baru`} className="text-xs font-semibold text-brand hover:underline">
               Tambah KU
             </Link>
@@ -135,7 +137,7 @@ export default async function CompetitionSchedulePage({
                     <div className="min-w-0 flex-1">
                       <MatchRow m={m} />
                     </div>
-                    {canManage && m.status === "scheduled" && (
+                    {canDeleteMatch && m.status === "scheduled" && (
                       <DeleteMatchButton matchId={m.id} label={`${m.homeShort ?? "?"} vs ${m.awayShort ?? "?"}`} />
                     )}
                   </div>

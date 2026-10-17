@@ -16,7 +16,7 @@ export default async function EditCategoryPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireCapability("registry:write");
+  await requireCapability("registry.category:edit");
   const { id } = await params;
   const cat = await getAgeCategory(id);
   if (!cat) notFound();

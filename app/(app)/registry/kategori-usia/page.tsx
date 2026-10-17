@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Clock, Users, Shirt, CircleDot, Repeat, Plus, Pencil } from "lucide-react";
 import { listAgeCategories } from "@/lib/queries/registry";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { PageHeader } from "@/components/app/page-header";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -16,8 +16,11 @@ export const metadata: Metadata = { title: "Aturan Kategori Usia" };
 export const dynamic = "force-dynamic";
 
 export default async function AgeCategoriesPage() {
-  const [cats, user] = await Promise.all([listAgeCategories(), getCurrentUser()]);
-  const canWrite = can(user?.role, "registry:write");
+  const user = await requireCapability("registry.category:view");
+  const cats = await listAgeCategories();
+  const canCreate = can(user, "registry.category:create");
+  const canEdit = can(user, "registry.category:edit");
+  const canDelete = can(user, "registry.category:delete");
   const range = cats.length
     ? `${cats[0].category.code} hingga ${cats[cats.length - 1].category.code}`
     : "belum ada kategori";
@@ -28,7 +31,7 @@ export default async function AgeCategoriesPage() {
         title="Aturan Kategori Usia"
         description={`Konfigurasi durasi pertandingan, jumlah pemain, dan aturan khusus per kelompok umur (${range}). Setiap kategori ditentukan oleh usia maksimalnya dan dapat ditambah sendiri hingga usia ${MAX_CATEGORY_AGE} tahun.`}
         actions={
-          canWrite && (
+          canCreate && (
             <Button size="sm" href="/registry/kategori-usia/baru">
               <Plus className="size-3.5" /> Kategori Baru
             </Button>
@@ -59,17 +62,19 @@ export default async function AgeCategoriesPage() {
                       Usia maks. {c.maxAge} · lahir {c.birthYearFrom} atau setelahnya
                     </span>
                   </div>
-                  {canWrite && (
+                  {(canEdit || canDelete) && (
                     <div className="flex shrink-0 items-center gap-0.5">
-                      <Link
-                        href={`/registry/kategori-usia/${c.id}/edit`}
-                        className="grid size-7 place-items-center rounded-md text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
-                        aria-label={`Ubah ${c.code}`}
-                        title={`Ubah ${c.code}`}
-                      >
-                        <Pencil className="size-3.5" />
-                      </Link>
-                      <DeleteCategoryButton id={c.id} code={c.code} inUse={inUse || null} />
+                      {canEdit && (
+                        <Link
+                          href={`/registry/kategori-usia/${c.id}/edit`}
+                          className="grid size-7 place-items-center rounded-md text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+                          aria-label={`Ubah ${c.code}`}
+                          title={`Ubah ${c.code}`}
+                        >
+                          <Pencil className="size-3.5" />
+                        </Link>
+                      )}
+                      {canDelete && <DeleteCategoryButton id={c.id} code={c.code} inUse={inUse || null} />}
                     </div>
                   )}
                 </CardHeader>

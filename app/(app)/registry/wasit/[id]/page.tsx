@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Mail, Phone, MapPin, ScrollText, Pencil, Landmark } from "lucide-react";
 import { getRefereeProfile } from "@/lib/queries/registry";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
@@ -29,12 +29,12 @@ export default async function RefereeProfilePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await requireCapability("registry.referee:view");
   const { id } = await params;
   const d = await getRefereeProfile(id);
   if (!d) notFound();
   const { referee: r, assignments } = d;
-  const user = await getCurrentUser();
-  const canWrite = can(user?.role, "registry:write");
+  const canWrite = can(user, "registry.referee:edit");
 
   return (
     <div className="mx-auto max-w-3xl">

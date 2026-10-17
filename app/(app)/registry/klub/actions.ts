@@ -75,7 +75,7 @@ async function uniqueSlug(name: string) {
 }
 
 export async function createClub(_prev: FormState, formData: FormData): Promise<FormState> {
-  const user = await actionUser("registry:write");
+  const user = await actionUser("registry.club:create");
   const parsed = clubSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return formError(parsed.error, formData);
 
@@ -104,7 +104,7 @@ export async function updateClub(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const user = await actionUser("registry:write");
+  const user = await actionUser("registry.club:edit");
   const before = await db.query.clubs.findFirst({ where: eq(clubs.id, id) });
   if (!before) return { error: "SSB tidak ditemukan." };
 

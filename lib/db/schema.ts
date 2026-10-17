@@ -51,6 +51,7 @@ const json = customType<{ data: unknown; driverData: string }>({
 /* ═══════════════════════════ Enums ═══════════════════════════════════ */
 
 export const userRole = [
+  "super_admin",
   "admin",
   "operator",
   "referee",
@@ -219,6 +220,24 @@ export const users = mysqlTable("users", {
   lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").default(NOW).notNull(),
 });
+
+/**
+ * Administrator-edited deviations from the factory role → capability table in
+ * `lib/auth/rbac.ts`. One row per (role, capability) that differs from the
+ * default; `granted` says which way. Absent rows mean "use the default".
+ */
+export const rolePermissions = mysqlTable(
+  "role_permissions",
+  {
+    id: id(),
+    role: mysqlEnum("role", userRole).notNull(),
+    capability: varchar("capability", { length: 48 }).notNull(),
+    granted: boolean("granted").notNull(),
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at").default(NOW).notNull(),
+  },
+  (t) => [uniqueIndex("role_permissions_role_cap_idx").on(t.role, t.capability)],
+);
 
 /* ═══════════════════════ Config / Rules ═════════════════════════════ */
 

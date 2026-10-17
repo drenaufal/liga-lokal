@@ -24,9 +24,9 @@ const ENTITY_LABEL: Record<string, string> = {
 };
 
 export default async function IngestionPage() {
-  await requireCapability("ingestion:read");
+  await requireCapability("ingestion:view");
   const [batches, user] = await Promise.all([listBatches(), getCurrentUser()]);
-  const canWrite = can(user?.role, "ingestion:write");
+  const canWrite = can(user, "ingestion:upload");
 
   return (
     <div>

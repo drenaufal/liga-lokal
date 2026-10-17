@@ -4,6 +4,7 @@ import { and, asc, eq, isNotNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { CheckCircle2 } from "lucide-react";
 import { requireCapability } from "@/lib/auth/session";
+import { can } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
 import { ageCategories, clubs, coaches, competitions, matchDspSubmissions, matchLineups, matches, tournaments } from "@/lib/db/schema";
 import { getEligibleMatchPlayers } from "@/lib/queries/match-roster";
@@ -19,11 +20,12 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Daftar Susunan Pemain" };
 
 export default async function DspPage({ searchParams }: { searchParams: Promise<{ ku?: string; match?: string; club?: string }> }) {
-  const actor = await requireCapability("dsp:write");
+  const actor = await requireCapability("dsp:view");
   const sp = await searchParams;
-  // A coach fills in their own club; an admin manages the DSP of either club in any match.
-  const isAdmin = actor.role === "admin";
-  if (!isAdmin && (!actor.clubId || actor.role !== "coach")) return <EmptyState title="Klub pelatih belum diatur" description="Admin perlu menghubungkan akun pelatih dengan SSB pada profil pelatih." />;
+  // Whoever may fill any club ("dsp:any-club") manages either side of any match; everyone else fills their own club.
+  const isAdmin = can(actor, "dsp:any-club");
+  const canSubmit = can(actor, "dsp:submit");
+  if (!isAdmin && !actor.clubId) return <EmptyState title="Klub pelatih belum diatur" description="Admin perlu menghubungkan akun pelatih dengan SSB pada profil pelatih." />;
   const H = alias(clubs, "dsp_home"), A = alias(clubs, "dsp_away");
   const ownClub = isAdmin ? null : actor.clubId!;
   const hasDsp = ownClub
@@ -92,7 +94,7 @@ export default async function DspPage({ searchParams }: { searchParams: Promise<
     {chosen && detail && coach && side ? <DspForm key={`${chosen.match.id}:${clubId}`} matchId={chosen.match.id} clubId={isAdmin ? clubId! : undefined} clubName={club?.name ?? side.name} coach={coach}
       players={detail[0]} initial={detail[1].map((p) => ({ playerId: p.playerId, role: p.role }))}
       submission={detail[2][0] ? { coachName: detail[2][0].coachName, submittedAt: detail[2][0].submittedAt.toISOString() } : null}
-      locked={chosen.match.status !== "scheduled" || chosen.match.period !== "not_started"} rules={detail[3][0]?.rules} />
+      locked={!canSubmit || chosen.match.status !== "scheduled" || chosen.match.period !== "not_started"} rules={detail[3][0]?.rules} />
       : chosen && isAdmin ? <EmptyState title="Pilih SSB untuk mengisi DSP" description="Pilih tuan rumah atau tamu di atas, lalu pilih pelatih penanggung jawabnya." />
       : <EmptyState title={kus.length ? "Pilih pertandingan untuk mengisi DSP" : isAdmin ? "Belum ada pertandingan terjadwal" : "Belum ada jadwal untuk klub Anda"} description="DSP berisi pemain klub sesuai KU pertandingan." />}
   </div>;

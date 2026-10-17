@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { X } from "lucide-react";
 import { getPlayerRadarData, searchPlayersForRadar, getPlayerFilterOptions } from "@/lib/queries/intelligence";
+import { requireCapability } from "@/lib/auth/session";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Radar } from "@/components/charts/radar";
 import { RADAR_AXES, radarValues } from "@/lib/player-metrics";
@@ -17,6 +18,7 @@ export default async function ComparePage({
 }: {
   searchParams: Promise<IntelligenceParams>;
 }) {
+  await requireCapability("intelligence.compare:view");
   const sp = await searchParams;
   const selected = [...new Set(paramValue(sp, "players").split(",").filter(Boolean))].slice(0, 3);
   const [results, rows, filterOptions] = await Promise.all([

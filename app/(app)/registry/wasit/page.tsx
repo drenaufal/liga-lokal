@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { listRefereeAskots, listReferees } from "@/lib/queries/registry";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { PageHeader } from "@/components/app/page-header";
 import { Card } from "@/components/ui/card";
@@ -24,13 +24,13 @@ export default async function RefereesPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string; level?: string; askot?: string }>;
 }) {
+  const user = await requireCapability("registry.referee:view");
   const params = await searchParams;
-  const [rows, askots, user] = await Promise.all([
+  const [rows, askots] = await Promise.all([
     listReferees(params),
     listRefereeAskots(),
-    getCurrentUser(),
   ]);
-  const canWrite = can(user?.role, "registry:write");
+  const canWrite = can(user, "registry.referee:create");
 
   const summary = {
     active: rows.filter((r) => r.status === "active").length,

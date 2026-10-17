@@ -1,4 +1,5 @@
 import { getKnockoutMatches } from "@/lib/queries/competition";
+import { requireCapability } from "@/lib/auth/session";
 import { Card, CardContent } from "@/components/ui/card";
 import { Bracket } from "@/components/app/bracket";
 
@@ -9,6 +10,7 @@ export default async function BracketPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireCapability("competition:view");
   const { id } = await params;
   const matches = await getKnockoutMatches(id);
 

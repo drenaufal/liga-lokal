@@ -10,14 +10,16 @@ import { ShortcutsButton } from "./shortcuts";
 import { findNavByPath } from "@/lib/nav";
 import { BRAND } from "@/lib/brand";
 import { LogoChip } from "@/components/brand/logo";
-import type { Role } from "@/lib/auth/rbac";
+import { can, type Capability, type Role } from "@/lib/auth/rbac";
 
 /** Floating glass bar. On phones it carries the logo; the sidebar does from lg up. */
 export function Topbar({
   user,
+  grants,
   activeFormula,
 }: {
   user: { name: string; email: string; image?: string | null; role: Role; title?: string | null };
+  grants: readonly Capability[];
   activeFormula: string | null;
 }) {
   const pathname = usePathname();
@@ -41,10 +43,10 @@ export function Topbar({
         </div>
 
         <div className="ml-auto flex items-center gap-1.5 lg:ml-0 lg:flex-1 lg:justify-between xl:ml-4">
-          <CommandPalette role={user.role} />
+          <CommandPalette role={user.role} grants={grants} />
 
           <div className="flex items-center gap-1.5">
-            {activeFormula && (
+            {activeFormula && can({ role: user.role, grants }, "intelligence.formula:view") && (
               <Link
                 href="/player-intelligence/formula"
                 className="hidden items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1.5 text-[11px] font-medium text-ink-secondary transition-colors hover:bg-elevated hover:text-ink lg:flex"

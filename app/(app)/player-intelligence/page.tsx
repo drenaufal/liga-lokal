@@ -1,4 +1,5 @@
 import { getPlayerRadarData, getPeerPool, searchPlayersForRadar, getPlayerFilterOptions } from "@/lib/queries/intelligence";
+import { requireCapability } from "@/lib/auth/session";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -17,6 +18,7 @@ export default async function RadarPage({
 }: {
   searchParams: Promise<IntelligenceParams>;
 }) {
+  await requireCapability("intelligence.radar:view");
   const sp = await searchParams;
   const [results, filterOptions] = await Promise.all([searchPlayersForRadar(sp), getPlayerFilterOptions()]);
   const list = results.rows;

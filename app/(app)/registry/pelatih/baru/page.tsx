@@ -13,7 +13,7 @@ export default async function NewCoachPage({
 }: {
   searchParams: Promise<{ club?: string }>;
 }) {
-  await requireCapability("registry:write");
+  await requireCapability("registry.coach:create");
   const [{ clubs }, { club }] = await Promise.all([getRegistryFilters(), searchParams]);
 
   return (

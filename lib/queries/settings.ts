@@ -1,8 +1,10 @@
-import { count, desc, eq, like, sql, and, type SQL } from "drizzle-orm";
+import { count, desc, eq, like, sql, and, ne, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { auditLogs, users } from "@/lib/db/schema";
+import { canSeeRole, type Role } from "@/lib/auth/rbac";
 
-export async function getSettingsData() {
+/** `viewer` is the signed-in role: the hidden Super Admin account is only listed to itself. */
+export async function getSettingsData(viewer?: Role | null) {
   const [userList, counts] = await Promise.all([
     db
       .select({
@@ -15,6 +17,7 @@ export async function getSettingsData() {
         lastLoginAt: users.lastLoginAt,
       })
       .from(users)
+      .where(canSeeRole(viewer, "super_admin") ? undefined : ne(users.role, "super_admin"))
       .orderBy(users.role),
     db
       .select({
@@ -37,7 +40,17 @@ export async function getSettingsData() {
 
 export type AuditParams = { q?: string; action?: string; page?: string };
 
-export async function getAuditLog(params: AuditParams) {
+/** Hide what the Super Admin did from everyone else; they only see the actions, never the actor. */
+export function maskHiddenActor<T extends { actorName: string | null; actorRole: string | null }>(
+  row: T,
+  viewer?: Role | null,
+): T {
+  return row.actorRole === "super_admin" && !canSeeRole(viewer, "super_admin")
+    ? { ...row, actorName: null, actorRole: null }
+    : row;
+}
+
+export async function getAuditLog(params: AuditParams, viewer?: Role | null) {
   const page = Math.max(1, Number(params.page) || 1);
   const size = 30;
   const conds: SQL[] = [];
@@ -60,5 +73,11 @@ export async function getAuditLog(params: AuditParams) {
       .orderBy(auditLogs.action),
   ]);
 
-  return { rows, total: total[0].n, page, size, actions: actions.map((a) => a.action) };
+  return {
+    rows: rows.map((r) => maskHiddenActor(r, viewer)),
+    total: total[0].n,
+    page,
+    size,
+    actions: actions.map((a) => a.action),
+  };
 }

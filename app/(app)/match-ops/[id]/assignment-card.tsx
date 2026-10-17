@@ -65,9 +65,7 @@ export function AssignmentCard({
     ...(options?.referees ?? []).map((r) => ({
       id: r.id,
       name: r.name,
-      subtitle: [`Lisensi ${r.level}`, r.city, r.expiry ? `s.d. ${formatDate(r.expiry)}` : null].filter(Boolean).join(" · "),
-      badge: r.license === "expiring" ? { label: "Segera habis", tone: "warn" as const } : undefined,
-    })),
+      subtitle: [`Lisensi ${r.level}`, r.city, r.expiry ? `s.d. ${formatDate(r.expiry)}` : null].filter(Boolean).join(" · "),    })),
     ...(referee && !options?.referees.some((r) => r.id === referee.id)
       ? [{ id: referee.id, name: referee.name, subtitle: "Lisensi tidak berlaku", badge: { label: "Perlu diganti", tone: "danger" as const } }]
       : []),
@@ -118,6 +116,7 @@ export function AssignmentCard({
                 value={refereeId ? [refereeId] : []}
                 onChange={([id]) => setRefereeId(id ?? "")}
                 disabled={pending}
+                maxListHeight="h-64"
                 noneLabel="Wasit belum ditugaskan"
                 placeholder="Cari nama wasit…"
                 emptyText="Belum ada wasit dengan lisensi berlaku."
@@ -131,6 +130,7 @@ export function AssignmentCard({
                 value={operatorIds}
                 onChange={setOperatorIds}
                 disabled={pending}
+                maxListHeight="h-64"
                 noneLabel="Operator belum ditugaskan"
                 placeholder="Cari nama operator…"
                 emptyText="Belum ada operator aktif."

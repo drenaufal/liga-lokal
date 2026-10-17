@@ -16,6 +16,7 @@ import {
   tournamentTeams,
 } from "@/lib/db/schema";
 import { actionUser } from "@/lib/auth/session";
+import { can } from "@/lib/auth/rbac";
 import { recordAudit } from "@/lib/audit";
 import { liveMinute, recomputeMatchScore, syncMatchStats } from "@/lib/match-engine";
 import { advanceCupWinner, isCupStage } from "@/lib/cup-advance";
@@ -43,7 +44,7 @@ import { recordManualMatchEvent, voidManualMatchEvent } from "@/lib/manual-match
 import { getEligibleMatchPlayers } from "@/lib/queries/match-roster";
 
 export async function saveMatchSquad(matchId: string, playerIds: string[], starterIds?: string[]) {
-  const user = await actionUser("competition:write");
+  const user = await actionUser("match:squad");
   const ids = z.array(z.string().uuid()).min(2).max(200).parse(playerIds);
   const starters = starterIds ? z.array(z.string().uuid()).parse(starterIds) : undefined;
   if (starters?.some((id) => !ids.includes(id))) throw new Error("Starter harus termasuk pemain yang dipilih.");
@@ -224,7 +225,7 @@ const eventSchema = z.object({
 });
 
 export async function addEvent(formData: FormData) {
-  const user = await actionUser("match:operate");
+  const user = await actionUser("match:events");
   const parsed = eventSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) throw new Error("Data kejadian tidak valid");
   const v = parsed.data;
@@ -244,7 +245,7 @@ export async function addEvent(formData: FormData) {
  * can offer "Batalkan".
  */
 export async function quickEvent(input: { matchId: string; clubId: string; playerId: string; type: string }) {
-  const user = await actionUser("match:operate");
+  const user = await actionUser("match:events");
   if (!(QUICK_TYPES as readonly string[]).includes(input.type)) throw new Error("Jenis kejadian tidak valid");
   const r = await recordQuickEvent({
     matchId: input.matchId,
@@ -271,12 +272,12 @@ export async function quickEvent(input: { matchId: string; clubId: string; playe
 
 /** "Batalkan" on the toast that follows a quick event. */
 export async function undoEvent(input: { matchId: string; eventId: string }) {
-  const user = await actionUser("match:operate");
+  const user = await actionUser("match:events");
   const r = await undoQuickEvent({
     matchId: input.matchId,
     eventId: input.eventId,
     userId: user.id,
-    isAdmin: user.role === "admin",
+    isAdmin: can(user, "match:undo-any"),
   });
   await recordAudit({
     actorId: user.id, actorName: user.name, actorRole: user.role,
@@ -287,7 +288,7 @@ export async function undoEvent(input: { matchId: string; eventId: string }) {
 }
 
 export async function voidEvent(formData: FormData) {
-  const user = await actionUser("match:operate");
+  const user = await actionUser("match:void");
   const eventId = String(formData.get("eventId"));
   const matchId = String(formData.get("matchId"));
   const reason = String(formData.get("reason") ?? "Koreksi operator");
@@ -446,7 +447,7 @@ export async function setShootout(input: { matchId: string; home: number; away: 
 }
 
 export async function amendResult(formData: FormData): Promise<CupOutcome> {
-  const user = await actionUser("match:confirm");
+  const user = await actionUser("match:amend");
   const id = String(formData.get("id"));
   const reason = String(formData.get("reason") ?? "").trim();
   if (!reason) throw new Error("Alasan koreksi wajib diisi");

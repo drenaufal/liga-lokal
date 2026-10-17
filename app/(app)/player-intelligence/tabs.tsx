@@ -12,11 +12,11 @@ const TABS = [
   { href: "/player-intelligence/badge", label: "Galeri Lencana", icon: Award },
 ];
 
-export function PiTabs() {
+export function PiTabs({ allowed }: { allowed: string[] }) {
   const pathname = usePathname();
   return (
     <div className="flex items-center gap-1 overflow-x-auto border-b border-line">
-      {TABS.map((t) => {
+      {TABS.filter((t) => allowed.includes(t.href)).map((t) => {
         const active = pathname === t.href;
         return (
           <Link

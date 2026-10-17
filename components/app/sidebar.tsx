@@ -4,20 +4,18 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PanelLeftClose, PanelLeft } from "lucide-react";
-import { NAV, SETTINGS_NAV } from "@/lib/nav";
-import { can, type Role } from "@/lib/auth/rbac";
+import { navFor } from "@/lib/nav";
+import type { Capability, Role } from "@/lib/auth/rbac";
 import { Logo } from "@/components/brand/logo";
 import { BRAND } from "@/lib/brand";
 import { Icon } from "./icon";
 import { cn } from "@/lib/utils";
 
-export function Sidebar({ role }: { role: Role }) {
+export function Sidebar({ role, grants }: { role: Role; grants: readonly Capability[] }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = React.useState(false);
 
-  const items = [...NAV, SETTINGS_NAV].filter(
-    (n) => !n.capability || can(role, n.capability),
-  );
+  const items = navFor({ role, grants });
 
   return (
     <aside

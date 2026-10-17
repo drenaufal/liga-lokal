@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Layers, Pencil, Plus, UserRound } from "lucide-react";
 import { getCompetition, getCompetitionImpact } from "@/lib/queries/competition";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,12 +27,13 @@ export default async function CompetitionLayout({
   children: React.ReactNode;
   params: Promise<{ id: string }>;
 }) {
+  const user = await requireCapability("competition:view");
   const { id } = await params;
   const c = await getCompetition(id);
   if (!c) notFound();
-  const user = await getCurrentUser();
-  const canManage = can(user?.role, "competition:write");
-  const canDelete = can(user?.role, "competition:delete");
+  const canAddKu = can(user, "ku:create");
+  const canEdit = can(user, "competition:edit");
+  const canDelete = can(user, "competition:delete");
   const impact = canDelete ? await getCompetitionImpact(id) : null;
 
   return (
@@ -62,14 +63,14 @@ export default async function CompetitionLayout({
           </div>
           {c.description && <p className="mt-2 max-w-2xl whitespace-pre-line text-xs text-ink-muted">{c.description}</p>}
         </div>
-        {(canManage || impact) && (
+        {(canAddKu || canEdit || impact) && (
           <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-            {canManage && (
+            {canAddKu && (
               <Button size="sm" href={`/kompetisi/${c.id}/ku/baru`}>
                 <Plus className="size-3.5" /> Tambah KU
               </Button>
             )}
-            {canManage && (
+            {canEdit && (
               <Button size="sm" variant="outline" href={`/kompetisi/${c.id}/ubah`}>
                 <Pencil className="size-3.5" /> Ubah
               </Button>

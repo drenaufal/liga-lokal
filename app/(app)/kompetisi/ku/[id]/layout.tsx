@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/app/status-badge";
 import { TournamentTabs } from "./tabs";
 import { LifecycleControl } from "./lifecycle-control";
 import { DeleteKu } from "./delete-tournament";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { formatLabel } from "@/lib/ku";
 import { formatDate } from "@/lib/utils";
@@ -30,12 +30,12 @@ export default async function KuLayout({
   children: React.ReactNode;
   params: Promise<{ id: string }>;
 }) {
+  const user = await requireCapability("competition:view");
   const { id } = await params;
   const t = await getTournamentBase(id);
   if (!t) notFound();
-  const user = await getCurrentUser();
-  const canManage = can(user?.role, "competition:write");
-  const canDelete = can(user?.role, "competition:delete");
+  const canManage = can(user, "ku:status");
+  const canDelete = can(user, "ku:delete");
   const impact = canDelete ? await getTournamentImpact(id) : null;
   const code = t.ageCategory?.code ?? null;
 

@@ -11,7 +11,7 @@ import { formError, type FormState } from "@/lib/form";
 import { venueSchema } from "@/lib/venue";
 
 export async function createVenue(_previous: FormState, formData: FormData): Promise<FormState> {
-  const user = await actionUser("registry:write");
+  const user = await actionUser("registry.venue:create");
   const parsed = venueSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return formError(parsed.error, formData);
   const v = parsed.data;
@@ -33,7 +33,7 @@ export async function createVenue(_previous: FormState, formData: FormData): Pro
 }
 
 export async function updateVenue(id: string, _previous: FormState, formData: FormData): Promise<FormState> {
-  const user = await actionUser("registry:write");
+  const user = await actionUser("registry.venue:edit");
   const parsed = venueSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return formError(parsed.error, formData);
   const before = await db.query.venues.findFirst({ where: eq(venues.id, id) });

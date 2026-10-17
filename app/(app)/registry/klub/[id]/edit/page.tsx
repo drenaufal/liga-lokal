@@ -15,7 +15,7 @@ export default async function EditClubPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireCapability("registry:write");
+  await requireCapability("registry.club:edit");
   const { id } = await params;
   const club = await getClub(id);
   if (!club) notFound();

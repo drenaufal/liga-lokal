@@ -6,7 +6,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { players, playerStats } from "@/lib/db/schema";
-import { actionUser } from "@/lib/auth/session";
+import { actionUser, actionUserAny } from "@/lib/auth/session";
 import { changedSuffix, recordAudit } from "@/lib/audit";
 import { documentUrlField, imageUrlField } from "@/lib/media";
 import { releaseReplaced } from "@/lib/media-store";
@@ -19,7 +19,7 @@ import { DOCUMENT_KEYS } from "@/lib/player-documents";
 const VERIF = ["verified", "flagged", "pending", "rejected"] as const;
 
 export async function setVerification(formData: FormData) {
-  const user = await actionUser("registry:verify");
+  const user = await actionUser("registry.player:verify");
   const id = String(formData.get("id"));
   const status = String(formData.get("status")) as (typeof VERIF)[number];
   const notes = String(formData.get("notes") ?? "").trim() || null;
@@ -136,7 +136,7 @@ function isDuplicateNisn(e: unknown) {
 
 /** Live check while typing the NISN in the form. */
 export async function checkNisn(nisn: string, exceptId?: string) {
-  await actionUser("registry:write");
+  await actionUserAny(["registry.player:create", "registry.player:edit"]);
   if (!/^\d{10}$/.test(nisn)) return { ok: false as const, message: "NISN harus 10 digit angka" };
   const taken = await nisnTaken(nisn, exceptId);
   return taken ? { ok: false as const, message: taken } : { ok: true as const };
@@ -148,7 +148,7 @@ export async function createPlayer(
   _prev: PlayerFormState,
   formData: FormData,
 ): Promise<PlayerFormState> {
-  const user = await actionUser("registry:write");
+  const user = await actionUser("registry.player:create");
   const parsed = playerSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return formError(parsed.error, formData);
 
@@ -197,7 +197,7 @@ export async function updatePlayer(
   _prev: PlayerFormState,
   formData: FormData,
 ): Promise<PlayerFormState> {
-  const user = await actionUser("registry:write");
+  const user = await actionUser("registry.player:edit");
   const before = await db.query.players.findFirst({ where: eq(players.id, id) });
   if (!before) return { error: "Pemain tidak ditemukan." };
 

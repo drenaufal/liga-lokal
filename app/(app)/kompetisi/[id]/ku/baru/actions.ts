@@ -39,7 +39,7 @@ export async function createKu(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const user = await actionUser("competition:write");
+  const user = await actionUser("ku:create");
   const competition = await getCompetition(competitionId);
   if (!competition) return { error: "Turnamen tidak ditemukan." };
 

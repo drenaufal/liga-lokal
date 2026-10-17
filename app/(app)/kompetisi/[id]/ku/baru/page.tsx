@@ -16,7 +16,7 @@ export default async function NewKuPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireCapability("competition:write");
+  await requireCapability("ku:create");
   const { id } = await params;
   const competition = await getCompetition(id);
   if (!competition) notFound();

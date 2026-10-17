@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Mail, Phone, MapPin, ScrollText, Pencil, Cake } from "lucide-react";
 import { getCoachProfile } from "@/lib/queries/registry";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { getMediaMeta } from "@/lib/media-store";
 import { COACH_DOCUMENTS, coachDocumentCompleteness } from "@/lib/coach-documents";
@@ -38,18 +38,18 @@ export default async function CoachProfilePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await requireCapability("registry.coach:view");
   const { id } = await params;
   const d = await getCoachProfile(id);
   if (!d) notFound();
   const { coach: c, club, recentMatches, squadSize } = d;
-  const user = await getCurrentUser();
-  const canWrite = can(user?.role, "registry:write");
-  const canVerify = can(user?.role, "registry:verify");
-  const docMeta = canVerify
+  const canWrite = can(user, "registry.coach:edit");
+  const canDocs = can(user, "registry:documents");
+  const docMeta = canDocs
     ? await Promise.all(COACH_DOCUMENTS.map((doc) => getMediaMeta(c[doc.key])))
     : [];
   const completeness = coachDocumentCompleteness(c);
-  const canManageAccount = can(user?.role, "settings:write");
+  const canManageAccount = can(user, "registry.coach:account");
   const account = canManageAccount && c.userId ? await db.query.users.findFirst({ where: eq(users.id, c.userId), columns: { email: true, active: true } }) : null;
 
   return (
@@ -133,7 +133,7 @@ export default async function CoachProfilePage({
                   label={doc.label}
                   url={c[doc.key]}
                   meta={docMeta[i] ?? null}
-                  canView={canVerify}
+                  canView={canDocs}
                   editHref={canWrite ? `/registry/pelatih/${c.id}/edit` : null}
                 />
               ))}

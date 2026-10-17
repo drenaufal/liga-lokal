@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MapPin, Users2, Landmark, Plus } from "lucide-react";
 import { listClubs } from "@/lib/queries/registry";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { PageHeader } from "@/components/app/page-header";
 import { Card } from "@/components/ui/card";
@@ -20,10 +20,10 @@ export default async function ClubsPage({
 }: {
   searchParams: Promise<{ q?: string; type?: string; city?: string }>;
 }) {
+  const user = await requireCapability("registry.club:view");
   const params = await searchParams;
   const { rows, cities } = await listClubs(params);
-  const user = await getCurrentUser();
-  const canWrite = can(user?.role, "registry:write");
+  const canWrite = can(user, "registry.club:create");
 
   return (
     <div>

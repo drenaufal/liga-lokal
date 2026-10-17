@@ -51,7 +51,7 @@ export type SearchState = {
 } | undefined;
 
 export async function runSearch(_prev: SearchState, formData: FormData): Promise<SearchState> {
-  await actionUser("scout:use");
+  await actionUser("scout:search");
   const query = String(formData.get("query") ?? "").trim();
   if (query.length < 4) return { error: "Masukkan deskripsi talenta yang dicari (min 4 karakter)." };
 
@@ -61,7 +61,7 @@ export async function runSearch(_prev: SearchState, formData: FormData): Promise
 }
 
 export async function saveShortlist(formData: FormData) {
-  const user = await actionUser("scout:use");
+  const user = await actionUser("scout:shortlist");
   const name = String(formData.get("name") ?? "").trim() || "Shortlist tanpa nama";
   const query = String(formData.get("query") ?? "");
   const items = JSON.parse(String(formData.get("items") ?? "[]"));
@@ -86,7 +86,7 @@ export async function saveShortlist(formData: FormData) {
 }
 
 export async function generatePlayerReport(formData: FormData) {
-  const user = await actionUser("scout:use");
+  const user = await actionUser("scout:report");
   const playerId = String(formData.get("playerId"));
   const ctx = await getPlayerReportContext(playerId);
   if (!ctx) throw new Error("Pemain tidak ditemukan");
@@ -144,7 +144,7 @@ export async function generatePlayerReport(formData: FormData) {
 }
 
 export async function generateMatchReport(formData: FormData) {
-  const user = await actionUser("scout:use");
+  const user = await actionUser("scout:report");
   const matchId = String(formData.get("matchId"));
   const ctx = await getMatchReportContext(matchId);
   if (!ctx) throw new Error("Pertandingan tidak ditemukan");
@@ -176,7 +176,7 @@ export async function generateMatchReport(formData: FormData) {
 }
 
 export async function generateCompetitionReport(formData: FormData) {
-  const user = await actionUser("scout:use");
+  const user = await actionUser("scout:report");
   const tournamentId = String(formData.get("tournamentId"));
   const ctx = await getCompetitionReportContext(tournamentId);
   if (!ctx) throw new Error("Turnamen tidak ditemukan");

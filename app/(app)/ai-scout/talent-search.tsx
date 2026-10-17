@@ -20,7 +20,7 @@ const EXAMPLES = [
   "Kiper KU-12 dengan refleks bagus dan banyak nirbobol",
 ];
 
-export function TalentSearch() {
+export function TalentSearch({ canShortlist }: { canShortlist: boolean }) {
   const [state, action, pending] = useActionState<SearchState, FormData>(runSearch, undefined);
   const [query, setQuery] = React.useState("");
   const [savePending, startSave] = React.useTransition();
@@ -117,14 +117,16 @@ export function TalentSearch() {
                   <span className="text-xs font-medium text-ink-secondary">
                     {state.results.length} kandidat teratas
                   </span>
-                  <Button size="sm" variant="ghost" disabled={savePending} onClick={save}>
-                    {savePending ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <BookmarkPlus className="size-3.5" />
-                    )}
-                    Simpan shortlist
-                  </Button>
+                  {canShortlist && (
+                    <Button size="sm" variant="ghost" disabled={savePending} onClick={save}>
+                      {savePending ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <BookmarkPlus className="size-3.5" />
+                      )}
+                      Simpan shortlist
+                    </Button>
+                  )}
                 </div>
                 <ol className="space-y-1.5">
                   {state.results.map((r, i) => (

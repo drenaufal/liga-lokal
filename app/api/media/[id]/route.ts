@@ -17,8 +17,8 @@ export async function GET(
   const row = await getMedia(id);
   if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  // Identity documents (KIA) are only visible to people who verify registrations.
-  if (row.kind === "document" && !can(user.role, "registry:verify")) {
+  // Identity and licence documents are only visible to people granted "registry:documents".
+  if (row.kind === "document" && !can(user, "registry:documents")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

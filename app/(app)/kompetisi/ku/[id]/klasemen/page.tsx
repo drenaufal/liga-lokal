@@ -4,7 +4,7 @@ import { StandingsTable } from "@/components/app/standings-table";
 import { EmptyState } from "@/components/ui/misc";
 import { TIEBREAKER_LABEL } from "@/lib/standings";
 import { RecomputeStandingsButton } from "../fixture-actions";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 
 export const dynamic = "force-dynamic";
@@ -14,13 +14,13 @@ export default async function StandingsPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await requireCapability("competition:view");
   const { id } = await params;
   const [t, rows] = await Promise.all([
     getTournamentBase(id),
     getTournamentStandings(id),
   ]);
-  const user = await getCurrentUser();
-  const canManage = can(user?.role, "competition:write");
+  const canManage = can(user, "ku:fixtures");
 
   if (rows.length === 0) {
     return (

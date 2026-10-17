@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { getReport } from "@/lib/queries/scout";
+import { requireCapability } from "@/lib/auth/session";
 import { AiReportView } from "@/components/app/ai-report";
 import { formatDateTime } from "@/lib/utils";
 
@@ -23,6 +24,7 @@ export default async function ReportPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireCapability("scout:view");
   const { id } = await params;
   const report = await getReport(id);
   if (!report) notFound();

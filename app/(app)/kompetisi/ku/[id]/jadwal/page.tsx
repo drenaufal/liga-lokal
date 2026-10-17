@@ -6,7 +6,7 @@ import {
   getTournamentFixtures,
   getTournamentTeamShorts,
 } from "@/lib/queries/competition";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { Card, CardContent } from "@/components/ui/card";
 import { MatchRow, MatchStack } from "@/components/app/match-row";
@@ -23,11 +23,12 @@ export default async function FixturesPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await requireCapability("competition:view");
   const { id } = await params;
   const t = await getTournamentBase(id);
   if (!t) notFound();
-  const user = await getCurrentUser();
-  const canManage = can(user?.role, "competition:write") && t.status !== "archived";
+  const canManage = can(user, "ku:schedule") && t.status !== "archived";
+  const canDeleteMatch = can(user, "ku:match-delete") && t.status !== "archived";
   const code = t.ageCategory?.code ?? t.name;
 
   const [matches, shorts, options, kuOptions] = await Promise.all([
@@ -91,7 +92,7 @@ export default async function FixturesPage({
                   <div className="min-w-0 flex-1">
                     <MatchRow m={m} showMeta={false} />
                   </div>
-                  {canManage && m.status === "scheduled" && (
+                  {canDeleteMatch && m.status === "scheduled" && (
                     <DeleteMatchButton matchId={m.id} label={`${m.homeShort ?? "?"} vs ${m.awayShort ?? "?"}`} />
                   )}
                 </div>

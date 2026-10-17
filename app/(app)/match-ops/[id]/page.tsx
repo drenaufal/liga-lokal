@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, MapPin, Flag as FlagIcon, CalendarClock, UserCog } from "lucide-react";
 import { getMatchConsole, getOfficialOptions } from "@/lib/queries/match";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { DEFAULT_MATCH_MINUTES, clockCap } from "@/lib/match-clock";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -46,14 +46,18 @@ export default async function MatchConsolePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await requireCapability("match:view");
   const { id } = await params;
   const d = await getMatchConsole(id);
   if (!d) notFound();
   const { m } = d;
-  const user = await getCurrentUser();
-  const canOperate = can(user?.role, "match:operate");
-  const canConfirm = can(user?.role, "match:confirm");
-  const canAssign = can(user?.role, "match:assign");
+  const canOperate = can(user, "match:operate");
+  const canEvents = can(user, "match:events");
+  const canVoid = can(user, "match:void");
+  const canConfirm = can(user, "match:confirm");
+  const canAmend = can(user, "match:amend");
+  const canAssign = can(user, "match:assign");
+  const canSquad = can(user, "match:squad");
   const squadReady = [m.homeClubId, m.awayClubId].every((id) => id && d.lineups.some((l) => l.clubId === id));
   const assigned = !!m.refereeId && d.operators.length > 0 && squadReady;
   const officialOptions = canAssign && m.status === "scheduled" ? await getOfficialOptions() : null;
@@ -97,9 +101,9 @@ export default async function MatchConsolePage({
   // Per-player counters for the list (assists come from the paired "assist" events).
   const tallies = buildTallies(withAutomaticSaves(evs, d.lineups));
 
-  const canRecord = canOperate && m.status !== "scheduled";
+  const canRecord = canEvents && m.status !== "scheduled";
   // one-tap buttons only while the match is in play; afterwards corrections go through the full form
-  const canQuick = canOperate && (m.status === "live" || m.status === "halftime");
+  const canQuick = canEvents && (m.status === "live" || m.status === "halftime");
 
   const stats = buildMatchStatistics(evs, m.homeClubId, m.awayClubId);
 
@@ -171,7 +175,7 @@ export default async function MatchConsolePage({
             scheduled={m.status === "scheduled"}
           />
 
-          {can(user?.role, "competition:write") && m.status === "scheduled" && m.homeClubId && m.awayClubId && <SquadSelection
+          {canSquad && m.status === "scheduled" && m.homeClubId && m.awayClubId && <SquadSelection
             key={`${d.lineups.length}:${d.lineups.filter((l) => l.role === "starter").map((l) => l.playerId).sort().join(":")}`}
             matchId={id}
             teams={[{ id: m.homeClubId, name: d.homeName ?? "Tuan rumah" }, { id: m.awayClubId, name: d.awayName ?? "Tamu" }]}
@@ -202,7 +206,7 @@ export default async function MatchConsolePage({
               canRecord={canRecord}
               canQuick={canQuick}
               hint={
-                canOperate
+                canEvents
                   ? "Pencatatan kejadian aktif setelah pertandingan dimulai."
                   : "Susunan pemain kedua tim."
               }
@@ -210,13 +214,14 @@ export default async function MatchConsolePage({
           )}
 
           {/* Result validation */}
-          {(m.status === "completed" || canConfirm) && m.status === "completed" && (
+          {m.status === "completed" && (
             <ResultControl
               matchId={id}
               resultStatus={m.resultStatus}
               homeScore={m.homeScore}
               awayScore={m.awayScore}
               canConfirm={canConfirm}
+              canAmend={canAmend}
               amendmentReason={m.amendmentReason}
               isCup={isCupStage(m.stage)}
               homeShort={d.homeShort}
@@ -239,7 +244,7 @@ export default async function MatchConsolePage({
                 events={d.events}
                 matchId={id}
                 homeClubId={m.homeClubId}
-                canEdit={canOperate}
+                canEdit={canVoid}
                 playerLookup={playerLookup}
               />
             </CardContent>

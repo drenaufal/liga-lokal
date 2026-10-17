@@ -15,7 +15,7 @@ export default async function EditRefereePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireCapability("registry:write");
+  await requireCapability("registry.referee:edit");
   const { id } = await params;
   const referee = await getReferee(id);
   if (!referee) notFound();

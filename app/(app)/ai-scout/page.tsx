@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Sparkles, FileText, Users, Trophy, Radio } from "lucide-react";
-import { requireCapability, getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
+import { can } from "@/lib/auth/rbac";
 import { listReports, listShortlists, getReportSubjectOptions } from "@/lib/queries/scout";
 import { aiLiveMode } from "@/lib/ai/provider";
 import { PageHeader } from "@/components/app/page-header";
@@ -24,14 +25,15 @@ const KIND_META: Record<string, { label: string; icon: React.ComponentType<{ cla
 };
 
 export default async function AiScoutPage() {
-  await requireCapability("scout:use");
-  const [reports, shortlists, options, user] = await Promise.all([
+  const user = await requireCapability("scout:view");
+  const canSearch = can(user, "scout:search");
+  const canShortlist = can(user, "scout:shortlist");
+  const canReport = can(user, "scout:report");
+  const [reports, shortlists, options] = await Promise.all([
     listReports(),
     listShortlists(),
-    getReportSubjectOptions(),
-    getCurrentUser(),
+    canReport ? getReportSubjectOptions() : Promise.resolve(null),
   ]);
-  void user;
 
   return (
     <div>
@@ -56,7 +58,7 @@ export default async function AiScoutPage() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div className="space-y-4">
-          <TalentSearch />
+          {canSearch && <TalentSearch canShortlist={canShortlist} />}
 
           <Card>
             <CardHeader>
@@ -102,7 +104,7 @@ export default async function AiScoutPage() {
         </div>
 
         <div className="space-y-4">
-          <ReportGenerators options={options} />
+          {options && <ReportGenerators options={options} />}
 
           <Card>
             <CardHeader>

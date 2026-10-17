@@ -15,7 +15,7 @@ export default async function EditCompetitionPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireCapability("competition:write");
+  await requireCapability("competition:edit");
   const { id } = await params;
   const competition = await getCompetition(id);
   if (!competition) notFound();

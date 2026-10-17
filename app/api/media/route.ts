@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { actionUser } from "@/lib/auth/session";
+import { actionUserAny } from "@/lib/auth/session";
+import { FILE_UPLOAD_CAPS } from "@/lib/auth/rbac";
 import { saveMedia } from "@/lib/media-store";
 import {
   DOCUMENT_TYPES,
@@ -32,7 +33,8 @@ function matchesSignature(bytes: Uint8Array, mime: string) {
 export async function POST(req: Request) {
   let user;
   try {
-    user = await actionUser("registry:write");
+    // Uploads happen inside the registry forms, so anyone who may create or edit a record may attach files.
+    user = await actionUserAny(FILE_UPLOAD_CAPS);
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Akses ditolak" },

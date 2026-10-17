@@ -9,7 +9,7 @@ import { PlayerForm } from "../player-form";
 export const metadata: Metadata = { title: "Registrasi Pemain Baru" };
 
 export default async function NewPlayerPage() {
-  await requireCapability("registry:write");
+  await requireCapability("registry.player:create");
   const { clubs, ageCategories } = await getRegistryFilters();
 
   return (

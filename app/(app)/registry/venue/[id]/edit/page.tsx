@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { VenueForm } from "../../venue-form";
 export const dynamic = "force-dynamic";
 export default async function EditVenue({ params }: { params: Promise<{ id: string }> }) {
-  await requireCapability("registry:write");
+  await requireCapability("registry.venue:edit");
   const { id } = await params;
   const venue = await db.query.venues.findFirst({ where: eq(venues.id, id) });
   if (!venue) notFound();

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus, Radio, CalendarDays, Users2, Layers, Trophy } from "lucide-react";
 import { listCompetitions } from "@/lib/queries/competition";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -15,9 +15,9 @@ export const metadata: Metadata = { title: "Kompetisi" };
 export const dynamic = "force-dynamic";
 
 export default async function CompetitionsPage() {
+  const user = await requireCapability("competition:view");
   const rows = await listCompetitions();
-  const user = await getCurrentUser();
-  const canWrite = can(user?.role, "competition:write");
+  const canWrite = can(user, "competition:create");
 
   return (
     <div>

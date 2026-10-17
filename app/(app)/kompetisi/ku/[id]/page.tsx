@@ -8,7 +8,7 @@ import { MatchRow, MatchStack } from "@/components/app/match-row";
 import { EmptyState } from "@/components/ui/misc";
 import { GenerateFixturesButton, RecomputeStandingsButton } from "./fixture-actions";
 import { crestTint } from "@/lib/crest";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 
 export const dynamic = "force-dynamic";
@@ -18,12 +18,12 @@ export default async function TournamentOverviewPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await requireCapability("competition:view");
   const { id } = await params;
   const d = await getTournamentOverview(id);
   if (!d) notFound();
   const { tournament: t, teams, matchAgg, topScorers, recentResults, upcoming } = d;
-  const user = await getCurrentUser();
-  const canManage = can(user?.role, "competition:write");
+  const canManage = can(user, "ku:fixtures");
   const hasFixtures = Number(matchAgg.total) > 0;
 
   return (

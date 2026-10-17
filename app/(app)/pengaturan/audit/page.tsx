@@ -16,9 +16,9 @@ export default async function AuditPage({
 }: {
   searchParams: Promise<AuditParams>;
 }) {
-  await requireCapability("audit:read");
+  const user = await requireCapability("audit:view");
   const params = await searchParams;
-  const { rows, total, page, size, actions } = await getAuditLog(params);
+  const { rows, total, page, size, actions } = await getAuditLog(params, user.role);
 
   return (
     <div>

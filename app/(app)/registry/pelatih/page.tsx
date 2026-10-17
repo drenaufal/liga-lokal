@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Check, Minus, Plus } from "lucide-react";
 import { getRegistryFilters, listCoaches } from "@/lib/queries/registry";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { PageHeader } from "@/components/app/page-header";
 import { Card } from "@/components/ui/card";
@@ -24,13 +24,13 @@ export default async function CoachesPage({
 }: {
   searchParams: Promise<{ q?: string; level?: string; club?: string; docs?: string }>;
 }) {
+  const user = await requireCapability("registry.coach:view");
   const params = await searchParams;
-  const [rows, { clubs }, user] = await Promise.all([
+  const [rows, { clubs }] = await Promise.all([
     listCoaches(params),
     getRegistryFilters(),
-    getCurrentUser(),
   ]);
-  const canWrite = can(user?.role, "registry:write");
+  const canWrite = can(user, "registry.coach:create");
 
   const complete = rows.filter((r) => Number(r.hasLicenseDoc) && Number(r.hasKtp)).length;
   const summary: [string, number][] = [

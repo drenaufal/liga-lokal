@@ -8,7 +8,7 @@ import { RefereeForm } from "../referee-form";
 export const metadata: Metadata = { title: "Registrasi Wasit Baru" };
 
 export default async function NewRefereePage() {
-  await requireCapability("registry:write");
+  await requireCapability("registry.referee:create");
 
   return (
     <div className="mx-auto max-w-2xl">

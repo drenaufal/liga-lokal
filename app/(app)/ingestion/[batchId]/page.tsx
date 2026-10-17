@@ -10,7 +10,7 @@ import {
   CircleMinus,
 } from "lucide-react";
 import { getBatch } from "@/lib/queries/ingestion";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -47,12 +47,13 @@ export default async function BatchPage({
 }: {
   params: Promise<{ batchId: string }>;
 }) {
+  const user = await requireCapability("ingestion:view");
   const { batchId } = await params;
   const data = await getBatch(batchId);
   if (!data) notFound();
   const { batch, rows } = data;
-  const user = await getCurrentUser();
-  const canWrite = can(user?.role, "ingestion:write");
+  const canReview = can(user, "ingestion:review");
+  const canCommit = can(user, "ingestion:commit");
 
   const stages = (batch.stages ?? []) as ImportStage[];
   const reviewRows = rows.filter((r) => r.status === "needs_review");
@@ -112,7 +113,7 @@ export default async function BatchPage({
                 </li>
               ))}
             </ol>
-            {canWrite && (
+            {(canReview || canCommit) && (
               <div className="mt-3 border-t border-line-soft pt-3">
                 <PipelineActions
                   batchId={batchId}
@@ -120,6 +121,8 @@ export default async function BatchPage({
                   notRun={notRun}
                   reviewCount={reviewRows.length}
                   committable={committable}
+                  canReview={canReview}
+                  canCommit={canCommit}
                 />
               </div>
             )}
@@ -138,7 +141,7 @@ export default async function BatchPage({
               </CardHeader>
               <CardContent className="space-y-2">
                 {reviewRows.map((r) => (
-                  <ReviewRow key={r.id} row={r} batchId={batchId} canWrite={canWrite} />
+                  <ReviewRow key={r.id} row={r} batchId={batchId} canWrite={canReview} />
                 ))}
               </CardContent>
             </Card>

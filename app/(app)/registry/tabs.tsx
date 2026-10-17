@@ -15,11 +15,11 @@ const TABS = [
   { href: "/registry/kategori-usia", label: "Kategori Usia", icon: CalendarRange },
 ];
 
-export function RegistryTabs() {
+export function RegistryTabs({ allowed }: { allowed: string[] }) {
   const pathname = usePathname();
   return (
     <div className="mb-5 flex items-center gap-1 overflow-x-auto border-b border-line pb-px">
-      {TABS.map((t) => {
+      {TABS.filter((t) => allowed.includes(t.href)).map((t) => {
         const active = pathname.startsWith(t.href);
         return (
           <Link

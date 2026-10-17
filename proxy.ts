@@ -14,6 +14,7 @@ const PROTECTED_PREFIXES = [
   "/player-intelligence",
   "/ai-scout",
   "/pengaturan",
+  "/tanpa-akses",
 ];
 
 export default auth(async (req) => {

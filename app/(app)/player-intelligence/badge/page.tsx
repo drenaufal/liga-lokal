@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getBadgeGallery, getPlayerFilterOptions, getManualBadgeOptions } from "@/lib/queries/intelligence";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { ManualMvp } from "./manual-mvp";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,10 +12,10 @@ import { pagingFields, positionField, paramValue, type FilterField, type Intelli
 
 export const dynamic = "force-dynamic";
 export default async function BadgeGalleryPage({ searchParams }: { searchParams: Promise<IntelligenceParams> }) {
+  const user = await requireCapability("intelligence.badge:view");
   const sp = await searchParams;
   const [gallery, options] = await Promise.all([getBadgeGallery(sp), getPlayerFilterOptions()]);
-  const user = await getCurrentUser();
-  const manualOptions = can(user?.role, "badge:write") ? await getManualBadgeOptions({ ...sp, ku: gallery.selectedKu }) : null;
+  const manualOptions = can(user, "intelligence.badge:select") ?await getManualBadgeOptions({ ...sp, ku: gallery.selectedKu }) : null;
   const competition = gallery.competitions.find((c) => c.id === paramValue(sp, "turnamen"));
   const ku = gallery.kus.find((k) => k.id === gallery.selectedKu);
   const scope = [competition?.name, ku?.code].filter(Boolean).join(" · ");

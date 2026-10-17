@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Plus, Radio, CalendarDays, Users2, Layers, Trophy, MapPin } from "lucide-react";
 import { getCompetitionOverview } from "@/lib/queries/competition";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { StatCard } from "@/components/app/page-header";
@@ -21,12 +21,12 @@ export default async function CompetitionOverviewPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await requireCapability("competition:view");
   const { id } = await params;
   const d = await getCompetitionOverview(id);
   if (!d) notFound();
   const { kus, totals, recentResults, upcoming } = d;
-  const user = await getCurrentUser();
-  const canManage = can(user?.role, "competition:write");
+  const canManage = can(user, "ku:create");
 
   return (
     <div className="space-y-4">

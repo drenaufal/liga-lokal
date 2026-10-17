@@ -12,12 +12,16 @@ export function PipelineActions({
   notRun,
   reviewCount,
   committable,
+  canReview,
+  canCommit,
 }: {
   batchId: string;
   status: string;
   notRun: boolean;
   reviewCount: number;
   committable: number;
+  canReview: boolean;
+  canCommit: boolean;
 }) {
   const [pending, start] = React.useTransition();
 
@@ -37,7 +41,7 @@ export function PipelineActions({
 
   return (
     <div className="space-y-2">
-      {notRun && (
+      {canReview && notRun && (
         <Button
           size="sm"
           className="w-full"
@@ -49,7 +53,7 @@ export function PipelineActions({
         </Button>
       )}
 
-      {reviewCount > 0 && (
+      {canReview && reviewCount > 0 && (
         <div className="flex gap-2">
           <Button
             size="sm"
@@ -72,7 +76,7 @@ export function PipelineActions({
         </div>
       )}
 
-      {(status === "staged" || (reviewCount === 0 && !notRun && status !== "completed")) && (
+      {canCommit && (status === "staged" || (reviewCount === 0 && !notRun && status !== "completed")) && (
         <Button
           size="sm"
           className="w-full"

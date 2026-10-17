@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ChevronRight, Radio } from "lucide-react";
 import { getPlayerTournamentDetail, type PlayerMatchRow } from "@/lib/queries/registry";
+import { requireCapability } from "@/lib/auth/session";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +44,7 @@ export default async function PlayerCompetitionPage({
 }: {
   params: Promise<{ id: string; tid: string }>;
 }) {
+  await requireCapability("registry.player:view");
   const { id, tid } = await params;
   const d = await getPlayerTournamentDetail(id, tid);
   if (!d) notFound();

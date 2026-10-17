@@ -28,7 +28,7 @@ export async function saveFormula(input: {
   description?: string;
   weights: Record<string, number>;
 }) {
-  const user = await actionUser("formula:write");
+  const user = await actionUser("intelligence.formula:edit");
   const parsed = schema.safeParse(input);
   if (!parsed.success) throw new Error("Data formula tidak valid");
   const v = parsed.data;
@@ -63,7 +63,7 @@ export async function saveFormula(input: {
 }
 
 export async function activateFormula(formData: FormData) {
-  const user = await actionUser("formula:write");
+  const user = await actionUser("intelligence.formula:activate");
   const id = String(formData.get("id"));
   const f = await db.query.scoringFormulas.findFirst({
     where: eq(scoringFormulas.id, id),

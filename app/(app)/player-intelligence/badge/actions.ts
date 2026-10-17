@@ -5,7 +5,7 @@ import { awardTournamentMvp } from "@/lib/manual-badges";
 import { recordAudit } from "@/lib/audit";
 
 export async function selectBestPlayer(input: { kuId: string; playerId: string }) {
-  const actor = await actionUser("badge:write");
+  const actor = await actionUser("intelligence.badge:select");
   const result = await awardTournamentMvp(input);
   await recordAudit({ actorId: actor.id, actorName: actor.name, actorRole: actor.role, action: "badge.mvp", entityType: "tournament", entityId: input.kuId,
     summary: `Pemain terbaik dipilih manual: ${result.playerName}`, before: { recipients: result.before }, after: { playerId: input.playerId } });

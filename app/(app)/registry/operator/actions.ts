@@ -20,7 +20,7 @@ function refreshOperators() {
   revalidatePath("/match-ops", "layout");
 }
 export async function createOperator(_previous: FormState, formData: FormData): Promise<FormState> {
-  const actor = await actionUser("settings:write");
+  const actor = await actionUser("registry.operator:create");
   const parsed = newOperatorSchema.safeParse({ ...Object.fromEntries(formData), active: formData.get("active") === "on" });
   if (!parsed.success) return formError(parsed.error, publicFields(formData));
   try {
@@ -34,7 +34,7 @@ export async function createOperator(_previous: FormState, formData: FormData): 
   return undefined;
 }
 export async function updateOperator(id: string, _previous: FormState, formData: FormData): Promise<FormState> {
-  const actor = await actionUser("settings:write");
+  const actor = await actionUser("registry.operator:edit");
   const parsed = editOperatorSchema.safeParse({ ...Object.fromEntries(formData), active: formData.get("active") === "on" });
   if (!parsed.success) return formError(parsed.error, publicFields(formData));
   try {

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getKuFormOptions, getTournamentFixtures, getTournamentOverview } from "@/lib/queries/competition";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ClubCrest } from "@/components/app/club-crest";
@@ -15,12 +15,12 @@ export default async function ParticipantsPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await requireCapability("competition:view");
   const { id } = await params;
   const d = await getTournamentOverview(id);
   if (!d) notFound();
   const { teams, tournament: t } = d;
-  const user = await getCurrentUser();
-  const canManage = can(user?.role, "competition:write") && t.status !== "completed" && t.status !== "archived";
+  const canManage = can(user, "ku:teams") && t.status !== "completed" && t.status !== "archived";
 
   // Only managers need to know who could still be added and who already plays.
   const [formOptions, fixtures] = canManage

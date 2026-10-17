@@ -50,6 +50,13 @@
       "when": 1791950941644,
       "tag": "0006_coach_dsp",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1792164866442,
+      "tag": "0007_role_permissions_super_admin",
+      "breakpoints": true
     }
   ]
 }

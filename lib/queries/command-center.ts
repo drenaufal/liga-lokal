@@ -15,8 +15,10 @@ import {
   venues,
 } from "@/lib/db/schema";
 import { kuNameSql } from "@/lib/queries/ku";
+import { maskHiddenActor } from "@/lib/queries/settings";
+import type { Role } from "@/lib/auth/rbac";
 
-export async function getCommandCenterData() {
+export async function getCommandCenterData(viewer?: Role | null) {
   const weekAgo = new Date(Date.now() - 7 * 86400000);
   const hc = alias(clubs, "hc");
   const ac = alias(clubs, "ac");
@@ -175,7 +177,7 @@ export async function getCommandCenterData() {
     })),
     tournamentMix,
     liveMatches,
-    activity,
+    activity: activity.map((a) => maskHiddenActor(a, viewer)),
     leaderboards: { topScorers, topAssists, topSaves, topRated },
   };
 }

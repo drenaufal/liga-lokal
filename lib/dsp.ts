@@ -30,12 +30,16 @@ export function checkDspSelections(selections: DspSelection[], eligibleIds: stri
  * A coach submits for their own club under their own name; an admin may submit
  * for either club and chooses which registered coach is responsible.
  */
-export async function submitDsp(userId: string, input: z.infer<typeof dspSchema>) {
+export async function submitDsp(userId: string, input: z.infer<typeof dspSchema>, opts?: { anyClub?: boolean }) {
   const v = dspSchema.parse(input);
   return db.transaction(async (tx) => {
     const [actor] = await tx.select().from(users).where(eq(users.id, userId)).for("update");
-    const isAdmin = actor?.role === "admin";
-    if (!actor?.active || (actor.role !== "coach" && !isAdmin) || (!isAdmin && !actor.clubId))
+    const staff = actor?.role === "admin" || actor?.role === "super_admin";
+    // Callers that already checked the access matrix pass `anyClub`; without it the original rule applies
+    // (coaches fill their own club, admins fill either).
+    const isAdmin = opts?.anyClub ?? staff;
+    const permitted = opts?.anyClub !== undefined || actor?.role === "coach" || staff;
+    if (!actor?.active || !permitted || (!isAdmin && !actor.clubId))
       throw new Error("DSP hanya dapat diisi oleh pelatih klub terkait atau admin.");
     const clubId = isAdmin ? v.clubId : actor.clubId!;
     if (!clubId) throw new Error("Pilih SSB yang DSP-nya akan diisi.");

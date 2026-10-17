@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, MapPin, Mail, Phone, User, Pencil, UserPlus, Landmark } from "lucide-react";
 import { getClubProfile } from "@/lib/queries/registry";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { Button } from "@/components/ui/button";
 import { ClubCrest } from "@/components/app/club-crest";
@@ -32,12 +32,13 @@ export default async function ClubProfilePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await requireCapability("registry.club:view");
   const { id } = await params;
   const d = await getClubProfile(id);
   if (!d) notFound();
   const { club, squad, comps, recentMatches, staff } = d;
-  const user = await getCurrentUser();
-  const canWrite = can(user?.role, "registry:write");
+  const canWrite = can(user, "registry.club:edit");
+  const canAddCoach = can(user, "registry.coach:create");
 
   const byCategory = squad.reduce<Record<string, typeof squad>>((acc, p) => {
     const k = p.ageCode ?? "Lainnya";
@@ -169,7 +170,7 @@ export default async function ClubProfilePage({
           <Card>
             <CardHeader>
               <CardTitle>Staf Pelatih</CardTitle>
-              {canWrite && (
+              {canAddCoach && (
                 <Link
                   href={`/registry/pelatih/baru?club=${club.id}`}
                   className="flex items-center gap-1 text-[11px] text-ink-muted hover:text-brand"

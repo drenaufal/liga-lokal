@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Radio, Calendar, CheckCircle2, CircleDashed } from "lucide-react";
 import { listMatches, type MatchListParams } from "@/lib/queries/match";
+import { requireCapability } from "@/lib/auth/session";
 import { FilterSelect } from "@/components/app/list-controls";
 import { AutoRefresh } from "@/components/app/auto-refresh";
 import { MatchRow, MatchStack } from "@/components/app/match-row";
@@ -22,6 +23,7 @@ const filters = [
 ];
 
 export default async function MatchOpsPage({ searchParams }: { searchParams: Promise<MatchListParams> }) {
+  await requireCapability("match:view");
   const params = await searchParams;
   const { rows, tournamentOpts } = await listMatches(params);
   const sections = [

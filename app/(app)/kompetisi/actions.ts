@@ -54,7 +54,7 @@ async function nameTaken(name: string, season: string, exceptId?: string) {
 }
 
 export async function createCompetition(_prev: FormState, formData: FormData): Promise<FormState> {
-  const user = await actionUser("competition:write");
+  const user = await actionUser("competition:create");
   const parsed = competitionSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return formError(parsed.error, formData);
 
@@ -88,7 +88,7 @@ export async function updateCompetition(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const user = await actionUser("competition:write");
+  const user = await actionUser("competition:edit");
   const before = await getCompetition(id);
   if (!before) return { error: "Turnamen tidak ditemukan." };
 

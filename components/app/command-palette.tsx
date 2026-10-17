@@ -4,21 +4,21 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { Search, CornerDownLeft, ArrowRight } from "lucide-react";
-import { NAV, SETTINGS_NAV } from "@/lib/nav";
-import { can, type Role } from "@/lib/auth/rbac";
+import { navFor } from "@/lib/nav";
+import { can, type Capability, type Role } from "@/lib/auth/rbac";
 import { Icon } from "./icon";
 import { cn } from "@/lib/utils";
 
 type Result = { type: string; label: string; sub?: string; href: string; icon?: string };
 
-const QUICK_ACTIONS: { label: string; href: string; icon: string; cap?: string }[] = [
-  { label: "Registrasi pemain baru", href: "/registry/pemain/baru", icon: "Users", cap: "registry:write" },
-  { label: "Buat turnamen baru", href: "/kompetisi/baru", icon: "Trophy", cap: "competition:write" },
-  { label: "Impor data massal (CSV)", href: "/ingestion", icon: "FileInput", cap: "ingestion:write" },
-  { label: "Buka AI Scout", href: "/ai-scout", icon: "Sparkles", cap: "scout:use" },
+const QUICK_ACTIONS: { label: string; href: string; icon: string; cap: Capability }[] = [
+  { label: "Registrasi pemain baru", href: "/registry/pemain/baru", icon: "Users", cap: "registry.player:create" },
+  { label: "Buat turnamen baru", href: "/kompetisi/baru", icon: "Trophy", cap: "competition:create" },
+  { label: "Impor data massal (CSV)", href: "/ingestion", icon: "FileInput", cap: "ingestion:upload" },
+  { label: "Buka AI Scout", href: "/ai-scout", icon: "Sparkles", cap: "scout:view" },
 ];
 
-export function CommandPalette({ role }: { role: Role }) {
+export function CommandPalette({ role, grants }: { role: Role; grants: readonly Capability[] }) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -71,8 +71,7 @@ export function CommandPalette({ role }: { role: Role }) {
     };
   }, [query]);
 
-  const navItems: Result[] = [...NAV, SETTINGS_NAV]
-    .filter((n) => !n.capability || can(role, n.capability))
+  const navItems: Result[] = navFor({ role, grants })
     .flatMap((n) => [
       { type: "Modul", label: n.label, sub: n.hint, href: n.href, icon: n.icon },
       ...(n.children ?? []).map((c) => ({
@@ -84,7 +83,7 @@ export function CommandPalette({ role }: { role: Role }) {
     ]);
 
   const actions: Result[] = QUICK_ACTIONS.filter(
-    (a) => !a.cap || can(role, a.cap as Parameters<typeof can>[1]),
+    (a) => can({ role, grants }, a.cap),
   ).map((a) => ({ type: "Tindakan", label: a.label, href: a.href, icon: a.icon }));
 
   const q = query.trim().toLowerCase();

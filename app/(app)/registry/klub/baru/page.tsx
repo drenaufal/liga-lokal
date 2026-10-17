@@ -8,7 +8,7 @@ import { ClubForm } from "../club-form";
 export const metadata: Metadata = { title: "Registrasi SSB Baru" };
 
 export default async function NewClubPage() {
-  await requireCapability("registry:write");
+  await requireCapability("registry.club:create");
 
   return (
     <div className="mx-auto max-w-2xl">

@@ -77,7 +77,7 @@ function revalidateCoach(id: string, clubIds: (string | null)[]) {
 }
 
 export async function createCoach(_prev: FormState, formData: FormData): Promise<FormState> {
-  const user = await actionUser("registry:write");
+  const user = await actionUser("registry.coach:create");
   const parsed = coachSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return formError(parsed.error, formData);
 
@@ -106,7 +106,7 @@ export async function updateCoach(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const user = await actionUser("registry:write");
+  const user = await actionUser("registry.coach:edit");
   const before = await db.query.coaches.findFirst({ where: eq(coaches.id, id) });
   if (!before) return { error: "Pelatih tidak ditemukan." };
 
@@ -148,7 +148,7 @@ export async function updateCoach(
 }
 
 export async function saveCoachLogin(coachId: string, input: z.infer<typeof coachAccountSchema>) {
-  const actor = await actionUser("settings:write");
+  const actor = await actionUser("registry.coach:account");
   const account = await saveCoachAccount(coachId, input);
   await recordAudit({ actorId: actor.id, actorName: actor.name, actorRole: actor.role, action: "coach.account", entityType: "user", entityId: account.id,
     summary: `Akun login pelatih disimpan: ${account.name}`, after: account });

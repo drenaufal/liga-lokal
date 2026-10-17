@@ -72,7 +72,7 @@ async function loadKu(id: string) {
 }
 
 export async function setTournamentStatus(formData: FormData) {
-  const user = await actionUser("competition:write");
+  const user = await actionUser("ku:status");
   const id = String(formData.get("id"));
   const target = String(formData.get("status")) as Status;
   if (!LIFECYCLE.includes(target)) throw new Error("Status tidak valid");
@@ -122,7 +122,7 @@ type Planned = {
 };
 
 export async function generateFixtures(formData: FormData) {
-  const user = await actionUser("competition:write");
+  const user = await actionUser("ku:fixtures");
   const id = String(formData.get("id"));
 
   const t = await loadKu(id);
@@ -278,7 +278,7 @@ async function scheduleContext(kuId: string, replaceScheduled: boolean) {
 
 /** Reads and checks an uploaded schedule without saving anything. */
 export async function previewSchedule(tournamentId: string, csv: string, replaceScheduled = false) {
-  await actionUser("competition:write");
+  await actionUser("ku:schedule");
   const { t, ctx, scheduledCount } = await scheduleContext(tournamentId, replaceScheduled);
   const parsed = parseSchedule(csv, ctx);
   return {
@@ -292,7 +292,7 @@ export async function previewSchedule(tournamentId: string, csv: string, replace
 
 /** Saves every valid row of an uploaded schedule as a scheduled match. */
 export async function importSchedule(tournamentId: string, csv: string, replaceScheduled = false) {
-  const user = await actionUser("competition:write");
+  const user = await actionUser("ku:schedule");
   const { t, ctx, scheduledCount } = await scheduleContext(tournamentId, replaceScheduled);
   if (t.status === "archived") throw new Error("KU sudah diarsipkan");
 
@@ -349,7 +349,7 @@ export async function importSchedule(tournamentId: string, csv: string, replaceS
 /* ── Jadwal manual ──────────────────────────────────────────────────────── */
 
 export async function matchPlayerOptions(kuId: string, clubIds: string[]) {
-  await actionUser("competition:write");
+  await actionUser("ku:schedule");
   const ids = z.array(z.string().uuid()).max(2).parse(clubIds);
   return getEligibleMatchPlayers(z.string().uuid().parse(kuId), ids);
 }
@@ -374,7 +374,7 @@ export type CreateMatchResult =
 
 /** Adds one match to a KU's schedule by hand. */
 export async function createMatch(kuId: string, input: unknown): Promise<CreateMatchResult> {
-  const user = await actionUser("competition:write");
+  const user = await actionUser("ku:schedule");
   const parsed = matchInput.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Isian tidak lengkap.", fieldErrors: {} };
 
@@ -449,7 +449,7 @@ export async function createMatch(kuId: string, input: unknown): Promise<CreateM
 
 /** Removes a match that has not started — for a typo, a changed draw or a cancelled fixture. */
 export async function deleteMatch(matchId: string) {
-  const user = await actionUser("competition:write");
+  const user = await actionUser("ku:match-delete");
   const m = await db.query.matches.findFirst({ where: eq(matches.id, matchId) });
   if (!m) throw new Error("Pertandingan tidak ditemukan");
   if (m.status !== "scheduled") {
@@ -484,7 +484,7 @@ function assertOpen(status: string) {
 }
 
 export async function addTeam(kuId: string, clubId: string) {
-  const user = await actionUser("competition:write");
+  const user = await actionUser("ku:teams");
   const t = await loadKu(kuId);
   assertOpen(t.status);
 
@@ -519,7 +519,7 @@ export async function addTeam(kuId: string, clubId: string) {
 }
 
 export async function removeTeam(kuId: string, clubId: string) {
-  const user = await actionUser("competition:write");
+  const user = await actionUser("ku:teams");
   const t = await loadKu(kuId);
   assertOpen(t.status);
 
@@ -559,7 +559,7 @@ export async function removeTeam(kuId: string, clubId: string) {
  * to be typed, and is refused while a match is in play.
  */
 export async function deleteTournament(formData: FormData) {
-  const user = await actionUser("competition:delete");
+  const user = await actionUser("ku:delete");
   const id = String(formData.get("id"));
   const typed = String(formData.get("confirm") ?? "").trim();
 
@@ -592,7 +592,7 @@ export async function deleteTournament(formData: FormData) {
 /* ── Klasemen ───────────────────────────────────────────────────────────── */
 
 export async function recomputeStandings(formData: FormData) {
-  const user = await actionUser("competition:write");
+  const user = await actionUser("ku:fixtures");
   const id = String(formData.get("id"));
   const t = await loadKu(id);
 

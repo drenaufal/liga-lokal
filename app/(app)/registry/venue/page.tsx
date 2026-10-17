@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { MapPin, Users, LayoutGrid, Lightbulb, Plus, CalendarDays } from "lucide-react";
 import { listVenues } from "@/lib/queries/registry";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { PageHeader, StatCard } from "@/components/app/page-header";
 import { Card } from "@/components/ui/card";
@@ -16,10 +16,12 @@ export const metadata: Metadata = { title: "Registrasi Venue" };
 export const dynamic = "force-dynamic";
 
 export default async function VenuesPage({ searchParams }: { searchParams: Promise<{ q?: string; surface?: string }> }) {
+  const user = await requireCapability("registry.venue:view");
   const params = await searchParams;
-  const [rows, user] = await Promise.all([listVenues(params), getCurrentUser()]);
-  const canWrite = can(user?.role, "registry:write");
-  const createButton = canWrite ? <Button href="/registry/venue/baru"><Plus />Tambah Venue</Button> : undefined;
+  const rows = await listVenues(params);
+  const canCreate = can(user, "registry.venue:create");
+  const canWrite = can(user, "registry.venue:edit");
+  const createButton = canCreate ?<Button href="/registry/venue/baru"><Plus />Tambah Venue</Button> : undefined;
   const capacityKnown = rows.some((v) => v.capacity != null);
 
   return (

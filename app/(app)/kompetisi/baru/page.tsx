@@ -8,7 +8,7 @@ import { CompetitionForm } from "../competition-form";
 export const metadata: Metadata = { title: "Turnamen Baru" };
 
 export default async function NewCompetitionPage() {
-  await requireCapability("competition:write");
+  await requireCapability("competition:create");
 
   return (
     <div className="mx-auto max-w-2xl">

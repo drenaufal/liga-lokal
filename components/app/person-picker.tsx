@@ -64,7 +64,7 @@ export function PersonPicker({
 
   return (
     <fieldset disabled={disabled} className="min-w-0 space-y-2.5">
-      <legend className="mb-2 flex w-full items-center gap-1.5 text-xs font-semibold text-ink-secondary">
+      <legend className="mb-2 flex h-6 w-full items-center gap-1.5 text-xs font-semibold text-ink-secondary">
         {icon}
         {legend}
         {mode === "multi" && (
@@ -108,7 +108,13 @@ export function PersonPicker({
           )}
         </div>
       ) : (
-        <div className="flex min-h-9 flex-wrap items-center gap-1.5" aria-live="polite">
+        <div
+          className={cn(
+            "flex h-[58px] flex-wrap content-center items-center gap-1.5 overflow-y-auto rounded-xl border px-3 py-2",
+            selected.length ? "border-brand/30 bg-brand-soft/40" : "border-dashed border-line bg-surface-2",
+          )}
+          aria-live="polite"
+        >
           {selected.length ? (
             selected.map((p) => (
               <span
@@ -128,25 +134,28 @@ export function PersonPicker({
               </span>
             ))
           ) : (
-            <span className="rounded-full border border-dashed border-line px-3 py-1.5 text-xs text-ink-muted">{noneLabel}</span>
+            <>
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-surface text-ink-muted ring-1 ring-line">
+                <UserX className="size-4" />
+              </span>
+              <p className="text-sm text-ink-muted">{noneLabel}</p>
+            </>
           )}
         </div>
       )}
 
-      {/* Search (only worth showing once the list is long) */}
-      {items.length > 5 && (
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-ink-muted" />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={placeholder}
-            aria-label={`Cari ${legend.toLowerCase()}`}
-            className="h-10 w-full rounded-full border border-line bg-surface pl-9 pr-3 text-sm text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-brand/50 focus:ring-4 focus:ring-brand/10"
-          />
-        </div>
-      )}
+      {/* Always shown so side-by-side pickers line up */}
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-ink-muted" />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={placeholder}
+          aria-label={`Cari ${legend.toLowerCase()}`}
+          className="h-10 w-full rounded-full border border-line bg-surface pl-9 pr-3 text-sm text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-brand/50 focus:ring-4 focus:ring-brand/10"
+        />
+      </div>
 
       <div
         role={mode === "single" ? "radiogroup" : "group"}

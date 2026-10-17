@@ -17,7 +17,7 @@ export default async function EditCoachPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireCapability("registry:write");
+  await requireCapability("registry.coach:edit");
   const { id } = await params;
   const coach = await getCoach(id);
   if (!coach) notFound();

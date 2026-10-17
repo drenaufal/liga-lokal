@@ -15,6 +15,7 @@ export function ResultControl({
   homeScore,
   awayScore,
   canConfirm,
+  canAmend,
   amendmentReason,
   isCup = false,
   homeShort = null,
@@ -27,6 +28,8 @@ export function ResultControl({
   homeScore: number;
   awayScore: number;
   canConfirm: boolean;
+  /** May correct a result that was already confirmed. */
+  canAmend: boolean;
   amendmentReason: string | null;
   /** A Cup match: it needs a winner, so a level score goes to a shoot-out. */
   isCup?: boolean;
@@ -166,15 +169,15 @@ export function ResultControl({
           </div>
         )}
 
-        {!canConfirm && (
+        {!canConfirm && !canAmend && (
           <p className="text-[11px] text-ink-muted">
-            Konfirmasi hasil memerlukan peran Wasit atau Operator Kompetisi.
+            Peran Anda tidak memiliki izin untuk mengonfirmasi atau mengoreksi hasil.
           </p>
         )}
 
-        {canConfirm && (
+        {(canConfirm || canAmend) && (
           <div className="space-y-2">
-            {resultStatus === "unconfirmed" && (
+            {canConfirm && resultStatus === "unconfirmed" && (
               <Button
                 className="w-full"
                 size="sm"
@@ -185,7 +188,7 @@ export function ResultControl({
                 Konfirmasi Hasil
               </Button>
             )}
-            {(resultStatus === "confirmed" || resultStatus === "amended") && !amending && (
+            {canAmend && (resultStatus === "confirmed" || resultStatus === "amended") && !amending && (
               <Button
                 className="w-full"
                 size="sm"
@@ -195,7 +198,7 @@ export function ResultControl({
                 <PenLine className="size-3.5" /> Koreksi Hasil
               </Button>
             )}
-            {amending && (
+            {canAmend && amending && (
               <div className="space-y-2">
                 <Textarea
                   value={reason}
