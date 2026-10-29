@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Users, ShieldCheck, Trophy, Radio, ArrowUpRight, Activity } from "lucide-react";
 import { getCommandCenterData } from "@/lib/queries/command-center";
-import { requireCapability } from "@/lib/auth/session";
+import { requireCapability, getClubScope } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { PageHeader, StatCard } from "@/components/app/page-header";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -31,7 +31,7 @@ export default async function CommandCenterPage() {
   const { t, fmt } = await getI18n();
   const user = await requireCapability("dashboard:view");
   const canActivity = can(user, "dashboard:activity");
-  const d = await getCommandCenterData(user.role);
+  const d = await getCommandCenterData(user.role, await getClubScope());
   const k = d.kpis;
 
   const leaderCard = (

@@ -14,10 +14,14 @@ import {
   tournamentTeams,
 } from "@/lib/db/schema";
 import { getEligibleMatchPlayers } from "@/lib/queries/match-roster";
+import { clubScopeFilter, playerScopeFilter } from "@/lib/club-scope";
 import { getSafeT } from "@/lib/i18n/server";
 
-function playerConditions(filter: ReturnType<typeof parsePlayerFilters>) {
+/** `scope`: the SSB the viewer may see (`getClubScope`); `null` means every SSB. */
+function playerConditions(filter: ReturnType<typeof parsePlayerFilters>, scope: string[] | null = null) {
   const conds: SQL[] = [eq(playerStats.season, "career"), gte(playerStats.appearances, filter.minApps), gte(playerStats.rating, filter.minRating)];
+  const scoped = playerScopeFilter(scope);
+  if (scoped) conds.push(scoped);
   if (filter.q) conds.push(like(players.fullName, `%${filter.q}%`));
   const roles = expandPosition(filter.position);
   if (roles.length) conds.push(inArray(players.position, roles));
@@ -26,17 +30,17 @@ function playerConditions(filter: ReturnType<typeof parsePlayerFilters>) {
   return and(...conds);
 }
 
-export async function getPlayerFilterOptions() {
+export async function getPlayerFilterOptions(scope: string[] | null = null) {
   const [ages, clubRows] = await Promise.all([
     db.select({ code: ageCategories.code }).from(ageCategories).orderBy(asc(ageCategories.sortOrder)),
-    db.select({ id: clubs.id, name: clubs.name }).from(clubs).orderBy(asc(clubs.name)),
+    db.select({ id: clubs.id, name: clubs.name }).from(clubs).where(clubScopeFilter(clubs.id, scope)).orderBy(asc(clubs.name)),
   ]);
   return { ages, clubs: clubRows };
 }
 
-export async function searchPlayersForRadar(params: IntelligenceParams = {}) {
+export async function searchPlayersForRadar(params: IntelligenceParams = {}, scope: string[] | null = null) {
   const filter = parsePlayerFilters(params);
-  const where = playerConditions(filter);
+  const where = playerConditions(filter, scope);
   const [{ total }] = await db.select({ total: count() }).from(playerStats)
     .innerJoin(players, eq(players.id, playerStats.playerId))
     .leftJoin(ageCategories, eq(ageCategories.id, players.ageCategoryId)).where(where);
@@ -74,7 +78,7 @@ export async function searchPlayersForRadar(params: IntelligenceParams = {}) {
   return { rows, ...pagination };
 }
 
-export async function getPlayerRadarData(ids: string[]) {
+export async function getPlayerRadarData(ids: string[], scope: string[] | null = null) {
   if (ids.length === 0) return [];
   const rows = await db
     .select({
@@ -94,7 +98,7 @@ export async function getPlayerRadarData(ids: string[]) {
       playerStats,
       and(eq(playerStats.playerId, players.id), eq(playerStats.season, "career")),
     )
-    .where(inArray(players.id, ids));
+    .where(and(inArray(players.id, ids), playerScopeFilter(scope)));
   return rows;
 }
 
@@ -128,9 +132,11 @@ export async function getPeerPool(position: string, ageCategoryId: string | null
  * `ageCategoryId` to one KU (age group) — across all Turnamen, or inside the
  * chosen one. With neither, every award is listed.
  */
-export async function getBadgeGallery(params: IntelligenceParams = {}) {
+export async function getBadgeGallery(params: IntelligenceParams = {}, scope: string[] | null = null) {
   const t = await getSafeT();
   const conds: SQL[] = [];
+  const scoped = playerScopeFilter(scope);
+  if (scoped) conds.push(scoped);
   const competitionId = paramValue(params, "turnamen");
   const kuRows = await db.selectDistinct({ id: ageCategories.id, code: ageCategories.code, sortOrder: ageCategories.sortOrder })
     .from(tournaments).innerJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
@@ -240,7 +246,7 @@ export async function getManualBadgeOptions(params: IntelligenceParams) {
   })));
 }
 
-export async function getFormulaData(params: IntelligenceParams = {}) {
+export async function getFormulaData(params: IntelligenceParams = {}, scope: string[] | null = null) {
   const list = await db.query.scoringFormulas.findMany({
     orderBy: (f, { desc: d }) => [d(f.isActive), d(f.createdAt)],
   });
@@ -256,16 +262,11 @@ export async function getFormulaData(params: IntelligenceParams = {}) {
       score: playerStats.score,
       goals: playerStats.goals,
       assists: playerStats.assists,
-      saves: playerStats.saves,
-      tackles: playerStats.tackles,
+      saves: playerStats.saves, // not scored, but the preview can still be sorted by it
       interceptions: playerStats.interceptions,
-      keyPasses: playerStats.keyPasses,
-      duelsWon: playerStats.duelsWon,
-      cleanSheets: playerStats.cleanSheets,
       yellowCards: playerStats.yellowCards,
       redCards: playerStats.redCards,
       minutesPlayed: playerStats.minutesPlayed,
-      motm: playerStats.motm,
       appearances: playerStats.appearances,
       shotsOnTarget: playerStats.shotsOnTarget,
       shotsOffTarget: playerStats.shotsOffTarget,
@@ -274,7 +275,7 @@ export async function getFormulaData(params: IntelligenceParams = {}) {
     .innerJoin(players, eq(players.id, playerStats.playerId))
     .leftJoin(clubs, eq(clubs.id, players.clubId))
     .leftJoin(ageCategories, eq(ageCategories.id, players.ageCategoryId))
-    .where(playerConditions(parsePlayerFilters(params, 3)))
+    .where(playerConditions(parsePlayerFilters(params, 3), scope))
     .orderBy(desc(playerStats.score), asc(players.fullName), asc(players.id));
 
   return { list, preview };

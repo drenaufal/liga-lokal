@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Plus, Radio, CalendarDays, Users2, Layers, Trophy, MapPin } from "lucide-react";
 import { getCompetitionOverview } from "@/lib/queries/competition";
-import { requireCapability } from "@/lib/auth/session";
+import { requireViewerCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { StatCard } from "@/components/app/page-header";
@@ -23,7 +23,7 @@ export default async function CompetitionOverviewPage({
   params: Promise<{ id: string }>;
 }) {
   const { t, fmt } = await getI18n();
-  const user = await requireCapability("competition:view");
+  const user = await requireViewerCapability("competition:view");
   const { id } = await params;
   const d = await getCompetitionOverview(id);
   if (!d) notFound();

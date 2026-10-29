@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { auth } from "./index";
-import { can, canAny, type Capability, type Role } from "./rbac";
+import { GUEST_GRANTS, can, canAny, type Capability, type Role } from "./rbac";
 import { getGrantsForRole } from "./permissions";
 import { homeHref } from "@/lib/nav";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { coaches, users } from "@/lib/db/schema";
+import { coachClubIds } from "@/lib/club-scope";
 import { cache } from "react";
 import { getSafeT } from "@/lib/i18n/server";
 
@@ -46,6 +47,55 @@ export async function requireAnyCapability(caps: readonly Capability[]) {
   const user = await requireUser();
   if (!canAny(user, caps)) redirect(deniedTarget(user, caps[0]));
   return user;
+}
+
+/** The read-only viewer behind a page that is open to visitors without an account. */
+const GUEST = { role: "viewer" as Role, grants: GUEST_GRANTS, guest: true as const };
+
+/** The SSB the signed-in account looks after: a coach's primary and second club (none for other accounts). */
+export const getOwnClubIds = cache(async (): Promise<string[]> => {
+  const user = await getCurrentUser();
+  if (!user) return [];
+  const [coach] = await db
+    .select({ clubId: coaches.clubId, secondClubId: coaches.secondClubId })
+    .from(coaches)
+    .where(eq(coaches.userId, user.id));
+  return coachClubIds({ clubId: coach?.clubId ?? user.clubId, secondClubId: coach?.secondClubId });
+});
+
+/**
+ * Which SSB the signed-in account may see: `null` = every SSB (it holds `scope:all-clubs`), else
+ * the SSB it looks after (`getOwnClubIds`). A restricted account with no SSB gets `[]`, which shows
+ * nothing. Read once per request; pages hand it to the queries (`clubScopeFilter` & co. in
+ * lib/club-scope.ts) and refuse single records outside it (`inClubScope`).
+ */
+export const getClubScope = cache(async (): Promise<string[] | null> => {
+  const user = await getCurrentUser();
+  if (!user || can(user, "scope:all-clubs")) return null;
+  return getOwnClubIds();
+});
+
+/** True when nobody (or no usable account) is signed in. Used to hide links that need an account. */
+export const isGuest = cache(async () => !(await getCurrentUser()));
+
+/**
+ * Guard for the pages that are open to visitors. A signed-in person needs the capability, as
+ * everywhere else; a visitor passes only for the read-only capabilities in `GUEST_GRANTS`, and
+ * is otherwise sent to the login page. Returns something `can()` accepts either way.
+ */
+export async function requireViewerCapability(cap: Capability) {
+  return requireAnyViewerCapability([cap]);
+}
+
+/** Like {@link requireViewerCapability}, but passes when at least one capability is held. */
+export async function requireAnyViewerCapability(caps: readonly Capability[]) {
+  const user = await getCurrentUser();
+  if (user) {
+    if (!canAny(user, caps)) redirect(deniedTarget(user, caps[0]));
+    return user;
+  }
+  if (!canAny(GUEST, caps)) redirect("/login");
+  return GUEST;
 }
 
 /**

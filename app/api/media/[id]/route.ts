@@ -10,17 +10,19 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { id } = await params;
   if (!isUuid(id)) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   const row = await getMedia(id);
+  // A visitor (the open pages show club logos and photos) is served images only; anything else,
+  // and anything that does not exist, looks the same to them as a missing login.
+  if (!user && row?.kind !== "image") return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   // Identity and licence documents are only visible to people granted "registry:documents";
   // finance receipts are also open to the unit they belong to (lib/finance/proof.ts).
-  if (row.kind === "document" && !can(user, "registry:documents") && !(await canOpenFinanceProof(user, row))) {
+  if (user && row.kind === "document" && !can(user, "registry:documents") && !(await canOpenFinanceProof(user, row))) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -36,6 +38,8 @@ export async function GET(
       "Cache-Control":
         row.kind === "document" ? "private, no-store" : "private, max-age=31536000, immutable",
       "X-Content-Type-Options": "nosniff",
+      // An image opened on its own (e.g. an SVG) can never run a script.
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
     },
   });
 }

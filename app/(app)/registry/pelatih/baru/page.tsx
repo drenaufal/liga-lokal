@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireCapability } from "@/lib/auth/session";
 import { getRegistryFilters } from "@/lib/queries/registry";
+import { can } from "@/lib/auth/rbac";
 import { Card, CardContent } from "@/components/ui/card";
 import { CoachForm } from "../coach-form";
 import { getT } from "@/lib/i18n/server";
@@ -17,7 +18,7 @@ export default async function NewCoachPage({
   searchParams: Promise<{ club?: string }>;
 }) {
   const t = await getT();
-  await requireCapability("registry.coach:create");
+  const user = await requireCapability("registry.coach:create");
   const [{ clubs }, { club }] = await Promise.all([getRegistryFilters(), searchParams]);
 
   return (
@@ -34,7 +35,7 @@ export default async function NewCoachPage({
       </p>
       <Card className="mt-5">
         <CardContent>
-          <CoachForm clubs={clubs} defaultClubId={clubs.some((c) => c.id === club) ? club : undefined} />
+          <CoachForm clubs={clubs} defaultClubId={clubs.some((c) => c.id === club) ? club : undefined} canAccount={can(user, "registry.coach:account")} />
         </CardContent>
       </Card>
     </div>

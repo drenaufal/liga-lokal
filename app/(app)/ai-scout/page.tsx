@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Sparkles, FileText, Users, Trophy, Radio } from "lucide-react";
-import { requireCapability } from "@/lib/auth/session";
+import { requireCapability, getClubScope } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { listReports, listShortlists, getReportSubjectOptions } from "@/lib/queries/scout";
 import { aiLiveMode } from "@/lib/ai/provider";
@@ -35,7 +35,7 @@ export default async function AiScoutPage() {
   const [reports, shortlists, options] = await Promise.all([
     listReports(),
     listShortlists(),
-    canReport ? getReportSubjectOptions() : Promise.resolve(null),
+    canReport ? getReportSubjectOptions(await getClubScope()) : Promise.resolve(null),
   ]);
 
   return (

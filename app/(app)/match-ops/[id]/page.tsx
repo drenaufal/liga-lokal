@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, MapPin, Flag as FlagIcon, CalendarClock, UserCog } from "lucide-react";
 import { getMatchConsole, getOfficialOptions } from "@/lib/queries/match";
-import { requireCapability } from "@/lib/auth/session";
+import { requireCapability, getClubScope } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { DEFAULT_MATCH_MINUTES, clockCap } from "@/lib/match-clock";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -25,6 +25,7 @@ import { ResultControl } from "./result-control";
 import { isCupStage } from "@/lib/cup-advance";
 import { STAGE_LABEL } from "@/lib/status";
 import { LINE_ORDER, positionLine } from "@/lib/positions";
+import { inClubScope } from "@/lib/club-scope";
 import { getI18n } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +51,7 @@ export default async function MatchConsolePage({
   const user = await requireCapability("match:view");
   const { id } = await params;
   const d = await getMatchConsole(id);
-  if (!d) notFound();
+  if (!d || !inClubScope(await getClubScope(), d.m.homeClubId, d.m.awayClubId)) notFound();
   const { m } = d;
   const canOperate = can(user, "match:operate");
   const canEvents = can(user, "match:events");

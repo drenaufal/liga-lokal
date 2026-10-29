@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Radio, Calendar, CheckCircle2, CircleDashed } from "lucide-react";
 import { listMatches, type MatchListParams } from "@/lib/queries/match";
-import { requireCapability } from "@/lib/auth/session";
+import { requireCapability, getClubScope } from "@/lib/auth/session";
 import { FilterSelect } from "@/components/app/list-controls";
 import { AutoRefresh } from "@/components/app/auto-refresh";
 import { MatchRow, MatchStack } from "@/components/app/match-row";
@@ -28,7 +28,7 @@ export default async function MatchOpsPage({ searchParams }: { searchParams: Pro
   const { t } = await getI18n();
   await requireCapability("match:view");
   const params = await searchParams;
-  const { rows, tournamentOpts } = await listMatches(params);
+  const { rows, tournamentOpts } = await listMatches(params, await getClubScope());
   const sections = [
     { status: "live", title: t("Sedang berlangsung"), icon: Radio },
     { status: "scheduled", title: t("Pertandingan mendatang"), icon: Calendar },

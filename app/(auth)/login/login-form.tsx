@@ -50,6 +50,7 @@ export function LoginForm() {
             autoComplete="username"
             required
             maxLength={254}
+            placeholder={t("nama@email.com")}
             defaultValue={state?.email ?? ""}
             className={inputClass}
           />
@@ -63,6 +64,7 @@ export function LoginForm() {
             autoComplete="current-password"
             required
             maxLength={1024}
+            placeholder={t("Masukkan kata sandi Anda")}
             className={inputClass}
           />
         </div>

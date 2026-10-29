@@ -1,4 +1,4 @@
-import { requireAnyCapability } from "@/lib/auth/session";
+import { requireAnyViewerCapability } from "@/lib/auth/session";
 import { allowedChildHrefs, moduleViewCaps } from "@/lib/nav";
 import { PageHeader } from "@/components/app/page-header";
 import { PiTabs } from "./tabs";
@@ -11,7 +11,7 @@ export default async function PiLayout({
 }) {
   const { t } = await getI18n();
   // Each tab has its own "view" permission; the menu opens when at least one is allowed.
-  const user = await requireAnyCapability(moduleViewCaps("player-intelligence"));
+  const user = await requireAnyViewerCapability(moduleViewCaps("player-intelligence"));
   return (
     <div>
       <PageHeader

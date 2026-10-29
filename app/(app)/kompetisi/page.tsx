@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus, Radio, CalendarDays, Users2, Layers, Trophy, X } from "lucide-react";
 import { listCompetitions } from "@/lib/queries/competition";
-import { requireCapability } from "@/lib/auth/session";
+import { requireViewerCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -55,7 +55,7 @@ export default async function CompetitionsPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { t, fmt } = await getI18n();
-  const user = await requireCapability("competition:view");
+  const user = await requireViewerCapability("competition:view");
   const f = parseCompetitionFilters(await searchParams);
   const all = await listCompetitions();
   const canWrite = can(user, "competition:create");

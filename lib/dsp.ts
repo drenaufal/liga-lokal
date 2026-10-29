@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { ageCategories, coaches, matchDspSubmissions, matchLineups, matches, tournaments, users } from "@/lib/db/schema";
+import { coachClubIds } from "@/lib/club-scope";
 import { getEligibleMatchPlayers } from "@/lib/queries/match-roster";
 import { createT, type TFunction } from "@/lib/i18n/translate";
 
@@ -10,7 +11,7 @@ import { getSafeT } from "@/lib/i18n/server";
 
 export const dspSchema = z.object({
   matchId: z.string().uuid(),
-  /** Admin only: the SSB being managed. A coach always submits for their own club. */
+  /** Admin: the SSB being managed. A coach with two SSB names the one they fill; with one it is implied. */
   clubId: z.string().uuid().optional(),
   /** Admin only: the registered coach responsible for the DSP. */
   coachId: z.string().uuid().optional(),
@@ -49,10 +50,16 @@ export async function submitDsp(userId: string, input: z.infer<typeof dspSchema>
     // (coaches fill their own club, admins fill either).
     const isAdmin = opts?.anyClub ?? staff;
     const permitted = opts?.anyClub !== undefined || actor?.role === "coach" || staff;
-    if (!actor?.active || !permitted || (!isAdmin && !actor.clubId))
+    // A coach's own SSB: the primary and the second one on their profile (users.clubId as a fallback).
+    const [ownCoach] = actor && !isAdmin
+      ? await tx.select({ clubId: coaches.clubId, secondClubId: coaches.secondClubId }).from(coaches).where(eq(coaches.userId, actor.id))
+      : [];
+    const ownClubs = coachClubIds({ clubId: ownCoach?.clubId ?? actor?.clubId, secondClubId: ownCoach?.secondClubId });
+    if (!actor?.active || !permitted || (!isAdmin && !ownClubs.length))
       throw new Error(t("DSP hanya dapat diisi oleh pelatih klub terkait atau admin."));
-    const clubId = isAdmin ? v.clubId : actor.clubId!;
+    const clubId = isAdmin ? v.clubId : (v.clubId ?? (ownClubs.length === 1 ? ownClubs[0] : undefined));
     if (!clubId) throw new Error(t("Pilih SSB yang DSP-nya akan diisi."));
+    if (!isAdmin && !ownClubs.includes(clubId)) throw new Error(t("Pertandingan ini bukan milik klub Anda."));
     const [m] = await tx.select().from(matches).where(eq(matches.id, v.matchId)).for("update");
     if (!m || m.status !== "scheduled" || m.period !== "not_started") throw new Error(t("DSP terkunci karena pertandingan sudah dimulai atau tidak terjadwal."));
     if (m.homeClubId !== clubId && m.awayClubId !== clubId) throw new Error(isAdmin ? t("SSB tersebut tidak bermain di pertandingan ini.") : t("Pertandingan ini bukan milik klub Anda."));
@@ -62,8 +69,8 @@ export async function submitDsp(userId: string, input: z.infer<typeof dspSchema>
       const [own] = await tx.select({ name: coaches.fullName }).from(coaches).where(eq(coaches.userId, actor.id));
       coachName = own?.name ?? actor.name;
     } else if (v.coachId) {
-      const [c] = await tx.select({ name: coaches.fullName, clubId: coaches.clubId }).from(coaches).where(eq(coaches.id, v.coachId));
-      if (!c || c.clubId !== clubId) throw new Error(t("Pelatih tersebut tidak terdaftar di SSB ini."));
+      const [c] = await tx.select({ name: coaches.fullName, clubId: coaches.clubId, secondClubId: coaches.secondClubId }).from(coaches).where(eq(coaches.id, v.coachId));
+      if (!c || !coachClubIds(c).includes(clubId)) throw new Error(t("Pelatih tersebut tidak terdaftar di SSB ini."));
       coachName = c.name;
     } else if (v.coachName) coachName = v.coachName;
     else throw new Error(t("Pilih pelatih penanggung jawab DSP."));

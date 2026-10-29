@@ -33,7 +33,7 @@ import {
   computeStandings,
   type MatchResultInput,
 } from "@/lib/standings";
-import { DEFAULT_WEIGHTS } from "@/lib/scoring";
+import { normalizeWeights } from "@/lib/scoring";
 import {
   clockCap,
   halfOf,
@@ -315,7 +315,7 @@ async function activeWeights() {
   const f = await db.query.scoringFormulas.findFirst({
     where: eq(scoringFormulas.isActive, true),
   });
-  return f?.weights ?? DEFAULT_WEIGHTS;
+  return normalizeWeights(f?.weights);
 }
 
 async function recomputeTournamentStandings(tournamentId: string) {

@@ -110,16 +110,12 @@ async function bumpStatRow(
   const scorable = {
     goals: next.goals,
     assists: next.assists,
-    saves: next.saves,
-    tackles: row?.tackles ?? 0,
+    shotsOnTarget: next.shotsOnTarget,
+    shotsOffTarget: next.shotsOffTarget,
     interceptions: next.interceptions,
-    keyPasses: row?.keyPasses ?? 0,
-    duelsWon: row?.duelsWon ?? 0,
-    cleanSheets: row?.cleanSheets ?? 0,
     yellowCards: next.yellowCards,
     redCards: next.redCards,
     minutesPlayed: next.minutesPlayed,
-    motm: next.motm,
   };
   const values = {
     ...next,

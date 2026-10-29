@@ -5,10 +5,11 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { StatCard } from "@/components/app/page-header";
 import { BarList } from "@/components/charts/bar-list";
 import { MatchRow, MatchStack } from "@/components/app/match-row";
+import { MemberLink } from "@/components/app/member-link";
 import { EmptyState } from "@/components/ui/misc";
 import { GenerateFixturesButton, RecomputeStandingsButton } from "./fixture-actions";
 import { crestTint } from "@/lib/crest";
-import { requireCapability } from "@/lib/auth/session";
+import { requireViewerCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { getI18n } from "@/lib/i18n/server";
 
@@ -20,7 +21,7 @@ export default async function TournamentOverviewPage({
   params: Promise<{ id: string }>;
 }) {
   const { t } = await getI18n();
-  const user = await requireCapability("competition:view");
+  const user = await requireViewerCapability("competition:view");
   const { id } = await params;
   const d = await getTournamentOverview(id);
   if (!d) notFound();
@@ -148,7 +149,7 @@ export default async function TournamentOverviewPage({
             <CardContent>
               <div className="flex flex-wrap gap-1.5">
                 {teams.map((tm) => (
-                  <Link
+                  <MemberLink
                     key={tm.id}
                     href={`/registry/klub/${tm.clubId}`}
                     className="flex items-center gap-1.5 rounded-full border border-line px-2 py-1 text-[11px] text-ink-secondary transition-colors hover:border-brand/40"
@@ -161,7 +162,7 @@ export default async function TournamentOverviewPage({
                     {tm.group && (
                       <span className="text-ink-muted">· {tm.group}</span>
                     )}
-                  </Link>
+                  </MemberLink>
                 ))}
               </div>
             </CardContent>

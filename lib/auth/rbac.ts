@@ -85,13 +85,19 @@ type Def = {
 const EVERYONE: readonly EditableRole[] = ["operator", "referee", "coach", "scout", "viewer"];
 const OPERATOR: readonly EditableRole[] = ["operator"];
 const MATCH_CREW: readonly EditableRole[] = ["operator", "referee"];
-const SCOUTING: readonly EditableRole[] = ["operator", "coach", "scout"];
+const SCOUTING: readonly EditableRole[] = ["operator", "scout"];
 const NOBODY_ELSE: readonly EditableRole[] = [];
 const UNIT_LOGIN: readonly EditableRole[] = ["unit_bisnis"];
+/**
+ * Everyone but the coach. A coach's menus are DSP, Competition and Player Intelligence — nothing else
+ * unless a Super Admin grants it — and, within those, only the SSB they look after (`scope:all-clubs`).
+ */
+const NOT_COACH: readonly EditableRole[] = ["operator", "referee", "scout", "viewer"];
 
 const GROUPS = [
   { id: "dashboard", title: "Command Center", caps: ["dashboard:view", "dashboard:activity"] },
   { id: "dsp", title: msg("Daftar Susunan Pemain (DSP)"), caps: ["dsp:view", "dsp:submit", "dsp:any-club"] },
+  { id: "club-scope", title: msg("Cakupan Data SSB"), caps: ["scope:all-clubs"] },
   {
     id: "registry-player",
     title: msg("Master Data — Pemain"),
@@ -172,14 +178,14 @@ const DEFS: Record<Capability, Def> = {
     label: msg("Membuka Command Center"),
     description: msg("Dasbor operasional: KPI, pertandingan langsung, sebaran verifikasi, dan papan peringkat."),
     kind: "menu",
-    defaults: EVERYONE,
+    defaults: NOT_COACH,
   },
   "dashboard:activity": {
     label: msg("Melihat aktivitas terbaru"),
     description: msg("Panel aktivitas di Command Center (siapa mengubah apa dan kapan)."),
     kind: "feature",
     requires: "dashboard:view",
-    defaults: EVERYONE,
+    defaults: NOT_COACH,
   },
 
   /* DSP */
@@ -204,12 +210,20 @@ const DEFS: Record<Capability, Def> = {
     defaults: NOBODY_ELSE,
   },
 
+  /* Club scope */
+  "scope:all-clubs": {
+    label: msg("Melihat data semua SSB"),
+    description: msg("Tanpa izin ini, akun hanya melihat data SSB yang diasuhnya: Registry, pertandingan, Player Intelligence, dan DSP."),
+    kind: "feature",
+    defaults: NOT_COACH,
+  },
+
   /* Registry — Pemain */
   "registry.player:view": {
     label: msg("Membuka daftar & profil pemain"),
     description: msg("Tab Pemain: daftar, pencarian, profil, statistik per kompetisi."),
     kind: "menu",
-    defaults: EVERYONE,
+    defaults: NOT_COACH,
   },
   "registry.player:create": {
     label: msg("Mendaftarkan pemain baru"),
@@ -238,7 +252,7 @@ const DEFS: Record<Capability, Def> = {
     label: msg("Membuka daftar & profil SSB"),
     description: msg("Tab SSB: daftar, profil, riwayat kompetisi."),
     kind: "menu",
-    defaults: EVERYONE,
+    defaults: NOT_COACH,
   },
   "registry.club:create": {
     label: msg("Mendaftarkan SSB baru"),
@@ -260,7 +274,7 @@ const DEFS: Record<Capability, Def> = {
     label: msg("Membuka daftar & profil pelatih"),
     description: msg("Tab Pelatih: daftar dan profil pelatih."),
     kind: "menu",
-    defaults: EVERYONE,
+    defaults: NOT_COACH,
   },
   "registry.coach:create": {
     label: msg("Mendaftarkan pelatih baru"),
@@ -289,7 +303,7 @@ const DEFS: Record<Capability, Def> = {
     label: msg("Membuka daftar & profil wasit"),
     description: msg("Tab Wasit: daftar dan profil wasit."),
     kind: "menu",
-    defaults: EVERYONE,
+    defaults: NOT_COACH,
   },
   "registry.referee:create": {
     label: msg("Mendaftarkan wasit baru"),
@@ -311,7 +325,7 @@ const DEFS: Record<Capability, Def> = {
     label: msg("Membuka daftar operator"),
     description: msg("Tab Operator: daftar akun operator pertandingan."),
     kind: "menu",
-    defaults: EVERYONE,
+    defaults: NOT_COACH,
   },
   "registry.operator:create": {
     label: msg("Membuat akun operator"),
@@ -333,7 +347,7 @@ const DEFS: Record<Capability, Def> = {
     label: msg("Membuka daftar & detail venue"),
     description: msg("Tab Venue: daftar dan detail venue."),
     kind: "menu",
-    defaults: EVERYONE,
+    defaults: NOT_COACH,
   },
   "registry.venue:create": {
     label: msg("Menambah venue"),
@@ -355,7 +369,7 @@ const DEFS: Record<Capability, Def> = {
     label: msg("Membuka kategori usia"),
     description: msg("Tab Kategori Usia: aturan KU-8 … KU-16."),
     kind: "menu",
-    defaults: EVERYONE,
+    defaults: NOT_COACH,
   },
   "registry.category:create": {
     label: msg("Menambah kategori usia"),
@@ -501,7 +515,7 @@ const DEFS: Record<Capability, Def> = {
     label: msg("Membuka Match Operations"),
     description: msg("Daftar pertandingan, konsol, lini masa, dan statistik pertandingan."),
     kind: "menu",
-    defaults: EVERYONE,
+    defaults: NOT_COACH,
   },
   "match:assign": {
     label: msg("Menugaskan wasit & operator"),
@@ -853,6 +867,20 @@ export function can(subject: AccessSubject, cap: Capability): boolean {
   if (typeof subject === "object" && subject?.grants) return subject.grants.includes(cap);
   return resolveGrants(role).includes(cap);
 }
+
+/**
+ * What a visitor without an account may open: the read-only pages of Competition and Player
+ * Intelligence. Nothing that writes is listed, so every edit button stays hidden for them.
+ * The proxy (`proxy.ts`) lists the matching URLs; a capability missing here keeps a page private
+ * even if its URL were added there.
+ */
+export const GUEST_GRANTS: readonly Capability[] = [
+  "competition:view",
+  "intelligence.radar:view",
+  "intelligence.compare:view",
+  "intelligence.formula:view",
+  "intelligence.badge:view",
+];
 
 /** True when the subject holds at least one of the capabilities. */
 export function canAny(subject: AccessSubject, caps: readonly Capability[]): boolean {

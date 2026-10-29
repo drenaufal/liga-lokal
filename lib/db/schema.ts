@@ -267,19 +267,20 @@ export const ageCategories = mysqlTable("age_categories", {
   createdAt: timestamp("created_at").default(NOW).notNull(),
 });
 
+/**
+ * One weight per one-tap button on the match page (goal, assist, shot on / off target,
+ * interception, yellow / red card) plus playing time. Formulas saved before this shape existed
+ * carry other keys; `normalizeWeights` (lib/scoring.ts) reads them safely.
+ */
 export type FormulaWeights = {
   goal: number;
   assist: number;
-  save: number;
-  tackle: number;
+  shotOn: number;
+  shotOff: number;
   interception: number;
-  cleanSheet: number;
-  keyPass: number;
-  duelWon: number;
   yellowCard: number;
   redCard: number;
   minutesPer90: number;
-  motm: number;
 };
 
 export const scoringFormulas = mysqlTable("scoring_formulas", {
@@ -366,6 +367,8 @@ export const coaches = mysqlTable(
     dob: date("dob"),
     city: text("city"),
     clubId: uuid("club_id").references(() => clubs.id, { onDelete: "set null" }),
+    /** A coach may look after a second SSB — two at most. `clubId` stays the primary one. */
+    secondClubId: uuid("second_club_id").references(() => clubs.id, { onDelete: "set null" }),
     licenseLevel: varchar("license_level", { length: 24 }).notNull(), // D Nasional … Pro AFC
     licenseNumber: varchar("license_number", { length: 40 }).notNull().unique(),
     // Private scans (see lib/coach-documents.ts): URLs of `document` media rows.
@@ -377,7 +380,7 @@ export const coaches = mysqlTable(
     specialty: text("specialty"), // pelatih kepala / asisten / kiper / fisik
     createdAt: timestamp("created_at").default(NOW).notNull(),
   },
-  (t) => [index("coaches_club_idx").on(t.clubId)],
+  (t) => [index("coaches_club_idx").on(t.clubId), index("coaches_second_club_idx").on(t.secondClubId)],
 );
 
 export const players = mysqlTable(

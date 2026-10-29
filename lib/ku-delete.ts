@@ -10,14 +10,14 @@ import {
   type FormulaWeights,
 } from "@/lib/db/schema";
 import { COUNTER_FIELDS } from "@/lib/player-stats";
-import { DEFAULT_WEIGHTS, computeRating, computeScore } from "@/lib/scoring";
+import { computeRating, computeScore, normalizeWeights } from "@/lib/scoring";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /** The active scoring formula's weights (falls back to the defaults). */
 export async function activeFormulaWeights(): Promise<FormulaWeights> {
   const formula = await db.query.scoringFormulas.findFirst({ where: eq(scoringFormulas.isActive, true) });
-  return formula?.weights ?? DEFAULT_WEIGHTS;
+  return normalizeWeights(formula?.weights);
 }
 
 /**

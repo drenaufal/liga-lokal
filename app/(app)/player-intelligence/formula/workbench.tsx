@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/utils";
-import { WEIGHT_LABELS, computeScore, type ScorableStats } from "@/lib/scoring";
+import { WEIGHT_KEYS, WEIGHT_LABELS, WEIGHT_RANGE, computeScore, type ScorableStats } from "@/lib/scoring";
 import type { FormulaWeights } from "@/lib/db/schema";
 import { saveFormula, activateFormula } from "./actions";
 import { IntelligenceFilters, IntelligencePagination } from "../filters";
@@ -29,9 +29,8 @@ type PreviewPlayer = {
   name: string;
   club: string | null;
   position: string;
-} & ScorableStats & { appearances: number; rating: number; ageCode: string | null; shotsOnTarget: number; shotsOffTarget: number };
+} & ScorableStats & { appearances: number; rating: number; ageCode: string | null; saves: number };
 
-const KEYS = Object.keys(WEIGHT_LABELS) as (keyof FormulaWeights)[];
 
 export function FormulaWorkbench({
   formulas,
@@ -153,8 +152,11 @@ export function FormulaWorkbench({
                 className="text-sm font-medium"
               />
             )}
+            <p className="text-[11px] leading-relaxed text-ink-muted">
+              {t("Bobot mengikuti tombol pencatatan di halaman pertandingan. Waktu bermain (menit / 90) tetap dihitung.")}
+            </p>
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-              {KEYS.map((k) => (
+              {WEIGHT_KEYS.map((k) => (
                 <div key={k}>
                   <div className="mb-1 flex items-center justify-between text-[11px]">
                     <span className="text-ink-secondary">{t.dyn(WEIGHT_LABELS[k])}</span>
@@ -162,8 +164,8 @@ export function FormulaWorkbench({
                   </div>
                   <input
                     type="range"
-                    min={k === "yellowCard" || k === "redCard" ? -8 : 0}
-                    max={k === "goal" || k === "motm" ? 12 : 8}
+                    min={WEIGHT_RANGE[k][0]}
+                    max={WEIGHT_RANGE[k][1]}
                     step={0.1}
                     value={draft[k]}
                     disabled={!canEdit}
@@ -241,7 +243,7 @@ export function FormulaWorkbench({
                       <td className="px-2 py-2">
                         <span className="block truncate text-xs font-medium text-ink">{p.name}</span>
                         <span className="text-[10px] text-ink-muted">
-                          {p.club} · {p.position} · {p.ageCode} · {p.goals}G {p.assists}A {p.saves}S
+                          {p.club} · {p.position} · {p.ageCode} · {p.goals}G {p.assists}A {p.shotsOnTarget}SoT
                         </span>
                       </td>
                       <td className="px-2 py-2 text-right font-semibold tabular-nums text-ink">

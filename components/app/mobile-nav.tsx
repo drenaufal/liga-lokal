@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, LogOut, X } from "lucide-react";
+import { LayoutGrid, LogIn, LogOut, X } from "lucide-react";
 import { navFor, type NavItem } from "@/lib/nav";
 import { ROLE_LABEL, type Capability, type Role } from "@/lib/auth/rbac";
 import { logoutAction } from "@/app/(app)/actions";
@@ -37,7 +37,8 @@ export function MobileNav({
 }: {
   role: Role;
   grants: readonly Capability[];
-  user: { name: string; email: string; image?: string | null };
+  /** Null for a visitor without an account. */
+  user: { name: string; email: string; image?: string | null } | null;
 }) {
   const t = useT();
   const pathname = usePathname();
@@ -45,7 +46,8 @@ export function MobileNav({
 
   const items = navFor({ role, grants });
   const primaryKeys =
-    role === "coach" ? ["dsp", "command-center", "kompetisi", "registry"] : role === "unit_bisnis" ? ["keuangan"] : PRIMARY;
+    !user ? ["kompetisi", "player-intelligence"]
+    : role === "coach" ? ["dsp", "kompetisi", "player-intelligence"] : role === "unit_bisnis" ? ["keuangan"] : PRIMARY;
   const primary = primaryKeys.map((k) => items.find((i) => i.key === k))
     .filter((i): i is NavItem => !!i)
     .slice(0, 4);
@@ -120,24 +122,35 @@ export function MobileNav({
                 </button>
               </div>
 
-              <div className="mt-4 flex items-center gap-3 rounded-2xl bg-night p-3 text-white">
-                <Avatar src={user.image} name={user.name} size={40} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{user.name}</p>
-                  <p className="truncate text-[11px] text-night-muted">
-                    {t(ROLE_LABEL[role])} · {user.email}
-                  </p>
+              {user ? (
+                <div className="mt-4 flex items-center gap-3 rounded-2xl bg-night p-3 text-white">
+                  <Avatar src={user.image} name={user.name} size={40} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{user.name}</p>
+                    <p className="truncate text-[11px] text-night-muted">
+                      {t(ROLE_LABEL[role])} · {user.email}
+                    </p>
+                  </div>
+                  <form action={logoutAction}>
+                    <button
+                      type="submit"
+                      aria-label={t("Keluar")}
+                      className="grid size-10 place-items-center rounded-full bg-night-2 text-white hover:bg-night-line"
+                    >
+                      <LogOut className="size-4" />
+                    </button>
+                  </form>
                 </div>
-                <form action={logoutAction}>
-                  <button
-                    type="submit"
-                    aria-label={t("Keluar")}
-                    className="grid size-10 place-items-center rounded-full bg-night-2 text-white hover:bg-night-line"
-                  >
-                    <LogOut className="size-4" />
-                  </button>
-                </form>
-              </div>
+              ) : (
+                <Link
+                  href={`/login?next=${encodeURIComponent(pathname)}`}
+                  onClick={() => setOpen(false)}
+                  className="mt-4 flex items-center justify-center gap-2 rounded-2xl bg-brand p-3 text-sm font-semibold text-white hover:bg-brand-dark"
+                >
+                  <LogIn className="size-4" />
+                  {t("Masuk")}
+                </Link>
+              )}
 
               <div className="mt-3 flex items-center justify-between rounded-2xl bg-surface-2 px-3 py-2">
                 <span className="text-xs font-semibold text-ink-secondary">{t("Bahasa")}</span>

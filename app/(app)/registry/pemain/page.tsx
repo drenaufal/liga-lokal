@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { FileCheck2, Plus, Upload } from "lucide-react";
 import { listPlayers, type PlayerListParams } from "@/lib/queries/registry";
-import { requireCapability } from "@/lib/auth/session";
+import { requireCapability, getClubScope } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -38,7 +38,7 @@ export default async function PlayersPage({
   const { t } = await getI18n();
   const user = await requireCapability("registry.player:view");
   const params = await searchParams;
-  const { rows, total, page, pageSize, filters } = await listPlayers(params);
+  const { rows, total, page, pageSize, filters } = await listPlayers(params, await getClubScope());
   const canWrite = can(user, "registry.player:create");
   const canImport = can(user, "ingestion:upload");
   const listQuery = new URLSearchParams(Object.entries(params).filter((entry): entry is [string, string] => typeof entry[1] === "string")).toString();

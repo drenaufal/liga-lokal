@@ -6,7 +6,7 @@ import {
   getCompetitionKuOptions,
   getScheduleOptions,
 } from "@/lib/queries/competition";
-import { requireCapability } from "@/lib/auth/session";
+import { requireViewerCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,7 +41,7 @@ export default async function CompetitionSchedulePage({
   searchParams: Promise<{ ku?: string; status?: string }>;
 }) {
   const { t, fmt } = await getI18n();
-  const user = await requireCapability("competition:view");
+  const user = await requireViewerCapability("competition:view");
   const { id } = await params;
   const { ku: kuFilter, status: statusParam } = await searchParams;
   const competition = await getCompetition(id);

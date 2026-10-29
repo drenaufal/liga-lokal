@@ -8,7 +8,7 @@ export async function GoalScorers({ goals }: { goals: MatchGoal[] }) {
   if (!goals.length) return null;
   const columns = goals.length > 5;
   return <ul
-    className={cn(styles.list, columns && styles.columns, "mt-2 text-[10px] font-medium leading-relaxed")}
+    className={cn(styles.list, columns && styles.columns, "mt-2 text-[10px] font-medium leading-relaxed @4xl:text-sm")}
     style={columns ? { gridTemplateRows: `repeat(${Math.ceil(goals.length / 2)}, auto)` } : undefined}
   >
     {goals.map((g) => <li key={g.id} className="min-w-0 break-words">

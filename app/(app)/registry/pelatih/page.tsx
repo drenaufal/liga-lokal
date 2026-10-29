@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Check, Minus, Plus } from "lucide-react";
 import { getRegistryFilters, listCoaches } from "@/lib/queries/registry";
-import { requireCapability } from "@/lib/auth/session";
+import { requireCapability, getClubScope } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { PageHeader } from "@/components/app/page-header";
 import { Card } from "@/components/ui/card";
@@ -30,9 +30,10 @@ export default async function CoachesPage({
   const { t } = await getI18n();
   const user = await requireCapability("registry.coach:view");
   const params = await searchParams;
+  const scope = await getClubScope();
   const [rows, { clubs }] = await Promise.all([
-    listCoaches(params),
-    getRegistryFilters(),
+    listCoaches(params, scope),
+    getRegistryFilters(scope),
   ]);
   const canWrite = can(user, "registry.coach:create");
 
@@ -123,10 +124,18 @@ export default async function CoachesPage({
                   </TD>
                   <TD>
                     {r.clubId ? (
-                      <Link href={`/registry/klub/${r.clubId}`} className="flex items-center gap-1.5 hover:text-ink">
-                        <ClubCrest logoUrl={r.clubLogo} short={r.clubShort} size={20} />
-                        <span className="truncate">{r.clubName}</span>
-                      </Link>
+                      <div className="space-y-1">
+                        <Link href={`/registry/klub/${r.clubId}`} className="flex items-center gap-1.5 hover:text-ink">
+                          <ClubCrest logoUrl={r.clubLogo} short={r.clubShort} size={20} />
+                          <span className="truncate">{r.clubName}</span>
+                        </Link>
+                        {r.secondClubId && (
+                          <Link href={`/registry/klub/${r.secondClubId}`} className="flex items-center gap-1.5 hover:text-ink">
+                            <ClubCrest logoUrl={r.secondClubLogo} short={r.secondClubShort} size={20} />
+                            <span className="truncate">{r.secondClubName}</span>
+                          </Link>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-ink-muted">—</span>
                     )}

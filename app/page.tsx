@@ -20,7 +20,9 @@ import {
   ArrowLeftRight,
   Search,
 } from "lucide-react";
-import { LandingNav, type LandingLink } from "@/components/landing/landing-nav";
+import { LandingNav } from "@/components/landing/landing-nav";
+import { LiveSection } from "@/components/landing/live-section";
+import { isPageLink, type LandingLink } from "@/components/landing/links";
 import { Folder } from "@/components/landing/folder";
 import { BRAND } from "@/lib/brand";
 import { cn } from "@/lib/utils";
@@ -76,6 +78,9 @@ const LINKS: LandingLink[] = [
   { href: "#alur", label: msg("Alur Kerja") },
   { href: "#modul", label: msg("Modul") },
   { href: "#implementasi", label: msg("Implementasi") },
+  // open to everyone, signed in or not (see OPEN_VIEWS in lib/auth/redirect.ts)
+  { href: "/kompetisi", label: msg("Kompetisi"), icon: "trophy" },
+  { href: "/player-intelligence", label: "Player Intelligence", icon: "radar" },
 ];
 
 const STATS = [
@@ -269,6 +274,9 @@ export default async function LandingPage() {
           ))}
         </div>
       </section>
+
+      {/* ── Live & coming-soon tournaments ─────────────────────────────── */}
+      <LiveSection />
 
       {/* ── Challenges ─────────────────────────────────────────────────── */}
       <section className="relative pb-16 pt-16 lg:pb-24 lg:pt-24">
@@ -622,9 +630,15 @@ export default async function LandingPage() {
               <ul className="mt-4 space-y-2.5 text-xs">
                 {LINKS.map((l) => (
                   <li key={l.href}>
-                    <a href={l.href} className="transition-colors hover:text-white">
-                      {t.dyn(l.label)}
-                    </a>
+                    {isPageLink(l) ? (
+                      <Link href={l.href} className="transition-colors hover:text-white">
+                        {t.dyn(l.label)}
+                      </Link>
+                    ) : (
+                      <a href={l.href} className="transition-colors hover:text-white">
+                        {t.dyn(l.label)}
+                      </a>
+                    )}
                   </li>
                 ))}
               </ul>

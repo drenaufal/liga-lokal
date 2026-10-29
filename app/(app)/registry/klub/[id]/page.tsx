@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, MapPin, Mail, Phone, User, Pencil, UserPlus, Landmark } from "lucide-react";
 import { getClubProfile } from "@/lib/queries/registry";
-import { requireCapability } from "@/lib/auth/session";
+import { requireCapability, getClubScope } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { Button } from "@/components/ui/button";
 import { ClubCrest } from "@/components/app/club-crest";
@@ -14,6 +14,7 @@ import { StatusBadge } from "@/components/app/status-badge";
 import { EmptyState } from "@/components/ui/misc";
 import { STAGE_LABEL } from "@/lib/status";
 import { positionText } from "@/lib/positions";
+import { inClubScope } from "@/lib/club-scope";
 import { getI18n } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,7 @@ export default async function ClubProfilePage({
   const { t, fmt } = await getI18n();
   const user = await requireCapability("registry.club:view");
   const { id } = await params;
-  const d = await getClubProfile(id);
+  const d = inClubScope(await getClubScope(), id) ? await getClubProfile(id) : null;
   if (!d) notFound();
   const { club, squad, comps, recentMatches, staff } = d;
   const canWrite = can(user, "registry.club:edit");

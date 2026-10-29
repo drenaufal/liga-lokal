@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Layers, Pencil, Plus, Radio, UserRound } from "lucide-react";
 import { getCompetition, getCompetitionImpact, getCompetitionSummary } from "@/lib/queries/competition";
-import { requireCapability } from "@/lib/auth/session";
+import { requireViewerCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { StatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,7 @@ export default async function CompetitionLayout({
   params: Promise<{ id: string }>;
 }) {
   const { t } = await getI18n();
-  const user = await requireCapability("competition:view");
+  const user = await requireViewerCapability("competition:view");
   const { id } = await params;
   const c = await getCompetition(id);
   if (!c) notFound();

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ChevronRight, Radio } from "lucide-react";
 import { getPlayerTournamentDetail, type PlayerMatchRow } from "@/lib/queries/registry";
-import { requireCapability } from "@/lib/auth/session";
+import { requireCapability, getClubScope } from "@/lib/auth/session";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { ClubCrest } from "@/components/app/club-crest";
 import { StatusBadge } from "@/components/app/status-badge";
 import { EVENT_LABEL, STAGE_LABEL } from "@/lib/status";
 import { cn } from "@/lib/utils";
+import { inClubScope } from "@/lib/club-scope";
 import { getI18n } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +51,7 @@ export default async function PlayerCompetitionPage({
   await requireCapability("registry.player:view");
   const { id, tid } = await params;
   const d = await getPlayerTournamentDetail(id, tid);
-  if (!d) notFound();
+  if (!d || !inClubScope(await getClubScope(), d.player.clubId, d.player.secondClubId)) notFound();
   const { player, tournament: tour, stat, club, matches } = d;
 
   const recorded = matches.filter((m) => m.involved).length;

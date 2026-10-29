@@ -15,7 +15,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { getPlayerProfile } from "@/lib/queries/registry";
-import { requireCapability } from "@/lib/auth/session";
+import { requireCapability, getClubScope } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
@@ -35,6 +35,7 @@ import { PLAYER_DOCUMENTS, documentCompleteness } from "@/lib/player-documents";
 import { LINE_LABEL, positionLine } from "@/lib/positions";
 import { cn, ageFromDob } from "@/lib/utils";
 import { VerificationControl } from "./verification-control";
+import { inClubScope } from "@/lib/club-scope";
 import { getI18n } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
@@ -63,7 +64,7 @@ export default async function PlayerProfilePage({
   const { klub, returnTo } = await searchParams;
   const backHref = typeof returnTo === "string" && (returnTo === "/registry/pemain" || returnTo.startsWith("/registry/pemain?")) ? returnTo : "/registry/pemain";
   const data = await getPlayerProfile(id, klub);
-  if (!data) notFound();
+  if (!data || !inClubScope(await getClubScope(), data.player.clubId, data.player.secondClubId)) notFound();
   const { player, clubChips, selectedClub, peers } = data;
   const totals = data.totals ?? emptyTotals();
   const canVerify = can(user, "registry.player:verify");

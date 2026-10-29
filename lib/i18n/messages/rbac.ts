@@ -35,6 +35,10 @@ export const rbac = {
   "Mengirim / merevisi DSP": "Submit / revise a DSP",
   "Menyimpan susunan pemain. Untuk akun yang terhubung ke sebuah SSB, DSP berlaku untuk SSB tersebut.": "Saves the squad. For an account linked to a club (SSB), the DSP applies to that club.",
   "Mengisi DSP untuk SSB mana pun": "Fill in a DSP for any club",
+  "Cakupan Data SSB": "Club Data Scope",
+  "Melihat data semua SSB": "See the data of every club",
+  "Tanpa izin ini, akun hanya melihat data SSB yang diasuhnya: Registry, pertandingan, Player Intelligence, dan DSP.":
+    "Without this, the account only sees the data of the club(s) they look after: Registry, matches, Player Intelligence and the DSP.",
   "Memilih sendiri SSB dan pelatih penanggung jawab, tidak terikat pada satu SSB.": "Choose the club and responsible coach freely, not tied to a single club.",
   "Membuka daftar & profil pemain": "Open the player list & profiles",
   "Tab Pemain: daftar, pencarian, profil, statistik per kompetisi.": "Players tab: list, search, profiles and per-competition statistics.",

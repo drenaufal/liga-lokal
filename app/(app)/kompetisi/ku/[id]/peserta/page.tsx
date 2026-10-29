@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getKuFormOptions, getTournamentFixtures, getTournamentOverview } from "@/lib/queries/competition";
-import { requireCapability } from "@/lib/auth/session";
+import { requireViewerCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ClubCrest } from "@/components/app/club-crest";
+import { MemberLink } from "@/components/app/member-link";
 import { StatusBadge } from "@/components/app/status-badge";
 import { AddTeam, RemoveTeamButton } from "../team-controls";
 import { getI18n } from "@/lib/i18n/server";
@@ -17,7 +17,7 @@ export default async function ParticipantsPage({
   params: Promise<{ id: string }>;
 }) {
   const { t } = await getI18n();
-  const user = await requireCapability("competition:view");
+  const user = await requireViewerCapability("competition:view");
   const { id } = await params;
   const d = await getTournamentOverview(id);
   if (!d) notFound();
@@ -77,14 +77,14 @@ export default async function ParticipantsPage({
                   key={x.id}
                   className="flex items-center gap-1 rounded-xl border border-line bg-surface/70 pr-2 transition-colors hover:border-brand/40"
                 >
-                  <Link href={`/registry/klub/${x.clubId}`} className="flex min-w-0 flex-1 items-center gap-3 p-3">
-                    <ClubCrest logoUrl={x.logo} short={x.short} size={36} />
+                  <MemberLink href={`/registry/klub/${x.clubId}`} className="flex min-w-0 flex-1 items-center gap-3 p-3">
+                    <ClubCrest logoUrl={x.logo} short={x.short} size={48} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-ink">{x.name}</p>
                       <p className="text-[11px] text-ink-muted">{t("Unggulan {n}", { n: x.seed ?? "—" })}</p>
                     </div>
                     <StatusBadge kind="registration" value={x.regStatus} />
-                  </Link>
+                  </MemberLink>
                   {canManage && (
                     <RemoveTeamButton kuId={id} clubId={x.clubId} name={x.name} matchCount={matchCount(x.clubId)} />
                   )}

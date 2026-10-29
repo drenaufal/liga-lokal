@@ -6,6 +6,29 @@ export const landing = {
   "Sistem operasi terpadu untuk manajemen kompetisi, data pemain, dan kecerdasan talenta sepak bola akar rumput berbasis AI.":
     "A unified operating system for competition management, player data and AI-powered talent intelligence in grassroots football.",
 
+  // live & coming-soon tournaments
+  "Sedang berlangsung & segera hadir": "Live now & coming soon",
+  "Geser barisnya, lalu klik turnamen untuk membuka halamannya. Skor dan kejadian pertandingan — gol, kartu, pergantian — muncul di sini begitu operator mencatatnya.":
+    "Drag the row, then click a tournament to open its page. Scores and match events — goals, cards, substitutions — show up here the moment an operator records them.",
+  "Lihat semua turnamen": "See all tournaments",
+  "Lihat turnamen": "View tournament",
+  "Buka halaman turnamen": "Open tournament page",
+  "Geser ke kiri": "Slide left",
+  "Geser ke kanan": "Slide right",
+  "Segera hadir": "Coming soon",
+  "{played}/{total} laga selesai": "{played}/{total} matches played",
+  "Mulai {date}": "Starts {date}",
+  "Jadwal segera diumumkan": "Schedule to be announced",
+  "Pembaruan pertandingan langsung": "Live match updates",
+  "GOL!": "GOAL!",
+  "GOL PENALTI!": "PENALTY GOAL!",
+  "GOL BUNUH DIRI": "OWN GOAL",
+  "PENALTI GAGAL": "PENALTY MISSED",
+  "KARTU KUNING": "YELLOW CARD",
+  "KUNING KEDUA": "SECOND YELLOW",
+  "KARTU MERAH": "RED CARD",
+  "PERGANTIAN": "SUBSTITUTION",
+
   // nav
   "Pilar": "Pillars",
   "Alur Kerja": "Workflow",

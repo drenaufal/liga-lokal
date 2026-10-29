@@ -99,7 +99,7 @@ function TeamSide({
 }) {
   return (
     <div className={cn("flex min-w-0 flex-col items-center gap-2 text-center", align === "right" && "order-last")}>
-      <ClubCrest logoUrl={logo} short={short} size={44} />
+      <ClubCrest logoUrl={logo} short={short} size={60} />
       <span className="line-clamp-2 text-xs font-semibold leading-snug text-white">{name}</span>
     </div>
   );

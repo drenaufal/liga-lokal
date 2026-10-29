@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { MatchRowData } from "./match-row";
 import { STAGE_LABEL } from "@/lib/status";
 import { matchWinnerSide, placeholderLabel } from "@/lib/fixtures";
 import { ClubCrest } from "./club-crest";
+import { MemberLink } from "./member-link";
 import { getT } from "@/lib/i18n/server";
 
 /**
@@ -68,7 +68,7 @@ async function BracketMatch({ m }: { m: MatchRowData }) {
   const pens = level && m.homePenalties != null && m.awayPenalties != null;
 
   return (
-    <Link
+    <MemberLink
       href={`/match-ops/${m.id}`}
       className="block overflow-hidden rounded-lg border border-line bg-surface-2/40 transition-colors hover:border-brand/40"
     >
@@ -102,7 +102,7 @@ async function BracketMatch({ m }: { m: MatchRowData }) {
               : t("Selesai")
             : t("Terjadwal")}
       </div>
-    </Link>
+    </MemberLink>
   );
 }
 
@@ -134,9 +134,9 @@ function BracketSide({
       )}
     >
       {pending ? (
-        <span className="size-5 shrink-0 rounded-full border border-dashed border-line" aria-hidden />
+        <span className="size-7 shrink-0 rounded-full border border-dashed border-line" aria-hidden />
       ) : (
-        <ClubCrest logoUrl={logo} short={short} size={20} className="rounded" />
+        <ClubCrest logoUrl={logo} short={short} size={28} className="rounded" />
       )}
       <span
         className={cn(

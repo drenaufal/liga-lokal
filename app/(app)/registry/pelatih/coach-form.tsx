@@ -25,10 +25,13 @@ export function CoachForm({
   coach,
   defaultClubId,
   docMeta,
+  canAccount = false,
 }: {
   clubs: { id: string; name: string }[];
   coach?: Coach;
   defaultClubId?: string;
+  /** May create the coach's login together with the profile (registration form only). */
+  canAccount?: boolean;
   /** File name / size of already-uploaded documents (only loaded for people who may open them). */
   docMeta?: Partial<Record<CoachDocumentKey, DocumentMeta | null>>;
 }) {
@@ -42,6 +45,9 @@ export function CoachForm({
     const v = coach?.[key];
     return v == null ? fallback : String(v);
   };
+  // The second SSB can only differ from the primary one, so both are controlled.
+  const [primary, setPrimary] = React.useState(val("clubId", defaultClubId ?? ""));
+  const [second, setSecond] = React.useState(val("secondClubId"));
 
   return (
     <form action={formAction} className="space-y-6">
@@ -67,14 +73,37 @@ export function CoachForm({
       </Section>
 
       <Section title={t("Penugasan")}>
-        <Field label={t("SSB::tunggal")} error={fe.clubId}>
-          <Select name="clubId" defaultValue={val("clubId", defaultClubId ?? "")}>
+        <Field label={t("SSB utama")} error={fe.clubId}>
+          <Select
+            name="clubId"
+            value={primary}
+            onChange={(e) => {
+              setPrimary(e.target.value);
+              if (e.target.value === second || !e.target.value) setSecond("");
+            }}
+          >
             <option value="">{t("Belum terikat SSB")}</option>
             {clubs.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
             ))}
+          </Select>
+        </Field>
+        <Field
+          label={t("SSB kedua (opsional)")}
+          hint={t("Seorang pelatih dapat mengasuh paling banyak dua SSB dan mengisi DSP untuk keduanya.")}
+          error={fe.secondClubId}
+        >
+          <Select name="secondClubId" value={second} disabled={!primary} onChange={(e) => setSecond(e.target.value)}>
+            <option value="">{t("Tidak ada SSB kedua")}</option>
+            {clubs
+              .filter((c) => c.id !== primary)
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
           </Select>
         </Field>
         <Field label={t("Peran")} error={fe.specialty}>
@@ -139,6 +168,20 @@ export function CoachForm({
           <Input name="email" type="email" defaultValue={val("email")} />
         </Field>
       </Section>
+
+      {!coach && canAccount && (
+        <Section title={t("Akun login (opsional)")}>
+          <p className="rounded-lg bg-surface-2/60 px-3 py-2 text-[11px] leading-relaxed text-ink-muted sm:col-span-2">
+            {t("Isi untuk langsung membuat akun login pelatih. Pelatih masuk lewat halaman login dan dapat mengganti kata sandinya sendiri.")}
+          </p>
+          <Field label={t("Email login")} error={fe.accountEmail}>
+            <Input name="accountEmail" type="email" autoComplete="off" maxLength={255} defaultValue={sv.accountEmail ?? ""} />
+          </Field>
+          <Field label={t("Kata sandi")} hint={t("Minimal 8 karakter.")} error={fe.accountPassword}>
+            <Input name="accountPassword" type="password" autoComplete="new-password" minLength={8} maxLength={72} />
+          </Field>
+        </Section>
+      )}
 
       {state?.error && (
         <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">

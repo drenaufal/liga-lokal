@@ -47,9 +47,10 @@ ok(
       if (CAPABILITY_INFO[cur].kind === "menu") return true;
       cur = REQUIRES[cur];
     }
-    return c === "registry:documents";
+    // the two switches that cut across every menu
+    return c === "registry:documents" || c === "scope:all-clubs";
   }),
-  "every feature depends on a menu (except the shared documents switch)",
+  "every feature depends on a menu (except the shared documents and club-scope switches)",
 );
 ok(ALL_CAPABILITIES.filter((c) => c.endsWith(":view")).length >= 15, "each menu and tab has its own view capability");
 
@@ -106,7 +107,9 @@ ok(Object.keys(diffAgainstDefaults(forged)).length === 0, "access:manage in a su
 /* ── Menus ── */
 ok(navFor("super_admin").length === NAV.length + 1, "super_admin sees every menu including Pengaturan");
 ok(hrefs("viewer").join() === "command-center,registry,kompetisi,match-ops,player-intelligence", "viewer sees the read-only menus");
-ok(hrefs("coach").includes("dsp") && hrefs("coach").includes("ai-scout") && !hrefs("coach").includes("ingestion"), "coach menu: DSP + AI Scout, no ingestion");
+ok(hrefs("coach").join() === "dsp,kompetisi,player-intelligence", "a coach has exactly three menus: DSP, Competition and Player Intelligence");
+ok(!can("coach", "dashboard:view") && !can("coach", "match:view") && !can("coach", "registry.player:view") && !can("coach", "scout:view"), "no dashboard, match operations, registry or AI Scout for a coach by default");
+ok(can("coach", "dsp:submit") && can("coach", "competition:view") && can("coach", "intelligence.radar:view") && !can("coach", "scope:all-clubs"), "a coach fills the DSP, reads competitions and player analytics, but only for their own SSB");
 ok(!hrefs("operator").includes("dsp") && hrefs("operator").includes("pengaturan"), "operator menu has Pengaturan but not DSP");
 ok(!hrefs("scout").includes("pengaturan"), "scout has no Pengaturan");
 ok(adminDefault.includes("settings:view") && navFor("admin").at(-1)?.key === "pengaturan", "admin keeps Pengaturan");
@@ -117,7 +120,7 @@ ok(registryMenu?.children?.length === 1 && registryMenu.href === "/registry/pema
 ok(allowedChildHrefs("registry", { role: "viewer", grants: onlyPlayers }).join() === "/registry/pemain", "tab bar only lists allowed tabs");
 ok(homeHref({ role: "viewer", grants: [] }) === null, "a role with nothing has no home page");
 ok(homeHref({ role: "viewer", grants: onlyPlayers }) === "/registry/pemain", "without the dashboard, home page is the first allowed menu");
-ok(homeHref("admin") === "/command-center" && homeHref("coach") === "/command-center", "with the dashboard allowed, home page is the dashboard");
+ok(homeHref("admin") === "/command-center" && homeHref("coach") === "/dsp", "with the dashboard allowed, home page is the dashboard; a coach lands on the DSP");
 ok(moduleViewCaps("registry").length === 7 && moduleViewCaps("player-intelligence").length === 4, "module guards cover every tab");
 const lonelyAudit = navFor({ role: "operator", grants: ["audit:view"] });
 ok(lonelyAudit.length === 0, "audit without settings:view opens nothing (settings:view is required)");

@@ -3,6 +3,42 @@
  * Pure functions with no Node/DB imports, so they are safe in every runtime.
  */
 
+/**
+ * Request header the proxy sets (and always strips from incoming requests) on the read-only pages
+ * a visitor without an account may open, so the app layout knows not to send them to /login.
+ */
+export const OPEN_VIEW_HEADER = "x-open-view";
+
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+/**
+ * The pages a visitor without an account may read — exact shapes, never a prefix, so the pages
+ * that write (`/kompetisi/baru`, `…/ubah`, `…/ku/baru`) and the Excel download stay behind login.
+ * Each page still checks `GUEST_GRANTS` itself (`requireViewerCapability`).
+ */
+const OPEN_VIEWS = [
+  /^\/kompetisi$/,
+  new RegExp(`^/kompetisi/${UUID}(/jadwal)?$`, "i"),
+  new RegExp(`^/kompetisi/ku/${UUID}(/(jadwal|klasemen|bagan|peserta))?$`, "i"),
+  /^\/player-intelligence(\/(banding|formula|badge))?$/,
+];
+
+/**
+ * The only API routes a visitor may call, both read-only:
+ *   - `/api/live`: the public live feed behind the home page slider (scores and match events);
+ *   - `/api/media/<id>`: images (club logos, photos) shown on the open pages. The route itself
+ *     serves a visitor only rows stored as images — documents (ID, licence, receipts) need an account.
+ */
+const OPEN_APIS = [/^\/api\/live$/, new RegExp(`^/api/media/${UUID}$`, "i")];
+
+export function isOpenApi(method: string, pathname: string) {
+  return (method === "GET" || method === "HEAD") && OPEN_APIS.some((re) => re.test(pathname));
+}
+
+/** GET/HEAD only: a visitor's POST (a Server Function call) is never let through to these pages. */
+export function isOpenView(method: string, pathname: string) {
+  return (method === "GET" || method === "HEAD") && OPEN_VIEWS.some((re) => re.test(pathname));
+}
+
 /** Where each kind of account starts after signing in. */
 export function landingFor(role: string | null | undefined) {
   return role === "coach" ? "/dsp" : role === "unit_bisnis" ? "/keuangan" : "/command-center";

@@ -41,6 +41,7 @@ import { expandPosition, positionLine, rolesOfLine } from "@/lib/positions";
 import { sumStats, type StatTotals } from "@/lib/player-stats";
 import { ascNullsLast, descNullsFirst } from "@/lib/db/order";
 import { kuNameSql } from "@/lib/queries/ku";
+import { clubScopeFilter, coachClubIds, coachOfClub, coachScopeFilter, playerScopeFilter } from "@/lib/club-scope";
 
 export type PlayerListParams = {
   q?: string;
@@ -55,7 +56,10 @@ export type PlayerListParams = {
 
 const PAGE_SIZE = 20;
 
-export async function listPlayers(params: PlayerListParams) {
+/**
+ * `scope`: the SSB the viewer may see (see `getClubScope`); `null` means every SSB.
+ */
+export async function listPlayers(params: PlayerListParams, scope: string[] | null = null) {
   const sc = alias(clubs, "sc");
   const page = Math.max(1, Number(params.page) || 1);
   const conds: SQL[] = [];
@@ -82,6 +86,9 @@ export async function listPlayers(params: PlayerListParams) {
         params.verification as "verified" | "flagged" | "pending" | "rejected",
       ),
     );
+
+  const scoped = playerScopeFilter(scope);
+  if (scoped) conds.push(scoped);
 
   const where = conds.length ? and(...conds) : undefined;
 
@@ -127,7 +134,7 @@ export async function listPlayers(params: PlayerListParams) {
       .limit(PAGE_SIZE)
       .offset((page - 1) * PAGE_SIZE),
     db.select({ n: count() }).from(players).where(where),
-    getRegistryFilters(),
+    getRegistryFilters(scope),
   ]);
 
   return {
@@ -139,11 +146,12 @@ export async function listPlayers(params: PlayerListParams) {
   };
 }
 
-export async function getRegistryFilters() {
+export async function getRegistryFilters(scope: string[] | null = null) {
   const [cl, ag] = await Promise.all([
     db
       .select({ id: clubs.id, name: clubs.name })
       .from(clubs)
+      .where(clubScopeFilter(clubs.id, scope))
       .orderBy(asc(clubs.name)),
     db
       .select({
@@ -469,8 +477,10 @@ export async function getPlayerTournamentDetail(playerId: string, tournamentId: 
 
 /* ─────────────────────────── Clubs ──────────────────────────────── */
 
-export async function listClubs(params: { q?: string; type?: string; city?: string }) {
+export async function listClubs(params: { q?: string; type?: string; city?: string }, scope: string[] | null = null) {
   const conds: SQL[] = [];
+  const scoped = clubScopeFilter(clubs.id, scope);
+  if (scoped) conds.push(scoped);
   if (params.q)
     conds.push(
       or(
@@ -506,6 +516,7 @@ export async function listClubs(params: { q?: string; type?: string; city?: stri
   const cities = await db
     .selectDistinct({ city: clubs.city })
     .from(clubs)
+    .where(scoped)
     .orderBy(asc(clubs.city));
 
   return { rows, cities: cities.map((c) => c.city) };
@@ -597,7 +608,7 @@ export async function getClubProfile(id: string) {
       docs: sql<number>`((${coaches.licenseDocUrl} is not null) + (${coaches.ktpUrl} is not null))`,
     })
     .from(coaches)
-    .where(eq(coaches.clubId, id))
+    .where(coachOfClub(id))
     .orderBy(ascNullsLast(coaches.specialty), asc(coaches.fullName));
 
   return { club, squad, comps, recentMatches, staff };
@@ -615,14 +626,17 @@ export async function listCoaches(params: {
   club?: string;
   /** "lengkap" = license + KTP both uploaded, "kurang" = at least one missing. */
   docs?: string;
-}) {
+}, scope: string[] | null = null) {
+  const sc2 = alias(clubs, "coach_second_club");
   const conds: SQL[] = [];
+  const scoped = coachScopeFilter(scope);
+  if (scoped) conds.push(scoped);
   if (params.q)
     conds.push(
       or(like(coaches.fullName, `%${params.q}%`), like(coaches.licenseNumber, `%${params.q}%`))!,
     );
   if (params.level) conds.push(eq(coaches.licenseLevel, params.level));
-  if (params.club) conds.push(eq(coaches.clubId, params.club));
+  if (params.club) conds.push(coachOfClub(params.club));
   if (params.docs === "lengkap")
     conds.push(and(isNotNull(coaches.licenseDocUrl), isNotNull(coaches.ktpUrl))!);
   if (params.docs === "kurang")
@@ -642,9 +656,14 @@ export async function listCoaches(params: {
       clubName: clubs.name,
       clubShort: clubs.shortName,
       clubLogo: clubs.logoUrl,
+      secondClubId: sc2.id,
+      secondClubName: sc2.name,
+      secondClubShort: sc2.shortName,
+      secondClubLogo: sc2.logoUrl,
     })
     .from(coaches)
     .leftJoin(clubs, eq(clubs.id, coaches.clubId))
+    .leftJoin(sc2, eq(sc2.id, coaches.secondClubId))
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(asc(coaches.fullName));
 }
@@ -660,6 +679,10 @@ export async function getCoachProfile(id: string) {
   const club = coach.clubId
     ? ((await db.query.clubs.findFirst({ where: eq(clubs.id, coach.clubId) })) ?? null)
     : null;
+  const secondClub = coach.secondClubId
+    ? ((await db.query.clubs.findFirst({ where: eq(clubs.id, coach.secondClubId) })) ?? null)
+    : null;
+  const clubIds = coachClubIds(coach);
 
   let recentMatches: {
     id: string;
@@ -671,11 +694,11 @@ export async function getCoachProfile(id: string) {
     awayScore: number;
     tournament: string;
   }[] = [];
-  let squadSize = 0;
-  if (club) {
+  let squadSizes: Record<string, number> = {};
+  if (clubIds.length) {
     const hc = alias(clubs, "hc");
     const ac = alias(clubs, "ac");
-    [recentMatches, squadSize] = await Promise.all([
+    const [matchRows, ...sizes] = await Promise.all([
       db
         .select({
           id: matches.id,
@@ -693,14 +716,16 @@ export async function getCoachProfile(id: string) {
         .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
         .leftJoin(hc, eq(hc.id, matches.homeClubId))
         .leftJoin(ac, eq(ac.id, matches.awayClubId))
-        .where(or(eq(matches.homeClubId, club.id), eq(matches.awayClubId, club.id)))
+        .where(or(inArray(matches.homeClubId, clubIds), inArray(matches.awayClubId, clubIds)))
         .orderBy(desc(matches.scheduledAt))
         .limit(10),
-      db.$count(players, or(eq(players.clubId, club.id), eq(players.secondClubId, club.id))),
+      ...clubIds.map((cid) => db.$count(players, or(eq(players.clubId, cid), eq(players.secondClubId, cid)))),
     ]);
+    recentMatches = matchRows;
+    squadSizes = Object.fromEntries(clubIds.map((cid, i) => [cid, sizes[i]]));
   }
 
-  return { coach, club, recentMatches, squadSize };
+  return { coach, club, secondClub, recentMatches, squadSizes };
 }
 
 /* ─────────────────────────── Referees ───────────────────────────── */

@@ -40,6 +40,7 @@ export const match = {
   "DSP masuk": "DSP received",
   "Pilih SSB untuk mengisi DSP": "Choose a club to fill in the DSP",
   "Pilih tuan rumah atau tamu di atas, lalu pilih pelatih penanggung jawabnya.": "Choose the home or away team above, then choose its responsible coach.",
+  "Kedua tim diasuh oleh Anda. Pilih tuan rumah atau tamu di atas.": "You look after both teams. Choose the home or away team above.",
   "Pilih pertandingan untuk mengisi DSP": "Choose a match to fill in the DSP",
   "Belum ada pertandingan terjadwal": "No scheduled matches yet",
   "Belum ada jadwal untuk klub Anda": "No schedule for your club yet",

@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { matchScopeFilter } from "@/lib/club-scope";
 import { alias } from "drizzle-orm/mysql-core";
 import { db } from "@/lib/db";
 import { MATCH_DURATION_SQL } from "@/lib/match-clock";
@@ -31,10 +32,12 @@ export type MatchListParams = {
   q?: string;
 };
 
-export async function listMatches(params: MatchListParams) {
+export async function listMatches(params: MatchListParams, scope: string[] | null = null) {
   const H = hc();
   const A = ac();
   const conds = [];
+  const scoped = matchScopeFilter(scope);
+  if (scoped) conds.push(scoped);
   if (params.status)
     conds.push(
       eq(

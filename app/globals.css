@@ -334,3 +334,133 @@ body {
     animation: none;
   }
 }
+
+/* Home page: what an operator just recorded in a live match. Each class is one beat of the show. */
+@keyframes live-toast {
+  0% {
+    opacity: 0;
+    transform: translateX(-28px) scale(0.9);
+  }
+  12% {
+    opacity: 1;
+    transform: translateX(0) scale(1.03);
+  }
+  18% {
+    transform: translateX(0) scale(1);
+  }
+  92% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-16px) scale(0.96);
+  }
+}
+@keyframes live-ball {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-16px) rotate(140deg);
+  }
+  50% {
+    transform: translateY(0) rotate(280deg);
+  }
+  68% {
+    transform: translateY(-7px) rotate(330deg);
+  }
+  84% {
+    transform: translateY(0) rotate(360deg);
+  }
+}
+@keyframes live-burst {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.92);
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(0) scale(1.04);
+  }
+  16% {
+    transform: translateY(0) scale(1);
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes live-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgb(255 255 255 / 0);
+    transform: scale(1);
+  }
+  18% {
+    box-shadow:
+      0 0 0 5px rgb(255 255 255 / 0.9),
+      0 24px 60px -12px rgb(255 214 64 / 0.85);
+    transform: scale(1.025);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(255 255 255 / 0);
+    transform: scale(1);
+  }
+}
+@keyframes live-score {
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.7);
+    color: #ffd23f;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes live-confetti {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) rotate(var(--rot));
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .animate-live-toast {
+    animation: live-toast 7s ease-out both;
+  }
+  .animate-live-ball {
+    animation: live-ball 1.4s ease-in-out 2;
+  }
+  .animate-live-burst {
+    animation: live-burst 6s ease-out both;
+  }
+  .animate-live-glow {
+    animation: live-glow 2.4s ease-out;
+  }
+  .animate-live-score {
+    display: inline-block;
+    animation: live-score 1.4s ease-out;
+  }
+  .live-confetti {
+    animation: live-confetti 1.7s cubic-bezier(0.15, 0.7, 0.3, 1) both;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* No movement: the same notice, simply shown and then gone. */
+  .animate-live-toast,
+  .animate-live-burst {
+    animation: fade-in 0.2s ease-out both;
+  }
+  .live-confetti {
+    display: none;
+  }
+}

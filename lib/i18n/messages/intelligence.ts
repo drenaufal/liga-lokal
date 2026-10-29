@@ -1,5 +1,7 @@
 /** intelligence */
 export const intelligence = {
+  "Bobot mengikuti tombol pencatatan di halaman pertandingan. Waktu bermain (menit / 90) tetap dihitung.":
+    "Weights follow the recording buttons on the match page. Playing time (minutes / 90) still counts.",
   "Kreator Serangan": "Playmaker",
   "Sarung Tangan Emas": "Golden Glove",
   "Pemain Terbaik Turnamen": "Tournament MVP",

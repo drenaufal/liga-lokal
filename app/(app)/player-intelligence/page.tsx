@@ -1,5 +1,6 @@
 import { getPlayerRadarData, getPeerPool, searchPlayersForRadar, getPlayerFilterOptions } from "@/lib/queries/intelligence";
-import { requireCapability } from "@/lib/auth/session";
+import { getClubScope } from "@/lib/auth/session";
+import { requireViewerCapability } from "@/lib/auth/session";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -19,13 +20,14 @@ export default async function RadarPage({
   searchParams: Promise<IntelligenceParams>;
 }) {
   const { t } = await getI18n();
-  await requireCapability("intelligence.radar:view");
+  await requireViewerCapability("intelligence.radar:view");
   const sp = await searchParams;
-  const [results, filterOptions] = await Promise.all([searchPlayersForRadar(sp), getPlayerFilterOptions()]);
+  const scope = await getClubScope();
+  const [results, filterOptions] = await Promise.all([searchPlayersForRadar(sp, scope), getPlayerFilterOptions(scope)]);
   const list = results.rows;
   const selectedId = paramValue(sp, "player") || list[0]?.id;
   const [rows] = await Promise.all([
-    selectedId ? getPlayerRadarData([selectedId]) : Promise.resolve([]),
+    selectedId ? getPlayerRadarData([selectedId], scope) : Promise.resolve([]),
   ]);
   const row = rows[0];
 

@@ -60,6 +60,7 @@ export const audit = {
   "Registrasi pelatih baru: {name} ({level} · {number})": "New coach registered: {name} ({level} · {number})",
   "Data pelatih {name} diperbarui{changed}": "Coach {name} data updated{changed}",
   "Akun login pelatih disimpan: {name}": "Coach login account saved: {name}",
+  "Kata sandi akun diganti oleh pemiliknya": "Account password changed by its owner",
   "Status verifikasi pemain {name} diubah menjadi \"{status}\"": "Verification status of player {name} changed to \"{status}\"",
   "Registrasi pemain baru: {name} ({regNo})": "New player registered: {name} ({regNo})",
   "Data pemain {name} diperbarui{changed}": "Player {name} data updated{changed}",

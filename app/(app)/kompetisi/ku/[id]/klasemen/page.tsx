@@ -6,7 +6,7 @@ import { StandingsTable } from "@/components/app/standings-table";
 import { EmptyState } from "@/components/ui/misc";
 import { TIEBREAKER_LABEL } from "@/lib/standings";
 import { RecomputeStandingsButton } from "../fixture-actions";
-import { requireCapability } from "@/lib/auth/session";
+import { isGuest, requireViewerCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { getI18n } from "@/lib/i18n/server";
 
@@ -18,13 +18,14 @@ export default async function StandingsPage({
   params: Promise<{ id: string }>;
 }) {
   const { t } = await getI18n();
-  const user = await requireCapability("competition:view");
+  const user = await requireViewerCapability("competition:view");
   const { id } = await params;
   const [tour, rows] = await Promise.all([
     getTournamentBase(id),
     getTournamentStandings(id),
   ]);
   const canManage = can(user, "ku:fixtures");
+  const canDownload = !(await isGuest()); // the Excel route needs an account
 
   if (rows.length === 0) {
     return (
@@ -49,11 +50,13 @@ export default async function StandingsPage({
           {(tour?.tiebreakers ?? []).map((tb) => t(TIEBREAKER_LABEL[tb])).join(" → ")}
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <Button asChild size="sm" variant="outline">
-            <a href={`/kompetisi/ku/${id}/klasemen/unduh`} download>
-              <FileSpreadsheet /> {t("Unduh Excel")}
-            </a>
-          </Button>
+          {canDownload && (
+            <Button asChild size="sm" variant="outline">
+              <a href={`/kompetisi/ku/${id}/klasemen/unduh`} download>
+                <FileSpreadsheet /> {t("Unduh Excel")}
+              </a>
+            </Button>
+          )}
           {canManage && <RecomputeStandingsButton tournamentId={id} />}
         </div>
       </div>

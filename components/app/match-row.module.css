@@ -1,30 +1,39 @@
+/*
+  Every folder is a deep colour with white text: the contrast of white on each fill is 5:1 or
+  better (blue 7.5, violet 7.1, teal 5.4, emerald 5.0), so names, scorers and small labels stay
+  readable. The fill fades into a darker tone for depth.
+*/
 .ticket {
+  position: relative;
+  overflow: hidden;
+  /* Sizes below follow the card's own width: the same card sits in a full-width list and in a half-width column. */
+  container-type: inline-size;
   border-radius: 24px;
-  background: var(--folder-fill, var(--color-block-blue));
-  color: var(--folder-ink, white);
+  background: linear-gradient(155deg, var(--folder-fill, #2f46c5) 0%, var(--folder-deep, #21328d) 100%);
+  color: #fff;
   /* Recess between the raised round and date tabs, like a file folder. */
   mask-image: radial-gradient(ellipse 48px 14px at 50% 0, transparent 98%, black 100%);
 }
 
 .stack > * {
   position: relative;
-  --folder-fill: var(--color-block-blue);
-  --folder-ink: white;
+  --folder-fill: #2f46c5;
+  --folder-deep: #21328d;
 }
 
 .stack > :nth-child(4n + 2) {
-  --folder-fill: var(--color-block-yellow);
-  --folder-ink: var(--color-ink);
+  --folder-fill: #6d28d9;
+  --folder-deep: #4e1c9c;
 }
 
 .stack > :nth-child(4n + 3) {
-  --folder-fill: var(--color-block-lime);
-  --folder-ink: var(--color-ink);
+  --folder-fill: #15803d;
+  --folder-deep: #0f5c2b;
 }
 
 .stack > :nth-child(4n + 4) {
-  --folder-fill: var(--color-block-orange);
-  --folder-ink: var(--color-ink);
+  --folder-fill: #0e7490;
+  --folder-deep: #0a5367;
 }
 
 .stack > * + * {
@@ -37,17 +46,21 @@
   padding-bottom: 28px;
 }
 
-/* Desktop: scorers flank the centered teams; mobile keeps them below. */
-@media (min-width: 1024px) {
+/*
+  Wide cards: the two teams sit in the middle of the card, vertically centred, with the scorers
+  on either side and the kick-off time and stadium pinned to the top corners. Narrower cards keep
+  the stacked layout (teams, then scorers below).
+*/
+@container (min-width: 900px) {
   .body {
+    position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 320px) minmax(0, 1fr);
-    grid-template-areas:
-      "time . venue"
-      "home teams away";
+    grid-template-columns: minmax(0, 1fr) minmax(0, 590px) minmax(0, 1fr);
+    grid-template-areas: "home teams away";
     align-items: center;
-    gap: 16px;
-    padding: 16px;
+    gap: 20px;
+    min-height: 320px;
+    padding: 36px 32px;
   }
 
   .matchInfo,
@@ -56,11 +69,16 @@
   }
 
   .time {
-    grid-area: time;
+    position: absolute;
+    top: 18px;
+    left: 32px;
   }
 
   .venue {
-    grid-area: venue;
+    position: absolute;
+    top: 18px;
+    right: 32px;
+    max-width: 26%;
   }
 
   .teams {
@@ -79,5 +97,12 @@
 
   .scorerLabel {
     display: none;
+  }
+}
+
+@container (min-width: 1200px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 680px) minmax(0, 1fr);
+    min-height: 360px;
   }
 }

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { aiReports, scoringFormulas, scoutShortlists } from "@/lib/db/schema";
-import { actionUser } from "@/lib/auth/session";
+import { actionUser, getClubScope } from "@/lib/auth/session";
 import { auditText, recordAudit } from "@/lib/audit";
 import { parseScoutQuery, type ScoutFilters } from "@/lib/ai/parse";
 import {
@@ -20,7 +20,7 @@ import {
   getPlayerReportContext,
   runTalentSearch,
 } from "@/lib/queries/scout";
-import { DEFAULT_WEIGHTS } from "@/lib/scoring";
+import { normalizeWeights } from "@/lib/scoring";
 import { insertReturning } from "@/lib/db/returning";
 import { getT } from "@/lib/i18n/server";
 
@@ -28,7 +28,7 @@ async function weights() {
   const f = await db.query.scoringFormulas.findFirst({
     where: eq(scoringFormulas.isActive, true),
   });
-  return f?.weights ?? DEFAULT_WEIGHTS;
+  return normalizeWeights(f?.weights);
 }
 
 export type SearchState = {
@@ -58,7 +58,7 @@ export async function runSearch(_prev: SearchState, formData: FormData): Promise
   if (query.length < 4) return { error: t("Masukkan deskripsi talenta yang dicari (min 4 karakter).") };
 
   const filters = parseScoutQuery(query);
-  const results = await runTalentSearch(filters, await weights());
+  const results = await runTalentSearch(filters, await weights(), await getClubScope());
   return { query, filters, results };
 }
 
@@ -92,7 +92,7 @@ export async function generatePlayerReport(formData: FormData) {
   const t = await getT();
   const user = await actionUser("scout:report");
   const playerId = String(formData.get("playerId"));
-  const ctx = await getPlayerReportContext(playerId);
+  const ctx = await getPlayerReportContext(playerId, await getClubScope());
   if (!ctx) throw new Error(t("Pemain tidak ditemukan"));
 
   const p = ctx.player;

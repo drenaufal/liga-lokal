@@ -27,7 +27,7 @@ export function requiredInt(min: number, max: number, message: string) {
 function echo(formData: FormData) {
   const values: Record<string, string> = {};
   formData.forEach((v, k) => {
-    if (typeof v === "string" && !k.startsWith("$ACTION")) values[k] = v;
+    if (typeof v === "string" && !k.startsWith("$ACTION") && !/password/i.test(k)) values[k] = v;
   });
   return values;
 }

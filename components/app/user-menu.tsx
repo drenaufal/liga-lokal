@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { LogOut, User as UserIcon, ChevronDown } from "lucide-react";
 import {
   Dropdown,
@@ -29,6 +30,7 @@ export function UserMenu({
   title?: string | null;
 }) {
   const t = useT();
+  const router = useRouter();
   return (
     <Dropdown>
       <DropdownTrigger>
@@ -51,7 +53,7 @@ export function UserMenu({
           <p className="px-2.5 pb-1 text-[11px] text-ink-secondary">{title}</p>
         )}
         <DropdownSeparator />
-        <DropdownItem>
+        <DropdownItem onSelect={() => router.push("/akun")}>
           <UserIcon />
           {t("Profil saya")}
         </DropdownItem>

@@ -167,9 +167,8 @@ async function main() {
           ...DEFAULT_WEIGHTS,
           goal: 9,
           assist: 6,
-          keyPass: 1.4,
-          save: 1,
-          tackle: 0.8,
+          shotOn: 1.4,
+          shotOff: 0.3,
         },
         isActive: false,
         version: 1,
@@ -1180,19 +1179,16 @@ async function main() {
       continue;
     }
     for (const [scope, a] of Object.entries(scopes)) {
+      // The demo data does not simulate shots; real match events fill them in later.
       const scorable = {
         goals: a.goals,
         assists: a.assists,
-        saves: a.saves,
-        tackles: a.tackles,
+        shotsOnTarget: 0,
+        shotsOffTarget: 0,
         interceptions: a.interceptions,
-        keyPasses: a.keyPasses,
-        duelsWon: a.duelsWon,
-        cleanSheets: a.cleanSheets,
         yellowCards: a.yellowCards,
         redCards: a.redCards,
         minutesPlayed: a.minutesPlayed,
-        motm: a.motm,
       };
       statRows.push({
         playerId: p.id,

@@ -28,11 +28,15 @@ import {
 import { hrefWith } from "@/components/app/filter-chips";
 import { resolveMatchSquads } from "@/lib/match-squad";
 import { makeVenueSchema } from "@/lib/venue";
+import { DEFAULT_WEIGHTS, WEIGHT_KEYS, computeScore, normalizeWeights, weightsFromInput } from "@/lib/scoring";
+import { coachClubIds, inClubScope } from "@/lib/club-scope";
+import { isOpenApi, isOpenView } from "@/lib/auth/redirect";
+import { FRESH_EVENT_SECONDS, NOTABLE_EVENTS, eventAgeSeconds, isGoalEvent, isNotableEvent, minuteLabel } from "@/lib/live-feed";
+import { QUICK_TYPES } from "@/lib/quick-events";
 import { createT } from "@/lib/i18n/translate";
 import { buildMatchStatistics } from "@/lib/match-statistics";
 import { participationAt, assertPlaying, assertSubstitution, type ParticipationLineup } from "@/lib/match-participation";
 import { withAutomaticSaves } from "@/lib/automatic-saves";
-import { QUICK_TYPES } from "@/lib/quick-events";
 
 import { RADAR_AXES, radarValues } from "@/lib/player-metrics";
 
@@ -380,6 +384,45 @@ ok(filterMatches(fixtures, "upcoming").length === 2 && filterMatches(fixtures, "
 const matchCounts = countMatches(fixtures);
 ok(matchCounts.all === 6 && matchCounts.upcoming === 2 && matchCounts.live === 2 && matchCounts.completed === 1, "schedule chip counts follow the filter");
 ok(hrefWith("/kompetisi", { q: "abc", status: undefined }, { status: "all" }) === "/kompetisi?q=abc&status=all" && hrefWith("/kompetisi", { q: "abc", status: "all" }, { status: null }) === "/kompetisi?q=abc" && hrefWith("/kompetisi", {}, {}) === "/kompetisi", "chip links keep the other filters and drop a cleared one");
+
+console.log("\n[scoring formula]");
+const stat = { goals: 2, assists: 1, shotsOnTarget: 3, shotsOffTarget: 4, interceptions: 5, yellowCards: 1, redCards: 0, minutesPlayed: 180 };
+// 2·6 + 1·4 + 3·0.8 + 4·0.1 + 5·1 − 1·1.5 + (180/90)·1.5 = 12 + 4 + 2.4 + 0.4 + 5 − 1.5 + 3
+ok(computeScore(stat, DEFAULT_WEIGHTS) === 25.3, "the score adds every match button, playing time included");
+ok(computeScore({ ...stat, minutesPlayed: 0 }, DEFAULT_WEIGHTS) === 22.3, "playing time is part of the formula (minutes / 90 × weight)");
+ok(WEIGHT_KEYS.join() === "goal,assist,shotOn,shotOff,interception,yellowCard,redCard,minutesPer90", "one weight per match button, plus minutes / 90");
+ok(QUICK_TYPES.every((type) => ({ goal: "goal", assist: "assist", shot_on: "shotOn", shot_off: "shotOff", interception: "interception", red_card: "redCard", yellow_card: "yellowCard" } as Record<string, string>)[type] in DEFAULT_WEIGHTS), "every quick-record button on the match page has a weight");
+const oldFormula = normalizeWeights({ goal: 9, assist: 6, save: 1, tackle: 0.8, cleanSheet: 4, keyPass: 1.4, duelWon: 0.4, motm: 5, yellowCard: -2, redCard: -6, minutesPer90: 2, interception: "x" });
+ok(oldFormula.goal === 9 && oldFormula.assist === 6 && oldFormula.yellowCard === -2 && oldFormula.minutesPer90 === 2, "a formula saved by an older version keeps the weights it shares with the new one");
+ok(oldFormula.shotOn === DEFAULT_WEIGHTS.shotOn && oldFormula.shotOff === DEFAULT_WEIGHTS.shotOff && oldFormula.interception === DEFAULT_WEIGHTS.interception, "missing or non-numeric weights fall back to the defaults");
+ok(!("save" in oldFormula) && !("motm" in oldFormula) && WEIGHT_KEYS.every((k) => Number.isFinite(computeScore(stat, normalizeWeights({ [k]: undefined })))), "retired weights are dropped and a score is never NaN");
+ok(JSON.stringify(normalizeWeights(null)) === JSON.stringify(DEFAULT_WEIGHTS) && normalizeWeights({ goal: 99 }).goal === 12, "no weights means the defaults, and a weight stays inside its slider range");
+ok(weightsFromInput({ goal: 6, shotOff: -9, bogus: 1 }).shotOff === -2 && weightsFromInput({}).goal === 0, "saved weights are clamped to their range and missing ones become 0");
+
+console.log("\n[club scope]");
+ok(coachClubIds({ clubId: "a", secondClubId: "b" }).join() === "a,b" && coachClubIds({ clubId: "a", secondClubId: "a" }).join() === "a" && coachClubIds({ clubId: null, secondClubId: "b" }).join() === "b" && coachClubIds({}).length === 0, "a coach has up to two SSB, primary first, without repeats or gaps");
+ok(inClubScope(null, "x") && inClubScope(null, null), "no scope means every SSB");
+ok(inClubScope(["a", "b"], "b") && inClubScope(["a"], "z", "a") && !inClubScope(["a"], "z") && !inClubScope(["a"], null, undefined) && !inClubScope([], "a"), "a record is visible when either of its clubs is in scope; a restricted account with no SSB sees nothing");
+
+console.log("\n[open pages]");
+const compId = "6a056fc0-90ef-4395-83f6-ea77c87c0d73";
+const open = (path: string, method = "GET") => isOpenView(method, path);
+ok(["/kompetisi", `/kompetisi/${compId}`, `/kompetisi/${compId}/jadwal`, `/kompetisi/ku/${compId}`, `/kompetisi/ku/${compId}/klasemen`, `/kompetisi/ku/${compId}/bagan`, `/kompetisi/ku/${compId}/peserta`, `/kompetisi/ku/${compId}/jadwal`].every((p) => open(p)), "the competition pages are open to visitors");
+ok(["/player-intelligence", "/player-intelligence/banding", "/player-intelligence/formula", "/player-intelligence/badge"].every((p) => open(p)), "the Player Intelligence pages are open to visitors");
+ok(["/kompetisi/baru", `/kompetisi/${compId}/ubah`, `/kompetisi/${compId}/ku/baru`, `/kompetisi/ku/${compId}/klasemen/unduh`, "/kompetisi/abc", "/kompetisi/", `/kompetisi/${compId}/x`, "/kompetisi/ku/baru"].every((p) => !open(p)), "pages that write, the Excel download and look-alike paths stay behind login");
+ok(["/registry/pemain", "/match-ops", "/dsp", "/command-center", "/ai-scout", "/pengaturan", "/akun", "/api/search", "/player-intelligence/../registry", "/player-intelligence/extra"].every((p) => !open(p)), "everything else needs an account");
+ok(!open("/kompetisi", "POST") && !open(`/kompetisi/${compId}`, "POST") && !open("/player-intelligence/formula", "PUT") && open("/kompetisi", "HEAD"), "a visitor can only read: POSTs (Server Function calls) are never let through");
+
+ok(isOpenApi("GET", "/api/live") && isOpenApi("GET", `/api/media/${compId}`) && isOpenApi("HEAD", "/api/live"), "a visitor can read the live feed and open an image by its id");
+ok(!isOpenApi("POST", "/api/live") && !isOpenApi("GET", "/api/media") && !isOpenApi("GET", "/api/media/abc") && !isOpenApi("GET", `/api/media/${compId}/x`) && !isOpenApi("GET", "/api/search") && !isOpenApi("GET", "/api/auth/session") && !isOpenApi("GET", "/api/live/x") && !isOpenApi("POST", `/api/media/${compId}`), "no other API route, write or look-alike path is open to a visitor");
+
+console.log("\n[live feed]");
+ok(["goal", "penalty_goal", "own_goal", "yellow_card", "second_yellow", "red_card", "substitution", "penalty_missed"].every(isNotableEvent), "goals, cards, substitutions and a missed penalty are announced to visitors");
+ok(!["assist", "shot_on", "shot_off", "foul", "corner", "offside", "save", "interception"].some(isNotableEvent) && NOTABLE_EVENTS.length === 8, "the routine ones (shots, saves, fouls…) never interrupt a visitor");
+ok(isGoalEvent("goal") && isGoalEvent("penalty_goal") && isGoalEvent("own_goal") && !isGoalEvent("red_card") && !isGoalEvent("penalty_missed"), "only goals get the celebration (they change the score)");
+ok(minuteLabel({ minute: 71, addedTime: 0 }) === "71′" && minuteLabel({ minute: 90, addedTime: 3 }) === "90+3′", "an event's minute reads 71′ or 90+3′");
+const clock = "2026-10-29T08:00:30.000Z";
+ok(eventAgeSeconds({ createdAt: "2026-10-29T08:00:00.000Z" }, clock) === 30 && eventAgeSeconds({ createdAt: "2026-10-29T07:58:00.000Z" }, clock) > FRESH_EVENT_SECONDS, "an event is fresh for 45 seconds by the server's clock; older ones (a tab left open) are not replayed");
 
 console.log(failures ? `\n${failures} CHECK(S) FAILED` : "\nAll checks passed");
 process.exit(failures ? 1 : 0);

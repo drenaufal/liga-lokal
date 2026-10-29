@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Mail, Phone, MapPin, ScrollText, Pencil, Cake } from "lucide-react";
 import { getCoachProfile } from "@/lib/queries/registry";
-import { requireCapability } from "@/lib/auth/session";
+import { requireCapability, getClubScope } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { getMediaMeta } from "@/lib/media-store";
 import { COACH_DOCUMENTS, coachDocumentCompleteness } from "@/lib/coach-documents";
@@ -20,6 +20,7 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { CoachAccountCard } from "./account-card";
+import { inClubScope } from "@/lib/club-scope";
 import { getI18n } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
@@ -44,8 +45,8 @@ export default async function CoachProfilePage({
   const user = await requireCapability("registry.coach:view");
   const { id } = await params;
   const d = await getCoachProfile(id);
-  if (!d) notFound();
-  const { coach: c, club, recentMatches, squadSize } = d;
+  if (!d || !inClubScope(await getClubScope(), d.coach.clubId, d.coach.secondClubId)) notFound();
+  const { coach: c, club, secondClub, recentMatches, squadSizes } = d;
   const canWrite = can(user, "registry.coach:edit");
   const canDocs = can(user, "registry:documents");
   const docMeta = canDocs
@@ -99,18 +100,23 @@ export default async function CoachProfilePage({
           </CardHeader>
           <CardContent>
             {club ? (
-              <Link
-                href={`/registry/klub/${club.id}`}
-                className="flex items-center gap-3 rounded-lg border border-line-soft bg-surface-2/40 p-3 transition-colors hover:border-brand/30"
-              >
-                <ClubCrest logoUrl={club.logoUrl} short={club.shortName} size={40} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-ink">{club.name}</span>
-                  <span className="text-[11px] text-ink-muted">
-                    {t("{city} · {n} pemain terdaftar", { city: club.city, n: squadSize })}
-                  </span>
-                </span>
-              </Link>
+              <div className="space-y-2">
+                {[club, secondClub].map((cl) => cl && (
+                  <Link
+                    key={cl.id}
+                    href={`/registry/klub/${cl.id}`}
+                    className="flex items-center gap-3 rounded-lg border border-line-soft bg-surface-2/40 p-3 transition-colors hover:border-brand/30"
+                  >
+                    <ClubCrest logoUrl={cl.logoUrl} short={cl.shortName} size={40} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-ink">{cl.name}</span>
+                      <span className="text-[11px] text-ink-muted">
+                        {t("{city} · {n} pemain terdaftar", { city: cl.city, n: squadSizes[cl.id] ?? 0 })}
+                      </span>
+                    </span>
+                  </Link>
+                ))}
+              </div>
             ) : (
               <p className="py-4 text-center text-xs text-ink-muted">{t("Belum terikat dengan SSB.")}</p>
             )}

@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/app/status-badge";
 import { TournamentTabs } from "./tabs";
 import { LifecycleControl } from "./lifecycle-control";
 import { DeleteKu } from "./delete-tournament";
-import { requireCapability } from "@/lib/auth/session";
+import { requireViewerCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { formatLabel, categoryLabel } from "@/lib/ku";
 import { getI18n } from "@/lib/i18n/server";
@@ -31,7 +31,7 @@ export default async function KuLayout({
   params: Promise<{ id: string }>;
 }) {
   const { t, fmt } = await getI18n();
-  const user = await requireCapability("competition:view");
+  const user = await requireViewerCapability("competition:view");
   const { id } = await params;
   const tour = await getTournamentBase(id);
   if (!tour) notFound();

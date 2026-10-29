@@ -293,17 +293,14 @@ function TeamCol({
   return (
     <div
       className={cn(
-        "flex min-w-0 flex-col items-center gap-2.5 text-center sm:flex-row sm:gap-3",
-        align === "right" ? "sm:flex-row-reverse sm:text-right" : "sm:text-left",
+        "flex min-w-0 flex-col items-center gap-2.5 text-center lg:flex-row lg:gap-4",
+        align === "right" ? "lg:flex-row-reverse lg:text-right" : "lg:text-left",
       )}
     >
-      <ClubCrest
-        logoUrl={logo}
-        short={short}
-        size={56}
-        className="text-sm ring-4 ring-white/10"
-      />
-      <span className="line-clamp-2 min-w-0 text-sm font-semibold text-white sm:text-base">{name}</span>
+      <span className="rounded-full bg-white/[0.06] p-2 ring-1 ring-white/15 lg:p-2.5">
+        <ClubCrest logoUrl={logo} short={short} size="var(--crest)" className="[--crest:72px] md:[--crest:96px] lg:[--crest:112px]" />
+      </span>
+      <span className="line-clamp-2 min-w-0 text-sm font-semibold text-white sm:text-base lg:text-lg">{name}</span>
     </div>
   );
 }

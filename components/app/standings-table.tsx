@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { ClubCrest } from "./club-crest";
+import { MemberLink } from "./member-link";
 import { getT } from "@/lib/i18n/server";
 
 export type StandingRowData = {
@@ -82,13 +82,13 @@ export async function StandingsTable({
                           </span>
                         </td>
                         <td className="px-2 py-2">
-                          <Link
+                          <MemberLink
                             href={`/registry/klub/${r.clubId}`}
                             className="flex items-center gap-2 hover:text-brand"
                           >
-                            <ClubCrest logoUrl={r.logo} short={r.short} size={20} />
+                            <ClubCrest logoUrl={r.logo} short={r.short} size={28} />
                             <span className="truncate font-medium text-ink">{r.name}</span>
-                          </Link>
+                          </MemberLink>
                         </td>
                         <Cell>{r.played}</Cell>
                         <Cell>{r.won}</Cell>

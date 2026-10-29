@@ -204,7 +204,7 @@ export function PlayerList({
                   active ? "border-night bg-night text-white" : "border-line bg-surface hover:border-ink/30",
                 )}
               >
-                <ClubCrest logoUrl={sheet.club.logo} short={sheet.club.short} size={40} />
+                <ClubCrest logoUrl={sheet.club.logo} short={sheet.club.short} size={56} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{sheet.club.name}</span>
                   <span className={cn("block text-[11px]", active ? "text-white/65" : "text-ink-muted")}>

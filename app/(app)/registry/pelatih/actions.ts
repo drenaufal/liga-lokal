@@ -2,11 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { coaches, users } from "@/lib/db/schema";
-import { saveCoachAccount, type CoachAccountInput } from "@/lib/coach-accounts";
+import { clubs, coaches, users } from "@/lib/db/schema";
+import { applyCoachAccount, isDuplicateEntry, makeCoachAccountSchema, saveCoachAccount, type CoachAccountInput } from "@/lib/coach-accounts";
+import { hashPassword } from "@/lib/auth/password";
+import { can } from "@/lib/auth/rbac";
 import { actionUser } from "@/lib/auth/session";
 import { auditText, changedSuffix, recordAudit } from "@/lib/audit";
 import { documentUrlField, imageUrlField } from "@/lib/media";
@@ -14,7 +16,6 @@ import { releaseReplaced } from "@/lib/media-store";
 import { COACH_DOCUMENT_KEYS } from "@/lib/coach-documents";
 import { formError, type FormState } from "@/lib/form";
 import { COACH_LICENSE_LEVELS, COACH_SPECIALTIES } from "@/lib/status";
-import { insertReturning } from "@/lib/db/returning";
 import { getT } from "@/lib/i18n/server";
 import type { TFunction } from "@/lib/i18n/translate";
 
@@ -29,6 +30,8 @@ const makeCoachSchema = (t: TFunction) => z.object({
   dob: optionalDate(t),
   city: z.string().trim().optional(),
   clubId: z.string().optional(),
+  /** A coach may look after a second SSB (two at most). */
+  secondClubId: z.string().optional(),
   specialty: z
     .string()
     .refine((v) => v === "" || COACH_SPECIALTIES.includes(v), t("Peran tidak dikenali"))
@@ -42,6 +45,9 @@ const makeCoachSchema = (t: TFunction) => z.object({
   photoUrl: imageUrlField(t),
   phone: z.string().trim().optional(),
   email: z.union([z.literal(""), z.email("Email tidak valid")]).optional(),
+  /** Registration form only: the coach's login, created together with the profile. */
+  accountEmail: z.string().trim().toLowerCase().optional(),
+  accountPassword: z.string().optional(),
 });
 
 type CoachInput = z.infer<ReturnType<typeof makeCoachSchema>>;
@@ -52,6 +58,7 @@ function toRow(v: CoachInput) {
     dob: v.dob || null,
     city: v.city || null,
     clubId: v.clubId || null,
+    secondClubId: v.secondClubId || null,
     specialty: v.specialty || null,
     licenseLevel: v.licenseLevel,
     licenseNumber: v.licenseNumber,
@@ -73,6 +80,20 @@ async function licenseTaken(t: TFunction, licenseNumber: string, exceptId?: stri
   return hit ? t("Nomor lisensi sudah terdaftar atas nama {name}", { name: hit.fullName }) : null;
 }
 
+/** The SSB assignment: a second SSB needs a primary one, must differ from it, and both must exist. */
+async function assignmentErrors(t: TFunction, row: Pick<ReturnType<typeof toRow>, "clubId" | "secondClubId">) {
+  const errors: Record<string, string> = {};
+  if (row.secondClubId && !row.clubId) errors.secondClubId = t("Tentukan SSB utama sebelum SSB kedua.");
+  else if (row.secondClubId && row.secondClubId === row.clubId) errors.secondClubId = t("SSB kedua tidak boleh sama dengan SSB utama.");
+  const ids = [row.clubId, row.secondClubId].filter((id): id is string => !!id);
+  if (ids.length) {
+    const found = new Set((await db.select({ id: clubs.id }).from(clubs).where(inArray(clubs.id, ids))).map((c) => c.id));
+    if (row.clubId && !found.has(row.clubId)) errors.clubId = t("SSB tidak ditemukan.");
+    if (row.secondClubId && !found.has(row.secondClubId)) errors.secondClubId ??= t("SSB tidak ditemukan.");
+  }
+  return errors;
+}
+
 function revalidateCoach(id: string, clubIds: (string | null)[]) {
   revalidatePath("/registry/pelatih");
   revalidatePath(`/registry/pelatih/${id}`);
@@ -88,8 +109,35 @@ export async function createCoach(_prev: FormState, formData: FormData): Promise
   const row = toRow(parsed.data);
   const taken = await licenseTaken(t, row.licenseNumber);
   if (taken) return formError(t, { licenseNumber: taken }, formData);
+  const assignment = await assignmentErrors(t, row);
+  if (Object.keys(assignment).length) return formError(t, assignment, formData);
 
-  const [created] = await insertReturning(db, coaches, row);
+  // The login (optional) is checked before anything is saved, then saved together with the profile.
+  const { accountEmail, accountPassword } = parsed.data;
+  let login: CoachAccountInput | null = null;
+  if (accountEmail || accountPassword) {
+    if (!can(user, "registry.coach:account")) return formError(t, { accountEmail: t("Akses ditolak untuk tindakan ini.") }, formData);
+    const account = makeCoachAccountSchema(t).safeParse({ email: accountEmail ?? "", password: accountPassword ?? "", active: true });
+    if (!account.success)
+      return formError(t, Object.fromEntries(account.error.issues.map((i) => [i.path[0] === "email" ? "accountEmail" : "accountPassword", i.message])), formData);
+    if (!account.data.password) return formError(t, { accountPassword: t("Kata sandi wajib diisi untuk akun baru.") }, formData);
+    if (!row.clubId) return formError(t, { clubId: t("Tentukan SSB pelatih sebelum membuat akun login.") }, formData);
+    login = account.data;
+  }
+  const passwordHash = login ? await hashPassword(login.password) : undefined;
+
+  const id = crypto.randomUUID();
+  let account: Awaited<ReturnType<typeof applyCoachAccount>> | null = null;
+  try {
+    await db.transaction(async (tx) => {
+      await tx.insert(coaches).values({ id, ...row });
+      if (login) account = await applyCoachAccount(tx, id, login, passwordHash, t);
+    });
+  } catch (e) {
+    if (login && (isDuplicateEntry(e) || (e instanceof Error && e.message === t("Email sudah terdaftar."))))
+      return formError(t, { accountEmail: t("Email sudah terdaftar.") }, formData);
+    throw e;
+  }
 
   await recordAudit({
     actorId: user.id,
@@ -97,12 +145,18 @@ export async function createCoach(_prev: FormState, formData: FormData): Promise
     actorRole: user.role,
     action: "coach.create",
     entityType: "coach",
-    entityId: created.id,
+    entityId: id,
     summary: auditText("Registrasi pelatih baru: {name} ({level} · {number})", { name: row.fullName, level: row.licenseLevel, number: row.licenseNumber }),
   });
+  if (account) {
+    const created = account as Awaited<ReturnType<typeof applyCoachAccount>>;
+    await recordAudit({ actorId: user.id, actorName: user.name, actorRole: user.role, action: "coach.account", entityType: "user", entityId: created.id,
+      summary: auditText("Akun login pelatih disimpan: {name}", { name: created.name }), after: { ...created } });
+    revalidatePath("/dsp");
+  }
 
-  revalidateCoach(created.id, [row.clubId]);
-  redirect(`/registry/pelatih/${created.id}`);
+  revalidateCoach(id, [row.clubId, row.secondClubId]);
+  redirect(`/registry/pelatih/${id}`);
 }
 
 export async function updateCoach(
@@ -121,6 +175,8 @@ export async function updateCoach(
   const row = toRow(parsed.data);
   const taken = await licenseTaken(t, row.licenseNumber, id);
   if (taken) return formError(t, { licenseNumber: taken }, formData);
+  const assignment = await assignmentErrors(t, row);
+  if (Object.keys(assignment).length) return formError(t, assignment, formData);
 
   await db.transaction(async (tx) => {
     await tx.update(coaches).set(row).where(eq(coaches.id, id));
@@ -148,7 +204,7 @@ export async function updateCoach(
     after: Object.fromEntries(changed.filter((k) => !COACH_DOCUMENT_KEYS.includes(k as never)).map((k) => [k, row[k]])),
   });
 
-  revalidateCoach(id, [before.clubId, row.clubId]);
+  revalidateCoach(id, [before.clubId, before.secondClubId, row.clubId, row.secondClubId]);
   redirect(`/registry/pelatih/${id}`);
 }
 

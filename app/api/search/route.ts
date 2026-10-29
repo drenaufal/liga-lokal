@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { like, or } from "drizzle-orm";
+import { and, like, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { clubs, coaches, competitions, players, referees, venues } from "@/lib/db/schema";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getClubScope, getCurrentUser } from "@/lib/auth/session";
+import { clubScopeFilter, coachScopeFilter, playerScopeFilter } from "@/lib/club-scope";
 import { can } from "@/lib/auth/rbac";
 import { getT } from "@/lib/i18n/server";
 
@@ -16,7 +17,8 @@ export async function GET(req: Request) {
   if (q.length < 2) return NextResponse.json({ results: [] });
   const pattern = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
 
-  // Each kind of result is only searched for people who may open its menu.
+  // Each kind of result is only searched for people who may open its menu, and only within their SSB.
+  const scope = await getClubScope();
   const none = Promise.resolve([] as never[]);
   const [pl, cl, rf, co, tn, vn] = await Promise.all([
     can(user, "registry.player:view")
@@ -24,10 +26,13 @@ export async function GET(req: Request) {
           .select({ id: players.id, name: players.fullName, reg: players.registrationNo })
           .from(players)
           .where(
-            or(
-              like(players.fullName, pattern),
-              like(players.registrationNo, pattern),
-              like(players.nisn, pattern),
+            and(
+              or(
+                like(players.fullName, pattern),
+                like(players.registrationNo, pattern),
+                like(players.nisn, pattern),
+              ),
+              playerScopeFilter(scope),
             ),
           )
           .limit(6)
@@ -36,7 +41,7 @@ export async function GET(req: Request) {
       ? db
           .select({ id: clubs.id, name: clubs.name, short: clubs.shortName })
           .from(clubs)
-          .where(or(like(clubs.name, pattern), like(clubs.shortName, pattern)))
+          .where(and(or(like(clubs.name, pattern), like(clubs.shortName, pattern)), clubScopeFilter(clubs.id, scope)))
           .limit(4)
       : none,
     can(user, "registry.referee:view")
@@ -50,7 +55,7 @@ export async function GET(req: Request) {
       ? db
           .select({ id: coaches.id, name: coaches.fullName, level: coaches.licenseLevel })
           .from(coaches)
-          .where(or(like(coaches.fullName, pattern), like(coaches.licenseNumber, pattern)))
+          .where(and(or(like(coaches.fullName, pattern), like(coaches.licenseNumber, pattern)), coachScopeFilter(scope)))
           .limit(3)
       : none,
     can(user, "competition:view")

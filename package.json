@@ -24,6 +24,7 @@
     "db:seed:dsp": "tsx scripts/seed-coach-dsp.ts",
     "db:seed:super": "tsx scripts/seed-super-admin.ts",
     "db:seed:finance": "tsx scripts/seed-keuangan.ts",
+    "db:recompute-scores": "tsx scripts/recompute-scores.ts",
     "db:reset": "tsx lib/db/reset.ts",
     "db:copy-from-neon": "tsx lib/db/copy-from-neon.ts"
   },

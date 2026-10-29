@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { getBadgeGallery, getPlayerFilterOptions, getManualBadgeOptions } from "@/lib/queries/intelligence";
-import { requireCapability } from "@/lib/auth/session";
+import { getClubScope, requireViewerCapability } from "@/lib/auth/session";
+import { MemberLink } from "@/components/app/member-link";
 import { can } from "@/lib/auth/rbac";
 import { ManualMvp } from "./manual-mvp";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,9 +13,10 @@ import { getI18n } from "@/lib/i18n/server";
 export const dynamic = "force-dynamic";
 export default async function BadgeGalleryPage({ searchParams }: { searchParams: Promise<IntelligenceParams> }) {
   const { t, fmt } = await getI18n();
-  const user = await requireCapability("intelligence.badge:view");
+  const user = await requireViewerCapability("intelligence.badge:view");
   const sp = await searchParams;
-  const [gallery, options] = await Promise.all([getBadgeGallery(sp), getPlayerFilterOptions()]);
+  const clubScope = await getClubScope();
+  const [gallery, options] = await Promise.all([getBadgeGallery(sp, clubScope), getPlayerFilterOptions(clubScope)]);
   const manualOptions = can(user, "intelligence.badge:select") ?await getManualBadgeOptions({ ...sp, ku: gallery.selectedKu }) : null;
   const competition = gallery.competitions.find((c) => c.id === paramValue(sp, "turnamen"));
   const ku = gallery.kus.find((k) => k.id === gallery.selectedKu);
@@ -35,12 +36,12 @@ export default async function BadgeGalleryPage({ searchParams }: { searchParams:
     { key: "awardSort", label: t("Urutkan penerima"), defaultValue: "recent", options: [{ value: "recent", label: t("Terbaru dahulu") }, { value: "oldest", label: t("Terlama dahulu") }, { value: "name", label: t("Nama pemain A–Z") }] },
   ];
   const awardRow = (a: (typeof gallery.badges)[number]["awards"][number]) => <li key={a.id}>
-    <Link href={"/registry/pemain/" + a.playerId} className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-xs hover:bg-surface-2">
+    <MemberLink href={"/registry/pemain/" + a.playerId} className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-xs hover:bg-surface-2">
       <span className="min-w-0 truncate text-ink-secondary">{a.playerName}<span className="text-ink-muted"> · {a.club}</span>
         {!ku && a.ageCode && <span className="text-ink-muted"> · {a.ageCode}</span>}
         {!competition && a.competition && <span className="text-ink-muted"> · {a.competition}</span>}
       </span><span className="shrink-0 text-right"><span className="block font-semibold tabular-nums text-ink">{t("Skor {n}", { n: a.score.toFixed(2) })}</span><span className="text-[10px] text-ink-muted">{fmt.relative(a.awardedAt)}</span></span>
-    </Link>
+    </MemberLink>
   </li>;
   return <div className="space-y-4">
     <IntelligenceFilters params={{ ...sp, ku: gallery.selectedKu }} fields={fields} title={t("Filter & pengurutan galeri lencana")} />

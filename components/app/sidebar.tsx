@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { PanelLeftClose, PanelLeft } from "lucide-react";
+import { LogIn, PanelLeftClose, PanelLeft } from "lucide-react";
 import { navFor } from "@/lib/nav";
 import type { Capability, Role } from "@/lib/auth/rbac";
 import { Logo } from "@/components/brand/logo";
@@ -12,7 +12,8 @@ import { Icon } from "./icon";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n/client";
 
-export function Sidebar({ role, grants }: { role: Role; grants: readonly Capability[] }) {
+/** `guest`: a visitor without an account — the logo leads to the landing page and a login button is shown. */
+export function Sidebar({ role, grants, guest = false }: { role: Role; grants: readonly Capability[]; guest?: boolean }) {
   const t = useT();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = React.useState(false);
@@ -27,7 +28,7 @@ export function Sidebar({ role, grants }: { role: Role; grants: readonly Capabil
       )}
     >
       <div className={cn("flex h-24 items-center", collapsed ? "justify-center px-3" : "px-5")}>
-        <Link href="/command-center" aria-label={BRAND.name} className="flex items-center">
+        <Link href={guest ? "/" : "/command-center"} aria-label={BRAND.name} className="flex items-center">
           <Logo className={collapsed ? "h-9" : "h-[72px]"} />
         </Link>
       </div>
@@ -76,6 +77,20 @@ export function Sidebar({ role, grants }: { role: Role; grants: readonly Capabil
           );
         })}
       </nav>
+
+      {guest && (
+        <Link
+          href={`/login?next=${encodeURIComponent(pathname)}`}
+          title={collapsed ? t("Masuk") : undefined}
+          className={cn(
+            "mx-3 mt-1 flex items-center gap-2.5 rounded-2xl bg-brand px-3 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-dark",
+            collapsed && "justify-center px-0",
+          )}
+        >
+          <LogIn className="size-[18px] shrink-0" />
+          {!collapsed && t("Masuk")}
+        </Link>
+      )}
 
       <button
         onClick={() => setCollapsed((c) => !c)}

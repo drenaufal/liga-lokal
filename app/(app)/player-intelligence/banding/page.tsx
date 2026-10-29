@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { X } from "lucide-react";
 import { getPlayerRadarData, searchPlayersForRadar, getPlayerFilterOptions } from "@/lib/queries/intelligence";
-import { requireCapability } from "@/lib/auth/session";
+import { getClubScope } from "@/lib/auth/session";
+import { requireViewerCapability } from "@/lib/auth/session";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Radar } from "@/components/charts/radar";
 import { RADAR_AXES, radarValues } from "@/lib/player-metrics";
@@ -20,13 +21,14 @@ export default async function ComparePage({
   searchParams: Promise<IntelligenceParams>;
 }) {
   const { t } = await getI18n();
-  await requireCapability("intelligence.compare:view");
+  await requireViewerCapability("intelligence.compare:view");
   const sp = await searchParams;
   const selected = [...new Set(paramValue(sp, "players").split(",").filter(Boolean))].slice(0, 3);
+  const scope = await getClubScope();
   const [results, rows, filterOptions] = await Promise.all([
-    searchPlayersForRadar(sp),
-    selected.length ? getPlayerRadarData(selected) : Promise.resolve([]),
-    getPlayerFilterOptions(),
+    searchPlayersForRadar(sp, scope),
+    selected.length ? getPlayerRadarData(selected, scope) : Promise.resolve([]),
+    getPlayerFilterOptions(scope),
   ]);
   const ordered = selected.map((id) => rows.find((r) => r.id === id)).filter(Boolean) as typeof rows;
 

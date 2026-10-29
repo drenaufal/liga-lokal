@@ -1,4 +1,5 @@
 import { and, count, desc, eq, gte, sql } from "drizzle-orm";
+import { playerScopeFilter } from "@/lib/club-scope";
 import { alias } from "drizzle-orm/mysql-core";
 import { db } from "@/lib/db";
 import { MATCH_DURATION_SQL } from "@/lib/match-clock";
@@ -18,7 +19,8 @@ import { kuNameSql } from "@/lib/queries/ku";
 import { maskHiddenActor } from "@/lib/queries/settings";
 import type { Role } from "@/lib/auth/rbac";
 
-export async function getCommandCenterData(viewer?: Role | null) {
+/** `scope`: the SSB the viewer may see (`getClubScope`); it narrows the player leaderboards. */
+export async function getCommandCenterData(viewer?: Role | null, scope: string[] | null = null) {
   const weekAgo = new Date(Date.now() - 7 * 86400000);
   const hc = alias(clubs, "hc");
   const ac = alias(clubs, "ac");
@@ -130,7 +132,7 @@ export async function getCommandCenterData(viewer?: Role | null) {
       .from(playerStats)
       .innerJoin(players, eq(players.id, playerStats.playerId))
       .leftJoin(clubs, eq(clubs.id, players.clubId))
-      .where(and(eq(playerStats.season, "career"), gte(col, min)))
+      .where(and(eq(playerStats.season, "career"), gte(col, min), playerScopeFilter(scope)))
       .orderBy(desc(col))
       .limit(7);
 
@@ -149,7 +151,7 @@ export async function getCommandCenterData(viewer?: Role | null) {
       .from(playerStats)
       .innerJoin(players, eq(players.id, playerStats.playerId))
       .leftJoin(clubs, eq(clubs.id, players.clubId))
-      .where(and(eq(playerStats.season, "career"), gte(playerStats.appearances, 3)))
+      .where(and(eq(playerStats.season, "career"), gte(playerStats.appearances, 3), playerScopeFilter(scope)))
       .orderBy(desc(playerStats.score))
       .limit(7),
   ]);
