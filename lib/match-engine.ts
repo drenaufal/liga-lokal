@@ -113,6 +113,7 @@ async function bumpStatRow(
     shotsOnTarget: next.shotsOnTarget,
     shotsOffTarget: next.shotsOffTarget,
     interceptions: next.interceptions,
+    saves: next.saves,
     yellowCards: next.yellowCards,
     redCards: next.redCards,
     minutesPlayed: next.minutesPlayed,

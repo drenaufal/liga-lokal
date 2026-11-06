@@ -12,7 +12,7 @@ export const OPEN_VIEW_HEADER = "x-open-view";
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 /**
  * The pages a visitor without an account may read — exact shapes, never a prefix, so the pages
- * that write (`/kompetisi/baru`, `…/ubah`, `…/ku/baru`) and the Excel download stay behind login.
+ * that write (`/kompetisi/baru`, `…/ubah`, `…/ku/baru`, `/artikel/baru`) and the Excel download stay behind login.
  * Each page still checks `GUEST_GRANTS` itself (`requireViewerCapability`).
  */
 const OPEN_VIEWS = [
@@ -20,6 +20,11 @@ const OPEN_VIEWS = [
   new RegExp(`^/kompetisi/${UUID}(/jadwal)?$`, "i"),
   new RegExp(`^/kompetisi/ku/${UUID}(/(jadwal|klasemen|bagan|peserta))?$`, "i"),
   /^\/player-intelligence(\/(banding|formula|badge))?$/,
+  // articles (reading only: /artikel/baru and …/ubah stay behind login) and the public player profile
+  /^\/artikel$/,
+  new RegExp(`^/artikel/${UUID}$`, "i"),
+  /^\/pemain$/,
+  new RegExp(`^/pemain/${UUID}$`, "i"),
 ];
 
 /**

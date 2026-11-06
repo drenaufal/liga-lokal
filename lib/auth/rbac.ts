@@ -129,6 +129,8 @@ const GROUPS = [
     title: msg("Competition & Rules — KU, Peserta & Jadwal"),
     caps: ["ku:create", "ku:status", "ku:teams", "ku:fixtures", "ku:schedule", "ku:match-delete", "ku:delete"],
   },
+  { id: "article", title: msg("Artikel"), caps: ["article:view", "article:create", "article:edit", "article:delete"] },
+  { id: "player-profile", title: msg("Profil Pemain (Publik)"), caps: ["player-profile:view"] },
   {
     id: "match",
     title: "Match Operations",
@@ -510,6 +512,43 @@ const DEFS: Record<Capability, Def> = {
     defaults: OPERATOR,
   },
 
+  /* Articles */
+  "article:view": {
+    label: msg("Membuka Artikel"),
+    description: msg("Membaca artikel yang sudah terbit, tepat di bawah menu Competition & Rules. Terbuka juga untuk pengunjung tanpa akun."),
+    kind: "menu",
+    defaults: NOT_COACH,
+  },
+  "article:create": {
+    label: msg("Menulis artikel"),
+    description: msg("Tombol Artikel Baru: menulis artikel lalu menyimpannya sebagai draf atau langsung menerbitkannya."),
+    kind: "feature",
+    requires: "article:view",
+    defaults: OPERATOR,
+  },
+  "article:edit": {
+    label: msg("Mengubah & menerbitkan artikel"),
+    description: msg("Mengubah artikel, menerbitkan atau menarik kembali ke draf, dan melihat semua draf."),
+    kind: "feature",
+    requires: "article:view",
+    defaults: OPERATOR,
+  },
+  "article:delete": {
+    label: msg("Menghapus artikel"),
+    description: msg("Menghapus artikel secara permanen."),
+    kind: "feature",
+    requires: "article:view",
+    defaults: OPERATOR,
+  },
+
+  /* Public player profile */
+  "player-profile:view": {
+    label: msg("Membuka Profil Pemain (publik)"),
+    description: msg("Daftar dan profil pemain tanpa data sensitif (NISN, tanggal & tempat lahir, wali, dokumen). Terbuka juga untuk pengunjung tanpa akun."),
+    kind: "menu",
+    defaults: NOT_COACH,
+  },
+
   /* Match Ops */
   "match:view": {
     label: msg("Membuka Match Operations"),
@@ -869,13 +908,15 @@ export function can(subject: AccessSubject, cap: Capability): boolean {
 }
 
 /**
- * What a visitor without an account may open: the read-only pages of Competition and Player
- * Intelligence. Nothing that writes is listed, so every edit button stays hidden for them.
+ * What a visitor without an account may open: the read-only pages of Competition, Articles, the public
+ * Player Profile and Player Intelligence. Nothing that writes is listed, so every edit button stays hidden for them.
  * The proxy (`proxy.ts`) lists the matching URLs; a capability missing here keeps a page private
  * even if its URL were added there.
  */
 export const GUEST_GRANTS: readonly Capability[] = [
   "competition:view",
+  "article:view",
+  "player-profile:view",
   "intelligence.radar:view",
   "intelligence.compare:view",
   "intelligence.formula:view",

@@ -9,7 +9,7 @@ import { RADAR_AXES, radarValues, per90Summary } from "@/lib/player-metrics";
 import { LINE_LABEL, positionLine, positionText } from "@/lib/positions";
 import { PlayerPicker } from "./player-picker";
 import { IntelligenceFilters, IntelligencePagination } from "./filters";
-import { playerFilterFields, paramValue, type IntelligenceParams } from "@/lib/intelligence-filters";
+import { playerFilterFields, paramValue, withoutSortFields, type IntelligenceParams } from "@/lib/intelligence-filters";
 import { getI18n } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export default async function RadarPage({
   await requireViewerCapability("intelligence.radar:view");
   const sp = await searchParams;
   const scope = await getClubScope();
-  const [results, filterOptions] = await Promise.all([searchPlayersForRadar(sp, scope), getPlayerFilterOptions(scope)]);
+  const [results, filterOptions] = await Promise.all([searchPlayersForRadar(sp, scope, true), getPlayerFilterOptions(scope)]);
   const list = results.rows;
   const selectedId = paramValue(sp, "player") || list[0]?.id;
   const [rows] = await Promise.all([
@@ -45,14 +45,14 @@ export default async function RadarPage({
 
   return (
     <div className="space-y-4">
-      <IntelligenceFilters params={sp} fields={playerFilterFields(filterOptions, t)} title={t("Filter pemain & radar")} />
+      <IntelligenceFilters params={sp} fields={withoutSortFields(playerFilterFields(filterOptions, t))} title={t("Filter pemain & radar")} />
     <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
       <Card className="h-fit">
         <CardHeader>
           <CardTitle>{t("Pilih Pemain")}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <PlayerPicker players={list} selectedId={selectedId} />
+          <PlayerPicker players={list} selectedId={selectedId} rankOffset={results.offset} />
           <IntelligencePagination params={sp} total={results.total} page={results.page} pageSize={results.pageSize} label={t("pemain")} />
         </CardContent>
       </Card>

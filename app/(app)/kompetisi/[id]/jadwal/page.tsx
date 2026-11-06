@@ -11,7 +11,7 @@ import { can } from "@/lib/auth/rbac";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MatchRow, MatchStack } from "@/components/app/match-row";
+import { MatchTable } from "@/components/app/match-table";
 import { FilterChips, hrefWith } from "@/components/app/filter-chips";
 import { EmptyState } from "@/components/ui/misc";
 import { MATCH_VIEWS, MATCH_VIEW_LABEL, countMatches, filterMatches, parseMatchView } from "@/lib/competition-view";
@@ -172,22 +172,20 @@ export default async function CompetitionSchedulePage({
         dayList.map(([day, list]) => (
           <Card key={day}>
             <CardContent>
-              <h3 className="mb-3 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-secondary">
+              <h3 className="mb-2 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-secondary">
                 {fmt.date(list[0].scheduledAt, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
                 {day === today && <Badge tone="brand">{t("Hari ini")}</Badge>}
               </h3>
-              <MatchStack>
-                {list.map((m) => (
-                  <div key={m.id} className="flex items-center gap-2">
-                    <div className="min-w-0 flex-1">
-                      <MatchRow m={m} />
-                    </div>
-                    {canDeleteMatch && m.status === "scheduled" && (
-                      <DeleteMatchButton matchId={m.id} label={`${m.homeShort ?? "?"} vs ${m.awayShort ?? "?"}`} />
-                    )}
-                  </div>
-                ))}
-              </MatchStack>
+              <MatchTable
+                matches={list}
+                showDate={false}
+                showMeta
+                actions={(m) =>
+                  canDeleteMatch && m.status === "scheduled" ? (
+                    <DeleteMatchButton matchId={m.id} label={`${m.homeShort ?? "?"} vs ${m.awayShort ?? "?"}`} />
+                  ) : null
+                }
+              />
             </CardContent>
           </Card>
         ))

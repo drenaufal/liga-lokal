@@ -106,7 +106,7 @@ ok(Object.keys(diffAgainstDefaults(forged)).length === 0, "access:manage in a su
 
 /* ── Menus ── */
 ok(navFor("super_admin").length === NAV.length + 1, "super_admin sees every menu including Pengaturan");
-ok(hrefs("viewer").join() === "command-center,registry,kompetisi,match-ops,player-intelligence", "viewer sees the read-only menus");
+ok(hrefs("viewer").join() === "command-center,registry,kompetisi,artikel,pemain,match-ops,player-intelligence", "viewer sees the read-only menus");
 ok(hrefs("coach").join() === "dsp,kompetisi,player-intelligence", "a coach has exactly three menus: DSP, Competition and Player Intelligence");
 ok(!can("coach", "dashboard:view") && !can("coach", "match:view") && !can("coach", "registry.player:view") && !can("coach", "scout:view"), "no dashboard, match operations, registry or AI Scout for a coach by default");
 ok(can("coach", "dsp:submit") && can("coach", "competition:view") && can("coach", "intelligence.radar:view") && !can("coach", "scope:all-clubs"), "a coach fills the DSP, reads competitions and player analytics, but only for their own SSB");

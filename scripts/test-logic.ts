@@ -35,7 +35,8 @@ import { FRESH_EVENT_SECONDS, NOTABLE_EVENTS, eventAgeSeconds, isGoalEvent, isNo
 import { QUICK_TYPES } from "@/lib/quick-events";
 import { createT } from "@/lib/i18n/translate";
 import { buildMatchStatistics } from "@/lib/match-statistics";
-import { participationAt, assertPlaying, assertSubstitution, type ParticipationLineup } from "@/lib/match-participation";
+import { participationAt, assertPlaying, assertSubstitution, assertParticipationHistory, type ParticipationLineup } from "@/lib/match-participation";
+import { buildTallies } from "@/lib/match-tally";
 import { withAutomaticSaves } from "@/lib/automatic-saves";
 
 import { RADAR_AXES, radarValues } from "@/lib/player-metrics";
@@ -323,10 +324,22 @@ ok(saved.filter((e) => e.type === "save").length === 2, "goals do not generate s
 ok(withAutomaticSaves([shot(10)], [...matchRoster.map((l) => ({ ...l, slot: l.playerId === "keeper" ? "GK" : null })), { playerId: "fieldGK", clubId: "A", role: "starter", position: "GK", slot: "CB" }]).filter((e) => e.type === "save" && e.playerId === "keeper").length === 1, "match goalkeeper slots take precedence over registry positions");
 const saveLines = buildMatchLines({ length: 60, events: saveEvents, lineups: matchRoster });
 ok(saveLines.find((l) => l.playerId === "keeper")?.saves === 1 && saveLines.find((l) => l.playerId === "benchKeeper")?.saves === 1, "player statistics include automatic saves and preserve goalkeeper minutes");
-ok(participationAt(matchRoster, saveEvents).get("keeper") === "off" && participationAt(matchRoster, saveEvents).get("benchKeeper") === "playing", "substitution disables the outgoing player and activates the incoming reserve");
+ok(participationAt(matchRoster, saveEvents).get("keeper") === "subbed" && participationAt(matchRoster, saveEvents).get("benchKeeper") === "playing", "substitution disables the outgoing player and activates the incoming reserve");
 const throws = (fn: () => void) => { try { fn(); return false; } catch { return true; } };
 ok(throws(() => assertPlaying("unused", matchRoster, saveEvents)) && throws(() => assertPlaying("keeper", matchRoster, saveEvents)), "unused reserves and substituted players cannot record actions");
-ok(throws(() => assertSubstitution("striker", "keeper", "H", matchRoster, [], 10)) && throws(() => assertSubstitution("benchKeeper", "keeper", "A", matchRoster, saveEvents, 30)), "substitutions reject opposing players and players already used");
+ok(throws(() => assertSubstitution("striker", "keeper", "H", matchRoster, [], 10)) && throws(() => assertSubstitution("benchKeeper", "unused", "H", matchRoster, saveEvents, 30)), "substitutions reject opposing players");
+const twoStarters: ParticipationLineup[] = [{ playerId: "a", clubId: "A", role: "starter" }, { playerId: "b", clubId: "A", role: "starter" }, { playerId: "c", clubId: "A", role: "substitute" }];
+ok(throws(() => assertSubstitution("a", "b", "A", twoStarters, [], 10)) && throws(() => assertSubstitution("a", "a", "A", twoStarters, [], 10)), "a player already on the pitch cannot be sent on");
+ok(!throws(() => assertSubstitution("benchKeeper", "keeper", "A", matchRoster, saveEvents, 30)), "a substituted player may come back on");
+const reEntry = [...saveEvents, { type: "substitution", minute: 30, clubId: "A", playerId: "benchKeeper", relatedPlayerId: "keeper" }];
+ok(participationAt(matchRoster, reEntry).get("keeper") === "playing" && participationAt(matchRoster, reEntry).get("benchKeeper") === "subbed", "re-entry puts the player back on the pitch and the other off");
+ok(!throws(() => assertParticipationHistory(matchRoster, reEntry.map((e) => ({ ...e, clubId: e.clubId })))), "a history with a re-entry is valid");
+const sentOff = [...saveEvents, { type: "red_card", minute: 28, clubId: "A", playerId: "benchKeeper", relatedPlayerId: null }];
+ok(participationAt(matchRoster, sentOff).get("benchKeeper") === "off" && throws(() => assertSubstitution("striker", "benchKeeper", "H", matchRoster, sentOff, 40)), "a dismissed player stays off");
+const reEntryLines = Object.fromEntries(buildMatchLines({ length: 60, events: reEntry, lineups: matchRoster }).map((l) => [l.playerId, l]));
+ok(reEntryLines.keeper.minutesPlayed === 20 + 30 && reEntryLines.keeper.appearances === 1 && reEntryLines.benchKeeper.minutesPlayed === 10, "minutes add up every stint: keeper 0–20 and 30–60, reserve 20–30");
+const backOn = buildTallies([{ type: "substitution", minute: 20, playerId: "keeper", relatedPlayerId: "benchKeeper" }, { type: "substitution", minute: 30, playerId: "benchKeeper", relatedPlayerId: "keeper" }]);
+ok(backOn.keeper.subOn === 30 && backOn.keeper.subOff === null && backOn.benchKeeper.subOn === 20 && backOn.benchKeeper.subOff === 30, "the match tags show each player's latest stint");
 ok(!QUICK_TYPES.some((t: string) => t === "save"), "manual save is absent from quick actions");
 ok(withAutomaticSaves(saveEvents.filter((e) => e.minute !== 25), matchRoster).filter((e) => e.type === "save").length === 1, "undoing a shot removes its automatic save");
 ok(withAutomaticSaves([shot(10), { type: "save", minute: 10, clubId: "A", playerId: "keeper", relatedPlayerId: null }], matchRoster).filter((e) => e.type === "save").length === 1, "legacy manually recorded saves are not double counted");
@@ -386,16 +399,17 @@ ok(matchCounts.all === 6 && matchCounts.upcoming === 2 && matchCounts.live === 2
 ok(hrefWith("/kompetisi", { q: "abc", status: undefined }, { status: "all" }) === "/kompetisi?q=abc&status=all" && hrefWith("/kompetisi", { q: "abc", status: "all" }, { status: null }) === "/kompetisi?q=abc" && hrefWith("/kompetisi", {}, {}) === "/kompetisi", "chip links keep the other filters and drop a cleared one");
 
 console.log("\n[scoring formula]");
-const stat = { goals: 2, assists: 1, shotsOnTarget: 3, shotsOffTarget: 4, interceptions: 5, yellowCards: 1, redCards: 0, minutesPlayed: 180 };
-// 2·6 + 1·4 + 3·0.8 + 4·0.1 + 5·1 − 1·1.5 + (180/90)·1.5 = 12 + 4 + 2.4 + 0.4 + 5 − 1.5 + 3
-ok(computeScore(stat, DEFAULT_WEIGHTS) === 25.3, "the score adds every match button, playing time included");
-ok(computeScore({ ...stat, minutesPlayed: 0 }, DEFAULT_WEIGHTS) === 22.3, "playing time is part of the formula (minutes / 90 × weight)");
-ok(WEIGHT_KEYS.join() === "goal,assist,shotOn,shotOff,interception,yellowCard,redCard,minutesPer90", "one weight per match button, plus minutes / 90");
+const stat = { goals: 2, assists: 1, shotsOnTarget: 3, shotsOffTarget: 4, interceptions: 5, saves: 4, yellowCards: 1, redCards: 0, minutesPlayed: 180 };
+// 2·6 + 1·4 + 3·0.8 + 4·0.1 + 5·1 + 4·1.5 − 1·1.5 + (180/90)·1.5 = 12 + 4 + 2.4 + 0.4 + 5 + 6 − 1.5 + 3
+ok(computeScore(stat, DEFAULT_WEIGHTS) === 31.3, "the score adds every match button, saves and playing time included");
+ok(computeScore({ ...stat, minutesPlayed: 0 }, DEFAULT_WEIGHTS) === 28.3, "playing time is part of the formula (minutes / 90 × weight)");
+ok(computeScore(stat, { ...DEFAULT_WEIGHTS, save: 0 }) === 25.3 && computeScore({ ...stat, saves: 0 }, DEFAULT_WEIGHTS) === 25.3, "the save weight scales with the keeper's saves");
+ok(WEIGHT_KEYS.join() === "goal,assist,shotOn,shotOff,interception,save,yellowCard,redCard,minutesPer90", "one weight per match button, plus saves and minutes / 90");
 ok(QUICK_TYPES.every((type) => ({ goal: "goal", assist: "assist", shot_on: "shotOn", shot_off: "shotOff", interception: "interception", red_card: "redCard", yellow_card: "yellowCard" } as Record<string, string>)[type] in DEFAULT_WEIGHTS), "every quick-record button on the match page has a weight");
 const oldFormula = normalizeWeights({ goal: 9, assist: 6, save: 1, tackle: 0.8, cleanSheet: 4, keyPass: 1.4, duelWon: 0.4, motm: 5, yellowCard: -2, redCard: -6, minutesPer90: 2, interception: "x" });
 ok(oldFormula.goal === 9 && oldFormula.assist === 6 && oldFormula.yellowCard === -2 && oldFormula.minutesPer90 === 2, "a formula saved by an older version keeps the weights it shares with the new one");
 ok(oldFormula.shotOn === DEFAULT_WEIGHTS.shotOn && oldFormula.shotOff === DEFAULT_WEIGHTS.shotOff && oldFormula.interception === DEFAULT_WEIGHTS.interception, "missing or non-numeric weights fall back to the defaults");
-ok(!("save" in oldFormula) && !("motm" in oldFormula) && WEIGHT_KEYS.every((k) => Number.isFinite(computeScore(stat, normalizeWeights({ [k]: undefined })))), "retired weights are dropped and a score is never NaN");
+ok(oldFormula.save === 1 && !("motm" in oldFormula) && !("tackle" in oldFormula) && WEIGHT_KEYS.every((k) => Number.isFinite(computeScore(stat, normalizeWeights({ [k]: undefined })))), "retired weights are dropped and a score is never NaN");
 ok(JSON.stringify(normalizeWeights(null)) === JSON.stringify(DEFAULT_WEIGHTS) && normalizeWeights({ goal: 99 }).goal === 12, "no weights means the defaults, and a weight stays inside its slider range");
 ok(weightsFromInput({ goal: 6, shotOff: -9, bogus: 1 }).shotOff === -2 && weightsFromInput({}).goal === 0, "saved weights are clamped to their range and missing ones become 0");
 
@@ -409,6 +423,8 @@ const compId = "6a056fc0-90ef-4395-83f6-ea77c87c0d73";
 const open = (path: string, method = "GET") => isOpenView(method, path);
 ok(["/kompetisi", `/kompetisi/${compId}`, `/kompetisi/${compId}/jadwal`, `/kompetisi/ku/${compId}`, `/kompetisi/ku/${compId}/klasemen`, `/kompetisi/ku/${compId}/bagan`, `/kompetisi/ku/${compId}/peserta`, `/kompetisi/ku/${compId}/jadwal`].every((p) => open(p)), "the competition pages are open to visitors");
 ok(["/player-intelligence", "/player-intelligence/banding", "/player-intelligence/formula", "/player-intelligence/badge"].every((p) => open(p)), "the Player Intelligence pages are open to visitors");
+ok(["/artikel", `/artikel/${compId}`, "/pemain", `/pemain/${compId}`].every((p) => open(p)), "the article and public player pages are open to visitors");
+ok(["/artikel/baru", `/artikel/${compId}/ubah`, "/artikel/abc", "/artikel/", "/pemain/abc", `/pemain/${compId}/kompetisi/${compId}`, "/pemain/baru"].every((p) => !open(p)) && !open("/artikel", "POST") && !open(`/pemain/${compId}`, "POST"), "writing an article, the editor and look-alike paths stay behind login");
 ok(["/kompetisi/baru", `/kompetisi/${compId}/ubah`, `/kompetisi/${compId}/ku/baru`, `/kompetisi/ku/${compId}/klasemen/unduh`, "/kompetisi/abc", "/kompetisi/", `/kompetisi/${compId}/x`, "/kompetisi/ku/baru"].every((p) => !open(p)), "pages that write, the Excel download and look-alike paths stay behind login");
 ok(["/registry/pemain", "/match-ops", "/dsp", "/command-center", "/ai-scout", "/pengaturan", "/akun", "/api/search", "/player-intelligence/../registry", "/player-intelligence/extra"].every((p) => !open(p)), "everything else needs an account");
 ok(!open("/kompetisi", "POST") && !open(`/kompetisi/${compId}`, "POST") && !open("/player-intelligence/formula", "PUT") && open("/kompetisi", "HEAD"), "a visitor can only read: POSTs (Server Function calls) are never let through");

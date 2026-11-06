@@ -5,6 +5,14 @@ const INDONESIAN = createT("id", {});
 export type ParticipationLineup = { playerId: string; clubId: string; role: "starter" | "substitute"; position?: string; slot?: string | null };
 export type ParticipationEvent = { type: string; minute: number; playerId: string | null; relatedPlayerId: string | null; clubId?: string | null; createdAt?: Date | string; voided?: boolean };
 
+/**
+ * - `playing`: on the pitch
+ * - `bench`: a reserve who has not played yet
+ * - `subbed`: taken off in a substitution — may come back on later
+ * - `off`: dismissed (red card / second yellow) — out for the rest of the match
+ */
+export type ParticipationState = "playing" | "bench" | "subbed" | "off";
+
 export function orderedEvents<T extends ParticipationEvent>(events: T[]): T[] {
   return events.filter((e) => !e.voided).sort((a, b) => a.minute - b.minute ||
     (a.createdAt && b.createdAt ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() : 0));
@@ -12,11 +20,11 @@ export function orderedEvents<T extends ParticipationEvent>(events: T[]): T[] {
 
 /** Starting roles stay intact; the event history determines who is currently on the pitch. */
 export function participationAt(lineups: ParticipationLineup[], events: ParticipationEvent[], minute = Infinity) {
-  const states = new Map<string, "playing" | "bench" | "off">(lineups.map((l) => [l.playerId, l.role === "starter" ? "playing" : "bench"]));
+  const states = new Map<string, ParticipationState>(lineups.map((l) => [l.playerId, l.role === "starter" ? "playing" : "bench"]));
   for (const e of orderedEvents(events)) {
     if (e.minute > minute) break;
     if (e.type === "substitution") {
-      if (e.playerId) states.set(e.playerId, "off");
+      if (e.playerId) states.set(e.playerId, "subbed");
       if (e.relatedPlayerId) states.set(e.relatedPlayerId, "playing");
     } else if ((e.type === "red_card" || e.type === "second_yellow") && e.playerId) states.set(e.playerId, "off");
   }
@@ -38,9 +46,13 @@ export function assertPlaying(playerId: string, lineups: ParticipationLineup[], 
     throw new Error(t("Pemain cadangan atau pemain yang sudah keluar tidak dapat mencatat kejadian."));
 }
 
+/**
+ * The player coming on is a reserve who has not played yet, or a squad member who was substituted
+ * off earlier. A dismissed player and one who is already on the pitch cannot be sent on.
+ */
 export function assertSubstitution(out: string, incoming: string | undefined, clubId: string, lineups: ParticipationLineup[], events: ParticipationEvent[], minute: number, t: TFunction = INDONESIAN) {
   assertPlaying(out, lineups, events, minute, t);
-  const states = participationAt(lineups, events, minute);
-  if (!incoming || incoming === out || !lineups.some((p) => p.playerId === incoming && p.clubId === clubId && p.role === "substitute") || states.get(incoming) !== "bench")
-    throw new Error(t("Pemain masuk harus dipilih dari cadangan klub yang belum dimainkan."));
+  const state = incoming ? participationAt(lineups, events, minute).get(incoming) : undefined;
+  if (!incoming || incoming === out || !lineups.some((p) => p.playerId === incoming && p.clubId === clubId) || (state !== "bench" && state !== "subbed"))
+    throw new Error(t("Pemain masuk harus dipilih dari cadangan atau pemain klub yang sudah diganti, bukan yang dikeluarkan."));
 }

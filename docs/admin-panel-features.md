@@ -3,7 +3,7 @@
 Generated from the code on branch `update` (2026-10-16). UI labels are Bahasa Indonesia.
 Every menu, tab and action in the app is **one permission** ("capability"). A **Super Admin** decides, per role,
 which menus open and which actions (create, edit, delete, verify, confirm …) are allowed — on
-**Pengaturan → Hak Akses Peran** (`/pengaturan/akses`). The tables below list all 76 permissions and their factory defaults.
+**Pengaturan → Hak Akses Peran** (`/pengaturan/akses`). The tables below list all 81 permissions and their factory defaults.
 
 ---
 
@@ -39,7 +39,7 @@ The Super Admin is deliberately **not** in that list.
 - `access:manage` can only ever be held by the Super Admin, whatever the matrix says.
 - Defaults reproduce the behaviour from before this feature, so nothing changes until the Super Admin changes it.
 
-## 3. Permission catalog (76) and factory defaults
+## 3. Permission catalog (81) and factory defaults
 
 "Super" is always ✓ and cannot be changed. ✓ in a role column = allowed by default; the Super Admin can switch any cell.
 
@@ -153,6 +153,21 @@ The Super Admin is deliberately **not** in that list.
 | `ku:match-delete` | Fitur | **Menghapus pertandingan terjadwal** — Menghapus pertandingan yang belum dimulai dari jadwal. _(butuh `competition:view`)_ | ✓ | ✓ | ✓ |  |  |  |  |
 | `ku:delete` | Fitur | **Menghapus KU** — Menghapus KU beserta jadwal dan hasilnya. _(butuh `competition:view`)_ | ✓ | ✓ | ✓ |  |  |  |  |
 
+#### Artikel
+
+| Izin | Jenis | Fungsi | Super | Admin | Operator | Wasit | Pelatih | Scout | Peninjau |
+|---|---|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| `article:view` | Menu | **Membuka Artikel** — Membaca artikel yang sudah terbit, tepat di bawah menu Competition & Rules. Terbuka juga untuk pengunjung tanpa akun. | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
+| `article:create` | Fitur | **Menulis artikel** — Tombol Artikel Baru: menulis artikel lalu menyimpannya sebagai draf atau langsung menerbitkannya. _(butuh `article:view`)_ | ✓ | ✓ | ✓ |  |  |  |  |
+| `article:edit` | Fitur | **Mengubah & menerbitkan artikel** — Mengubah artikel, menerbitkan atau menarik kembali ke draf, dan melihat semua draf. _(butuh `article:view`)_ | ✓ | ✓ | ✓ |  |  |  |  |
+| `article:delete` | Fitur | **Menghapus artikel** — Menghapus artikel secara permanen. _(butuh `article:view`)_ | ✓ | ✓ | ✓ |  |  |  |  |
+
+#### Profil Pemain (Publik)
+
+| Izin | Jenis | Fungsi | Super | Admin | Operator | Wasit | Pelatih | Scout | Peninjau |
+|---|---|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| `player-profile:view` | Menu | **Membuka Profil Pemain (publik)** — Daftar dan profil pemain tanpa data sensitif (NISN, tanggal & tempat lahir, wali, dokumen). Terbuka juga untuk pengunjung tanpa akun. | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
+
 #### Match Operations
 
 | Izin | Jenis | Fungsi | Super | Admin | Operator | Wasit | Pelatih | Scout | Peninjau |
@@ -229,11 +244,13 @@ Monitoring of six kinds of financial records per business unit — full guide in
 | 3 | Master Data & Registry | `/registry/*` | any registry tab | Pemain `registry.player:view`, SSB `registry.club:view`, Pelatih `registry.coach:view`, Wasit `registry.referee:view`, Operator `registry.operator:view`, Venue `registry.venue:view`, Kategori Usia `registry.category:view` |
 | 4 | Data Ingestion & Staging | `/ingestion` | `ingestion:view` | batch detail `/ingestion/[batchId]` |
 | 5 | Competition & Rules | `/kompetisi` | `competition:view` | turnamen → KU (Ringkasan, Jadwal & Hasil, Klasemen, Bagan Cup, Peserta) |
-| 6 | Match Operations | `/match-ops` | `match:view` | match console `/match-ops/[id]` |
-| 7 | Player Intelligence | `/player-intelligence` | any tab | Radar Performa `intelligence.radar:view`, Perbandingan `intelligence.compare:view`, Formula `intelligence.formula:view`, Lencana `intelligence.badge:view` |
-| 8 | AI Scout & Insights | `/ai-scout` | `scout:view` | report detail `/ai-scout/laporan/[id]` |
-| 9 | Keuangan | `/keuangan/*` | `finance:view` | Ringkasan, Aset, Modal, Dividen, Registrasi, Match Fee, RAB (all `finance:view`), Unit Bisnis (`finance.units:manage`) |
-| 10 | Pengaturan | `/pengaturan` | `settings:view` | Umum, Jejak Audit (`audit:view`), Hak Akses Peran (`access:manage`) |
+| 6 | Artikel | `/artikel` | `article:view` | open to visitors (published only); drafts, `/artikel/baru` (`article:create`), `/artikel/[id]/ubah` (`article:edit`), publish / take back to draft (`article:edit`), delete (`article:delete`) |
+| 7 | Profil Pemain | `/pemain` | `player-profile:view` | open to visitors; profile `/pemain/[id]` — no NISN, birth date / place, guardian, verification date or documents |
+| 8 | Match Operations | `/match-ops` | `match:view` | match console `/match-ops/[id]` |
+| 9 | Player Intelligence | `/player-intelligence` | any tab | Radar Performa `intelligence.radar:view`, Perbandingan `intelligence.compare:view`, Formula `intelligence.formula:view`, Lencana `intelligence.badge:view` |
+| 10 | AI Scout & Insights | `/ai-scout` | `scout:view` | report detail `/ai-scout/laporan/[id]` |
+| 11 | Keuangan | `/keuangan/*` | `finance:view` | Ringkasan, Aset, Modal, Dividen, Registrasi, Match Fee, RAB (all `finance:view`), Unit Bisnis (`finance.units:manage`) |
+| 12 | Pengaturan | `/pengaturan` | `settings:view` | Umum, Jejak Audit (`audit:view`), Hak Akses Peran (`access:manage`) |
 
 Shell: floating sidebar (lg+), bottom nav + menu sheet (mobile), top bar with command palette (⌘/Ctrl+K — searches
 players, SSB, tournaments, referees, coaches, venues, but only the kinds the role may open), active-formula chip
@@ -304,7 +321,7 @@ Radar (filters, player picker), compare, formula view with impact preview, `form
 ## 6. The access-matrix screen (Super Admin only)
 
 - Route `/pengaturan/akses`. Columns: Super Admin (fixed) + Administrator, Operator, Wasit, Pelatih, Pemandu Bakat, Peninjau, Unit Bisnis.
-  Rows: all 76 permissions in 18 groups, tagged **Menu** or **Fitur**.
+  Rows: all 81 permissions in 20 groups, tagged **Menu** or **Fitur**.
 - Per group: a tri-state checkbox per role switches the whole group; groups collapse; search filters menus/features by name, description or key.
 - Per role: *Bawaan* (factory default), *Semua*, *Kosong*; global *Kembalikan semua ke bawaan*.
 - Cells that differ from the factory default are highlighted; unsaved roles are flagged "diubah"; nothing applies until **Simpan perubahan**.

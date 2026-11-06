@@ -34,7 +34,7 @@ export type TeamSheet = {
 
 export type { PlayerTally };
 
-const GROUP_LABEL = { playing: msg("Di lapangan"), bench: msg("Cadangan"), off: msg("Sudah keluar") };
+const GROUP_LABEL = { playing: msg("Di lapangan"), bench: msg("Cadangan"), subbed: msg("Sudah diganti"), off: msg("Dikeluarkan") };
 
 /** Show the tap immediately; the server's numbers replace it a moment later. */
 function applyQuick(cur: Record<string, PlayerTally>, a: { playerId: string; type: QuickType }) {
@@ -161,7 +161,7 @@ export function PlayerList({
     });
   };
 
-  const groups = (["playing", "bench", "off"] as const)
+  const groups = (["playing", "bench", "subbed", "off"] as const)
     .map((role) => ({ role, players: team.players.filter((p) => p.state === role) }))
     .filter((g) => g.players.length);
 

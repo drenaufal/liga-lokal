@@ -96,6 +96,9 @@ export function playerFilterFields(options: PlayerFilterOptions, t: TFunction, d
   ];
 }
 
+/** The filter fields without the sort controls, for lists that are always ranked by score. */
+export const withoutSortFields = (fields: FilterField[]) => fields.filter((f) => f.key !== "sort" && f.key !== "order");
+
 /** Shared by the live formula preview; rank numbers stay based on score, regardless of display order. */
 export function sortPlayerRows<T extends { id: string; name: string }>(rows: T[], sort: PlayerSort, order: "asc" | "desc", metric: (row: T, key: Exclude<PlayerSort, "name">) => number): T[] {
   const direction = order === "asc" ? 1 : -1;

@@ -22,6 +22,7 @@ import { ClubCrest } from "@/components/app/club-crest";
 import { cn } from "@/lib/utils";
 import { positionText } from "@/lib/positions";
 import { elapsedMinute } from "@/lib/match-clock";
+import type { ParticipationState } from "@/lib/match-participation";
 import { addEvent } from "./actions";
 import { useT } from "@/lib/i18n/client";
 import { msg } from "@/lib/i18n/translate";
@@ -33,7 +34,7 @@ export type RosterPlayer = {
   number: number | null;
   role: "starter" | "substitute" | "squad";
   captain?: boolean;
-  state?: "playing" | "bench" | "off";
+  state?: ParticipationState;
 };
 export type ClubMini = {
   id: string;
@@ -141,10 +142,10 @@ export function EventForm({
   const roster = rosters[clubId] ?? [];
   const selected = roster.find((p) => p.id === playerId);
   const teammates = roster
-    .filter((p) => p.id !== playerId && (meta.related === "sub_in" ? p.role === "substitute" && p.state === "bench" : p.state === "playing"))
+    .filter((p) => p.id !== playerId && (meta.related === "sub_in" ? p.state === "bench" || p.state === "subbed" : p.state === "playing"))
     .sort((a, b) => {
-      // for a substitution, the bench comes first
-      if (meta.related === "sub_in" && a.role !== b.role) return a.role === "substitute" ? -1 : 1;
+      // for a substitution, reserves who have not played come before players who were taken off
+      if (meta.related === "sub_in" && a.state !== b.state) return a.state === "bench" ? -1 : 1;
       return (a.number ?? 99) - (b.number ?? 99);
     });
 
@@ -382,7 +383,10 @@ function SubstitutePicker({
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold text-ink-muted">{p.name}</span>
-                <span className="block truncate text-[11px] text-ink-muted">{positionText(p.position, t)}</span>
+                <span className="block truncate text-[11px] text-ink-muted">
+                  {positionText(p.position, t)}
+                  {p.state === "subbed" ? ` · ${t("Sudah diganti")}` : ""}
+                </span>
               </span>
               {on && <Check className="size-4 shrink-0 text-brand" strokeWidth={3} />}
             </button>

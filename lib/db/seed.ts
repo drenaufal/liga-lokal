@@ -1186,6 +1186,7 @@ async function main() {
         shotsOnTarget: 0,
         shotsOffTarget: 0,
         interceptions: a.interceptions,
+        saves: a.saves,
         yellowCards: a.yellowCards,
         redCards: a.redCards,
         minutesPlayed: a.minutesPlayed,

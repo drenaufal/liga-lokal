@@ -13,6 +13,7 @@ import {
   Hand,
   Heart,
   LayoutDashboard,
+  Newspaper,
   Radar,
   Radio,
   Settings,
@@ -30,6 +31,7 @@ import {
 
 const MAP = {
   LayoutDashboard,
+  Newspaper,
   Database,
   FileInput,
   Trophy,

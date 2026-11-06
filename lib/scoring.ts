@@ -2,8 +2,9 @@ import type { FormulaWeights } from "@/lib/db/schema";
 import { msg } from "@/lib/i18n/translate";
 
 /**
- * The formula follows the one-tap buttons on the match page (see `lib/quick-events.ts`) and keeps
- * playing time. Anything the operators cannot record with a button does not score.
+ * The formula follows the one-tap buttons on the match page (see `lib/quick-events.ts`), the
+ * keeper's saves (derived from the opposing shots on target, so they have no button) and playing
+ * time. Anything the operators cannot record does not score.
  */
 export const DEFAULT_WEIGHTS: FormulaWeights = {
   goal: 6,
@@ -11,6 +12,7 @@ export const DEFAULT_WEIGHTS: FormulaWeights = {
   shotOn: 0.8,
   shotOff: 0.1,
   interception: 1,
+  save: 1.5,
   yellowCard: -1.5,
   redCard: -5,
   minutesPer90: 1.5,
@@ -25,6 +27,7 @@ export const WEIGHT_LABELS: Record<keyof FormulaWeights, string> = {
   shotOn: msg("Tembakan tepat sasaran"),
   shotOff: msg("Tembakan meleset"),
   interception: msg("Intersep"),
+  save: msg("Penyelamatan"),
   yellowCard: msg("Kartu kuning"),
   redCard: msg("Kartu merah"),
   minutesPer90: msg("Menit / 90"),
@@ -37,6 +40,7 @@ export const WEIGHT_RANGE: Record<keyof FormulaWeights, readonly [min: number, m
   shotOn: [0, 4],
   shotOff: [-2, 2],
   interception: [0, 8],
+  save: [0, 8],
   yellowCard: [-8, 8],
   redCard: [-8, 8],
   minutesPer90: [0, 8],
@@ -75,6 +79,7 @@ export type ScorableStats = {
   shotsOnTarget: number;
   shotsOffTarget: number;
   interceptions: number;
+  saves: number;
   yellowCards: number;
   redCards: number;
   minutesPlayed: number;
@@ -88,6 +93,7 @@ export function scorableOf(s: ScorableStats): ScorableStats {
     shotsOnTarget: s.shotsOnTarget,
     shotsOffTarget: s.shotsOffTarget,
     interceptions: s.interceptions,
+    saves: s.saves,
     yellowCards: s.yellowCards,
     redCards: s.redCards,
     minutesPlayed: s.minutesPlayed,
@@ -106,6 +112,7 @@ export function computeScore(
     s.shotsOnTarget * w.shotOn +
     s.shotsOffTarget * w.shotOff +
     s.interceptions * w.interception +
+    s.saves * w.save +
     s.yellowCards * w.yellowCard +
     s.redCards * w.redCard +
     per90 * w.minutesPer90;

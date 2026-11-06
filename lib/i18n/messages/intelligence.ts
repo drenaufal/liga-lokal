@@ -1,7 +1,7 @@
 /** intelligence */
 export const intelligence = {
-  "Bobot mengikuti tombol pencatatan di halaman pertandingan. Waktu bermain (menit / 90) tetap dihitung.":
-    "Weights follow the recording buttons on the match page. Playing time (minutes / 90) still counts.",
+  "Bobot mengikuti tombol pencatatan di halaman pertandingan, ditambah penyelamatan kiper (dihitung otomatis) dan waktu bermain (menit / 90).":
+    "Weights follow the recording buttons on the match page, plus the keeper's saves (counted automatically) and playing time (minutes / 90).",
   "Kreator Serangan": "Playmaker",
   "Sarung Tangan Emas": "Golden Glove",
   "Pemain Terbaik Turnamen": "Tournament MVP",
@@ -74,6 +74,7 @@ export const intelligence = {
   "Penyelamatan / 90": "Saves / 90",
   "Pilih pemain di panel kiri untuk melihat profil radar.": "Select a player in the left panel to see the radar profile.",
   "Filter pemain & radar": "Player & radar filters",
+  "Peringkat {n}": "Rank {n}",
   "{n} penampilan": "{n} {n|appearance|appearances}",
   "{goals} gol · {assists} assist": "{goals} {goals|goal|goals} · {assists} {assists|assist|assists}",
   "Rating {value}": "Rating {value}",

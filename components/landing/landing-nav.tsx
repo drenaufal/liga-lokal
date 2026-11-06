@@ -3,12 +3,14 @@
 import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, Menu, Radar, Trophy, X } from "lucide-react";
+import { ArrowRight, Menu, Newspaper, Radar, Trophy, Users, X } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n/client";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { isPageLink, type LandingLink } from "./links";
+
+const PAGE_ICON = { trophy: Trophy, radar: Radar, newspaper: Newspaper, users: Users } as const;
 
 /**
  * Landing navigation: logo on the left, the section links as separate grey
@@ -77,15 +79,15 @@ export function LandingNav({ links }: { links: LandingLink[] }) {
             />
           </Link>
 
-          <nav aria-label={t("Bagian halaman")} className="hidden items-center gap-4 xl:flex">
+          <nav aria-label={t("Bagian halaman")} className="hidden items-center gap-3 xl:flex">
             {links.map((l) => {
               if (isPageLink(l)) {
-                const PageIcon = l.icon === "radar" ? Radar : Trophy;
+                const PageIcon = PAGE_ICON[l.icon ?? "trophy"];
                 return (
                   <Link
                     key={l.href}
                     href={l.href}
-                    className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-brand/10 px-5 py-2 text-xs font-semibold text-brand ring-1 ring-brand/25 transition-colors hover:bg-brand hover:text-white"
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-brand/10 px-4 py-2 text-xs font-semibold text-brand ring-1 ring-brand/25 transition-colors hover:bg-brand hover:text-white"
                   >
                     <PageIcon className="size-3.5" />
                     {t.dyn(l.label)}
@@ -140,7 +142,10 @@ export function LandingNav({ links }: { links: LandingLink[] }) {
                   className="mt-1 flex items-center justify-between rounded-2xl bg-brand/10 px-4 py-3.5 text-sm font-semibold text-brand hover:bg-brand/15"
                 >
                   <span className="flex items-center gap-2">
-                    {l.icon === "radar" ? <Radar className="size-4" /> : <Trophy className="size-4" />}
+                    {(() => {
+                      const PageIcon = PAGE_ICON[l.icon ?? "trophy"];
+                      return <PageIcon className="size-4" />;
+                    })()}
                     {t.dyn(l.label)}
                   </span>
                   <ArrowRight className="size-4" />

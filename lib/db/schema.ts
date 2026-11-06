@@ -269,7 +269,7 @@ export const ageCategories = mysqlTable("age_categories", {
 
 /**
  * One weight per one-tap button on the match page (goal, assist, shot on / off target,
- * interception, yellow / red card) plus playing time. Formulas saved before this shape existed
+ * interception, yellow / red card), the keeper's saves, plus playing time. Formulas saved before this shape existed
  * carry other keys; `normalizeWeights` (lib/scoring.ts) reads them safely.
  */
 export type FormulaWeights = {
@@ -278,6 +278,7 @@ export type FormulaWeights = {
   shotOn: number;
   shotOff: number;
   interception: number;
+  save: number;
   yellowCard: number;
   redCard: number;
   minutesPer90: number;
@@ -901,6 +902,38 @@ export const media = mysqlTable("media", {
   createdAt: timestamp("created_at").default(NOW).notNull(),
 });
 
+/* ═══════════════════════════ Articles ═════════════════════════════ */
+
+export const articleStatus = ["draft", "published"] as const;
+
+/**
+ * An article shown on the home page (below the tournaments) and on /artikel. Written in plain
+ * text: blank lines separate paragraphs, so the page never renders stored HTML. A draft is only
+ * visible to people who may edit articles.
+ */
+export const articles = mysqlTable(
+  "articles",
+  {
+    id: id(),
+    title: varchar("title", { length: 200 }).notNull(),
+    /** Short teaser shown on cards. */
+    excerpt: text("excerpt"),
+    body: longtext("body").notNull(),
+    coverUrl: text("cover_url"),
+    status: mysqlEnum("status", articleStatus).notNull().default("draft"),
+    authorId: uuid("author_id").references(() => users.id, { onDelete: "set null" }),
+    /** Set when the article is first published; the date readers see. */
+    publishedAt: timestamp("published_at"),
+    createdAt: timestamp("created_at").default(NOW).notNull(),
+    updatedAt: timestamp("updated_at").default(NOW).notNull(),
+  },
+  (t) => [index("articles_status_published_idx").on(t.status, t.publishedAt)],
+);
+
+export const articlesRelations = relations(articles, ({ one }) => ({
+  author: one(users, { fields: [articles.authorId], references: [users.id] }),
+}));
+
 /* ═══════════════════════ Audit + AI ═══════════════════════════════ */
 
 export const auditLogs = mysqlTable("audit_logs", {
@@ -1266,6 +1299,7 @@ export type Referee = typeof referees.$inferSelect;
 export type Coach = typeof coaches.$inferSelect;
 export type Media = typeof media.$inferSelect;
 export type Venue = typeof venues.$inferSelect;
+export type Article = typeof articles.$inferSelect;
 export type AgeCategory = typeof ageCategories.$inferSelect;
 export type ScoringFormula = typeof scoringFormulas.$inferSelect;
 /** Turnamen (the umbrella event). */

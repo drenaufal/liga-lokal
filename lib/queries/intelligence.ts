@@ -38,8 +38,16 @@ export async function getPlayerFilterOptions(scope: string[] | null = null) {
   return { ages, clubs: clubRows };
 }
 
-export async function searchPlayersForRadar(params: IntelligenceParams = {}, scope: string[] | null = null) {
+/**
+ * `byScore`: rank strictly by performance score, highest first, whatever `?sort=` / `?order=` say
+ * (the radar list shows the leaders, so it has no sort controls).
+ */
+export async function searchPlayersForRadar(params: IntelligenceParams = {}, scope: string[] | null = null, byScore = false) {
   const filter = parsePlayerFilters(params);
+  if (byScore) {
+    filter.sort = "score";
+    filter.order = "desc";
+  }
   const where = playerConditions(filter, scope);
   const [{ total }] = await db.select({ total: count() }).from(playerStats)
     .innerJoin(players, eq(players.id, playerStats.playerId))

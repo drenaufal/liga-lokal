@@ -7,7 +7,7 @@ export type LandingLink = {
   href: `#${string}` | `/${string}`;
   label: string;
   /** Icon of a page menu (a name, since the nav is a client component and cannot be handed a component). */
-  icon?: "trophy" | "radar";
+  icon?: "trophy" | "radar" | "newspaper" | "users";
 };
 
 export const isPageLink = (l: LandingLink) => l.href.startsWith("/");

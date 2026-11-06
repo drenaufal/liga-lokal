@@ -86,8 +86,13 @@ export function buildMatchLines(input: {
   const events: LineEvent[] = withAutomaticSaves(input.events, lineups);
 
   const lineupOf = new Map(lineups.map((l) => [l.playerId, l]));
-  const subOn = new Map<string, number>();
-  const subOff = new Map<string, number>();
+  // Every time a player goes on / comes off, in match order. A player can go off and come back on.
+  const marks = new Map<string, { minute: number; on: boolean }[]>();
+  const mark = (pid: string, minute: number, on: boolean) => {
+    const list = marks.get(pid) ?? [];
+    list.push({ minute, on });
+    marks.set(pid, list);
+  };
   const firstMinute = new Map<string, number>();
   const clubSeen = new Map<string, string>();
   const participants = new Set<string>();
@@ -96,16 +101,16 @@ export function buildMatchLines(input: {
     if (l.role === "starter") participants.add(l.playerId);
     else if (l.subInMinute != null) {
       participants.add(l.playerId);
-      subOn.set(l.playerId, l.subInMinute);
+      mark(l.playerId, l.subInMinute, true);
     }
-    if (l.subOutMinute != null) subOff.set(l.playerId, l.subOutMinute);
+    if (l.subOutMinute != null) mark(l.playerId, l.subOutMinute, false);
   }
 
   for (const e of events) {
     if (e.type === "substitution") {
-      if (e.playerId) subOff.set(e.playerId, e.minute); // player going off
+      if (e.playerId) mark(e.playerId, e.minute, false); // player going off
       if (e.relatedPlayerId) {
-        subOn.set(e.relatedPlayerId, e.minute); // player coming on
+        mark(e.relatedPlayerId, e.minute, true); // player coming on
         participants.add(e.relatedPlayerId);
         if (e.clubId && !clubSeen.has(e.relatedPlayerId)) clubSeen.set(e.relatedPlayerId, e.clubId);
       }
@@ -120,15 +125,35 @@ export function buildMatchLines(input: {
     }
   }
 
+  /** Minutes on the pitch, adding up every stint. */
+  const minutesOn = (pid: string, role: LineLineup["role"] | undefined) => {
+    const list = (marks.get(pid) ?? []).sort((x, y) => x.minute - y.minute); // stable: ties keep match order
+    // Where the first stint starts. A reserve who was never sent on (he only has events) is assumed
+    // to have been on from his first event; someone with no line-up row who first appears coming on
+    // starts then, otherwise at kick-off.
+    let from: number | null;
+    if (role === "starter") from = 0;
+    else if (role === "substitute") from = list.some((m) => m.on) ? null : (firstMinute.get(pid) ?? 0);
+    else from = list[0]?.on ? null : 0;
+    let total = 0;
+    for (const m of list) {
+      if (m.on && from === null) from = m.minute;
+      else if (!m.on && from !== null) {
+        total += Math.max(0, m.minute - from);
+        from = null;
+      }
+    }
+    if (from !== null) total += Math.max(0, length - from);
+    return total;
+  };
+
   const lines = new Map<string, MatchLine>();
   for (const pid of participants) {
     const lu = lineupOf.get(pid);
     const clubId = lu?.clubId ?? clubSeen.get(pid) ?? fallbackClub?.(pid) ?? null;
     const line = emptyLine(pid, clubId);
-    const start = subOn.get(pid) ?? (lu?.role === "substitute" ? (firstMinute.get(pid) ?? 0) : 0);
-    const end = subOff.get(pid) ?? length;
     line.appearances = 1;
-    line.minutesPlayed = Math.max(1, Math.min(length, Math.max(0, end - start)));
+    line.minutesPlayed = Math.max(1, Math.min(length, minutesOn(pid, lu?.role)));
     lines.set(pid, line);
   }
 

@@ -29,7 +29,7 @@ type PreviewPlayer = {
   name: string;
   club: string | null;
   position: string;
-} & ScorableStats & { appearances: number; rating: number; ageCode: string | null; saves: number };
+} & ScorableStats & { appearances: number; rating: number; ageCode: string | null };
 
 
 export function FormulaWorkbench({
@@ -153,7 +153,7 @@ export function FormulaWorkbench({
               />
             )}
             <p className="text-[11px] leading-relaxed text-ink-muted">
-              {t("Bobot mengikuti tombol pencatatan di halaman pertandingan. Waktu bermain (menit / 90) tetap dihitung.")}
+              {t("Bobot mengikuti tombol pencatatan di halaman pertandingan, ditambah penyelamatan kiper (dihitung otomatis) dan waktu bermain (menit / 90).")}
             </p>
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
               {WEIGHT_KEYS.map((k) => (

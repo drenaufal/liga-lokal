@@ -17,6 +17,8 @@ export const components = {
   "Dicatat oleh {name}": "Recorded by {name}",
   "assist {name}": "assist {name}",
   "Stadion": "Stadium",
+  "Babak::fase": "Stage",
+  "KU & Stadion": "Age group & stadium",
   "DSP sudah submit": "Squad list submitted",
   "DSP belum submit": "Squad list not submitted",
   "Sudah submit": "Submitted",
