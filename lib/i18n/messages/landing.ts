@@ -113,11 +113,11 @@ export const landing = {
   "Konsol laga langsung: klik pemain untuk mencatat gol, kartu, dan pergantian dari pinggir lapangan.":
     "A live match console: tap a player to log goals, cards and substitutions from the touchline.",
   "Analisis": "Analyze",
-  "Klasemen, radar performa, dan laporan AI Scout diperbarui seketika dari setiap kejadian.":
-    "Standings, performance radar and AI Scout reports update instantly from every event.",
+  "Klasemen, radar performa, dan riwayat perkembangan pemain diperbarui seketika dari setiap kejadian.":
+    "Standings, performance radar and player development history update instantly from every event.",
 
   // modules
-  "Tujuh modul kerja": "Seven work modules",
+  "Enam modul kerja": "Six work modules",
   "Dirancang mengikuti alur kerja nyata organisasi pengelola kompetisi, dari perencanaan hingga evaluasi pasca-pertandingan.":
     "Designed around the real workflow of a competition-managing organization, from planning to post-match evaluation.",
   "Dasbor operasional real-time: status sistem, live match monitor, dan papan peringkat.":
@@ -173,8 +173,8 @@ export const landing = {
 
   // CTA + footer
   "Siap melihat {brand} bekerja?": "Ready to see {brand} at work?",
-  "Masuk untuk menjelajahi seluruh tujuh modul, dari kompetisi akar rumput hingga intelijen pemain.":
-    "Sign in to explore all seven modules, from grassroots competitions to player intelligence.",
+  "Masuk untuk menjelajahi seluruh enam modul, dari kompetisi akar rumput hingga intelijen pemain.":
+    "Sign in to explore all six modules, from grassroots competitions to player intelligence.",
   "Masuk ke Platform": "Sign in to the Platform",
   "Tinjau modul": "Review the modules",
   "{tagline} — sistem operasi terpadu untuk kompetisi, data pemain, dan talenta sepak bola akar rumput Indonesia.":

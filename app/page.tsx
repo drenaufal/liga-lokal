@@ -18,7 +18,6 @@ import {
   Check,
   Goal,
   ArrowLeftRight,
-  Search,
 } from "lucide-react";
 import { LandingNav } from "@/components/landing/landing-nav";
 import { LiveSection } from "@/components/landing/live-section";
@@ -106,7 +105,7 @@ const STEPS = [
   { body: "#ec5951", tab: "#b23c37", text: "text-white", title: msg("Daftarkan"), desc: msg("Registrasi pemain, klub, pelatih, dan wasit — lengkap dengan verifikasi dokumen KIA.") },
   { body: "#4361ee", tab: "#1f307d", text: "text-white", title: msg("Jadwalkan"), desc: msg("Buat turnamen, tambahkan KU-nya, lalu dapatkan fixture otomatis untuk format Liga atau Cup — atau susun jadwal sendiri.") },
   { body: "#ffc8eb", tab: "#c597b2", text: "text-ink", title: msg("Pertandingkan"), desc: msg("Konsol laga langsung: klik pemain untuk mencatat gol, kartu, dan pergantian dari pinggir lapangan.") },
-  { body: "#c3ffa9", tab: "#8fc77d", text: "text-ink", title: msg("Analisis"), desc: msg("Klasemen, radar performa, dan laporan AI Scout diperbarui seketika dari setiap kejadian.") },
+  { body: "#c3ffa9", tab: "#8fc77d", text: "text-ink", title: msg("Analisis"), desc: msg("Klasemen, radar performa, dan riwayat perkembangan pemain diperbarui seketika dari setiap kejadian.") },
 ];
 
 const MODULES = [
@@ -116,7 +115,6 @@ const MODULES = [
   { icon: Trophy, block: "bg-block-yellow text-ink", name: "Competition & Rules", desc: msg("Turnamen dengan banyak KU, format Liga & Cup — fixture otomatis atau manual, klasemen dan bagan real-time.") },
   { icon: Radio, block: "bg-block-blue text-white", name: "Match Operations", desc: msg("Konsol pertandingan langsung: klik pemain untuk mencatat kejadian, lalu validasi hasil.") },
   { icon: Radar, block: "bg-block-mint text-ink", name: "Player Intelligence", desc: msg("Grafik radar performa, perbandingan head-to-head, dan mesin formula penilaian.") },
-  { icon: Sparkles, block: "bg-block-pink text-ink", name: "AI Scout & Insights", desc: msg("Pencarian talenta bahasa natural dan laporan analisis pemain otomatis.") },
 ];
 
 const VALUES = [
@@ -410,40 +408,6 @@ export default async function LandingPage() {
               </div>
             </article>
           </div>
-
-          {/* AI scout */}
-          <article className="reveal mt-4 flex flex-col gap-6 rounded-[2rem] bg-night p-6 text-white sm:mt-5 sm:rounded-[2.5rem] sm:p-9 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-md">
-              <span className="grid size-11 place-items-center rounded-full bg-white/10 text-brand">
-                <Sparkles className="size-5" />
-              </span>
-              <h3 className="mt-5 font-headline text-4xl uppercase leading-none sm:text-5xl">AI Talent Scout</h3>
-              <p className="mt-2.5 text-sm leading-relaxed text-night-muted">
-                {t("Pencarian dan evaluasi talenta berbasis kecerdasan buatan untuk keputusan scouting yang lebih objektif.")}
-              </p>
-            </div>
-            <div className="w-full max-w-lg" aria-hidden>
-              <div className="flex items-center gap-3 rounded-full bg-night-2 py-2 pl-5 pr-2 ring-1 ring-night-line">
-                <Search className="size-4 shrink-0 text-night-muted" />
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-white">{t("Gelandang KU-15 kaki kiri, umpan kunci tinggi")}</span>
-                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand">
-                  <ArrowRight className="size-4" />
-                </span>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {[
-                  ["Arya Nugroho", "92"],
-                  ["Dimas Gunawan", "88"],
-                  ["Reza Ramadhan", "85"],
-                ].map(([n, s]) => (
-                  <span key={n} className="flex items-center gap-2 rounded-full bg-white py-1 pl-3 pr-1 text-xs font-semibold text-ink">
-                    {n}
-                    <span className="rounded-full bg-block-mint px-2 py-0.5 font-headline text-sm leading-none">{s}</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          </article>
         </div>
       </section>
 
@@ -486,7 +450,7 @@ export default async function LandingPage() {
             <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-12">
               <div className="lg:pt-20">
                 <Kicker>{t("Modul")}</Kicker>
-                <Headline className="mt-2 text-[56px] sm:text-[84px] xl:text-[96px]">{t("Tujuh modul kerja")}</Headline>
+                <Headline className="mt-2 text-[56px] sm:text-[84px] xl:text-[96px]">{t("Enam modul kerja")}</Headline>
                 <p className="mt-5 max-w-sm text-[16px] font-bold leading-snug text-coral sm:text-lg">
                   {t("Dirancang mengikuti alur kerja nyata organisasi pengelola kompetisi, dari perencanaan hingga evaluasi pasca-pertandingan.")}
                 </p>
@@ -591,7 +555,7 @@ export default async function LandingPage() {
               {t("Siap melihat {brand} bekerja?", { brand: BRAND.name })}
             </h2>
             <p className="mt-6 max-w-md text-sm font-semibold leading-snug text-ink sm:text-[16px]">
-              {t("Masuk untuk menjelajahi seluruh tujuh modul, dari kompetisi akar rumput hingga intelijen pemain.")}
+              {t("Masuk untuk menjelajahi seluruh enam modul, dari kompetisi akar rumput hingga intelijen pemain.")}
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
