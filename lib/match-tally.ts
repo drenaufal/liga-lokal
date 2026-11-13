@@ -10,7 +10,9 @@ export type PlayerTally = {
   yellow: number;
   /** Red cards, including the dismissal that follows a second yellow. */
   red: number;
+  /** Minute of the latest substitution taking the player off (cleared when he comes back on). */
   subOff: number | null;
+  /** Minute he last came on. */
   subOn: number | null;
 };
 
@@ -38,6 +40,8 @@ type TallyEvent = {
 /**
  * Per-player counters from a match's events (voided ones must be left out).
  * Assists come from the paired "assist" events, as the stats engine counts them.
+ * Events must be in match order: a player substituted off and later back on shows only the
+ * latest stint.
  */
 export function buildTallies(events: TallyEvent[]): Record<string, PlayerTally> {
   const tallies: Record<string, PlayerTally> = {};
@@ -77,7 +81,11 @@ export function buildTallies(events: TallyEvent[]): Record<string, PlayerTally> 
         break;
       case "substitution":
         t.subOff = e.minute;
-        if (e.relatedPlayerId) tally(e.relatedPlayerId).subOn = e.minute;
+        if (e.relatedPlayerId) {
+          const incoming = tally(e.relatedPlayerId);
+          incoming.subOn = e.minute;
+          incoming.subOff = null;
+        }
         break;
     }
   }

@@ -1,36 +1,18 @@
 import type { PlayerStat } from "@/lib/db/schema";
+import { msg } from "@/lib/i18n/translate";
 
 export const RADAR_AXES = [
-  { key: "attack", label: "Gol" },
-  { key: "creation", label: "Assist" },
-  { key: "passing", label: "Umpan Kunci" },
-  { key: "defending", label: "Tekel & Intersep" },
-  { key: "keeping", label: "Penyelamatan" },
-  { key: "discipline", label: "Disiplin" },
+  { key: "goals", label: msg("Goal") },
+  { key: "assists", label: msg("Assist::statistik") },
+  { key: "shotsOnTarget", label: msg("Shot on goal") },
+  { key: "saves", label: msg("Saves") },
+  { key: "interceptions", label: msg("Intercept") },
+  { key: "shotsOffTarget", label: msg("Shot off target") },
 ] as const;
 
-const clamp100 = (v: number) => Math.max(4, Math.min(100, Math.round(v)));
-
-/** Normalise a stat line into 0–100 radar values (per-90 rates against fixed caps). */
+/** Actual counters from recorded match statistics. */
 export function radarValues(s: Partial<PlayerStat> | null | undefined) {
-  const mins = s?.minutesPlayed ?? 0;
-  const per90 = (n: number) => (mins > 0 ? (n / mins) * 90 : 0);
-  const goals = per90(s?.goals ?? 0);
-  const assists = per90(s?.assists ?? 0);
-  const keyPasses = per90(s?.keyPasses ?? 0);
-  const def = per90((s?.tackles ?? 0) + (s?.interceptions ?? 0));
-  const saves = per90(s?.saves ?? 0);
-  const cards = (s?.yellowCards ?? 0) + (s?.redCards ?? 0) * 2;
-  const apps = s?.appearances ?? 1;
-
-  return {
-    attack: clamp100((goals / 1.1) * 100),
-    creation: clamp100((assists / 0.8) * 100),
-    passing: clamp100((keyPasses / 2.5) * 100),
-    defending: clamp100((def / 7) * 100),
-    keeping: clamp100((saves / 5) * 100),
-    discipline: clamp100(100 - (cards / Math.max(1, apps)) * 60),
-  };
+  return Object.fromEntries(RADAR_AXES.map(({ key }) => [key, s?.[key] ?? 0]));
 }
 
 /** Compact per-90 summary numbers for the profile stat strip. */

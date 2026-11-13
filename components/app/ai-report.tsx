@@ -2,8 +2,9 @@ import { Sparkles } from "lucide-react";
 import type { AiReportResult } from "@/lib/db/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { getT } from "@/lib/i18n/server";
 
-export function AiReportView({
+export async function AiReportView({
   result,
   model,
   kind,
@@ -12,6 +13,7 @@ export function AiReportView({
   model: string;
   kind: string;
 }) {
+  const t = await getT();
   return (
     <div className="space-y-4">
       <Card>
@@ -27,10 +29,10 @@ export function AiReportView({
               <p className="mt-2 text-sm leading-relaxed text-ink-secondary">{result.summary}</p>
               <div className="mt-3 flex flex-wrap items-center gap-1.5">
                 <Badge tone={model === "demo" ? "neutral" : "violet"}>
-                  {model === "demo" ? "Mode Demo — berbasis data" : `Model: ${model}`}
+                  {model === "demo" ? t("Analisis berbasis data") : t("Model: {model}", { model })}
                 </Badge>
-                {result.tags?.map((t) => (
-                  <Badge key={t}>{t}</Badge>
+                {result.tags?.map((tag) => (
+                  <Badge key={tag}>{tag}</Badge>
                 ))}
               </div>
             </div>
@@ -81,7 +83,7 @@ export function AiReportView({
       {result.recommendations && result.recommendations.length > 0 && (
         <Card>
           <CardContent>
-            <h3 className="text-sm font-semibold text-ink">Rekomendasi Tindak Lanjut</h3>
+            <h3 className="text-sm font-semibold text-ink">{t("Rekomendasi Tindak Lanjut")}</h3>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {result.recommendations.map((r, i) => (
                 <span
@@ -98,8 +100,8 @@ export function AiReportView({
 
       <p className="text-center text-[11px] text-ink-muted">
         {kind === "player_analysis"
-          ? "Analisis dihasilkan dari data performa terverifikasi pada platform LigaLokal."
-          : "Wawasan berbasis data kejadian yang tercatat pada sistem."}
+          ? t("Analisis dihasilkan dari data performa terverifikasi pada platform LigaLokal.")
+          : t("Wawasan berbasis data kejadian yang tercatat pada sistem.")}
       </p>
     </div>
   );

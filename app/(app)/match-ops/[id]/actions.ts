@@ -1,48 +1,101 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, gte, inArray, lte, ne, or } from "drizzle-orm";
-import { alias } from "drizzle-orm/mysql-core";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
-  clubs,
+  ageCategories,
+  tournaments,
   matchEvents,
+  matchDspSubmissions,
+  matchLineups,
   matches,
-  referees,
   scoringFormulas,
   standings,
   tournamentTeams,
-  users,
 } from "@/lib/db/schema";
 import { actionUser } from "@/lib/auth/session";
-import { recordAudit } from "@/lib/audit";
+import { assertMatchAccess } from "@/lib/competition-access";
+import { can } from "@/lib/auth/rbac";
+import { auditText, recordAudit } from "@/lib/audit";
 import { liveMinute, recomputeMatchScore, syncMatchStats } from "@/lib/match-engine";
+import { advanceCupWinner, isCupStage } from "@/lib/cup-advance";
+import { matchWinnerSide } from "@/lib/fixtures";
 import {
   QUICK_TYPES,
+  TEAM_COUNTER_TYPES,
   matchDuration,
   recordQuickEvent,
+  recordTeamEvent,
+  removeLastTeamEvent,
   undoQuickEvent,
   type QuickType,
+  type TeamCounterType,
 } from "@/lib/match-events";
 import {
   DEFAULT_TIEBREAKERS,
   computeStandings,
   type MatchResultInput,
 } from "@/lib/standings";
-import { DEFAULT_WEIGHTS } from "@/lib/scoring";
+import { normalizeWeights } from "@/lib/scoring";
 import {
-  MAX_MATCH_MINUTES,
-  MIN_MATCH_MINUTES,
   clockCap,
   halfOf,
 } from "@/lib/match-clock";
-import { EVENT_LABEL, licenseStatus } from "@/lib/status";
-import { formatDateTime } from "@/lib/utils";
+import { EVENT_LABEL } from "@/lib/status";
+import { officialAssignmentConflicts, saveMatchOfficials, startAssignedMatch } from "@/lib/match-officials";
+import { recordManualMatchEvent, voidManualMatchEvent } from "@/lib/manual-match-events";
+import { getEligibleMatchPlayers } from "@/lib/queries/match-roster";
+import { getT } from "@/lib/i18n/server";
+import type { TFunction } from "@/lib/i18n/translate";
+
+export async function saveMatchSquad(matchId: string, playerIds: string[], starterIds?: string[]) {
+  const t = await getT();
+  const user = await actionUser("match:squad");
+  await assertMatchAccess(matchId);
+  const ids = z.array(z.string().uuid()).min(2).max(200).parse(playerIds);
+  const starters = starterIds ? z.array(z.string().uuid()).parse(starterIds) : undefined;
+  if (starters?.some((id) => !ids.includes(id))) throw new Error(t("Starter harus termasuk pemain yang dipilih."));
+  const m = await loadMatch(matchId);
+  const [ku] = await db.select({ rules: ageCategories.rules }).from(tournaments)
+    .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId)).where(eq(tournaments.id, m.tournamentId));
+  const onField = ku?.rules?.playersOnField;
+  const clubIds = [m.homeClubId, m.awayClubId].filter(Boolean) as string[];
+  const eligible = await getEligibleMatchPlayers(m.tournamentId, clubIds);
+  if (clubIds.length !== 2 || new Set(ids).size !== ids.length || ids.some((id) => !eligible.some((p) => p.id === id)) ||
+      clubIds.some((clubId) => !eligible.some((p) => p.clubId === clubId && ids.includes(p.id))))
+    throw new Error(t("Pilih pemain yang sesuai untuk kedua tim."));
+  await db.transaction(async (tx) => {
+    const [locked] = await tx.select().from(matches).where(eq(matches.id, matchId)).for("update");
+    if (!locked || locked.status !== "scheduled") throw new Error(t("Pemain hanya dapat dipilih sebelum pertandingan dimulai."));
+    const previous = await tx.select().from(matchLineups).where(eq(matchLineups.matchId, matchId));
+    await tx.delete(matchLineups).where(eq(matchLineups.matchId, matchId));
+    const next = ids.map((playerId) => {
+      const p = eligible.find((p) => p.id === playerId)!;
+      const saved = previous.find((l) => l.playerId === playerId && l.clubId === p.clubId);
+      return { matchId, clubId: p.clubId, playerId, shirtNumber: saved?.shirtNumber ?? p.jersey,
+        role: starters ? (starters.includes(playerId) ? "starter" as const : "substitute" as const) : saved?.role ?? "starter", isCaptain: saved?.isCaptain ?? false,
+        slot: saved?.slot ?? (p.position === "GK" ? "GK" : null), x: saved?.x, y: saved?.y };
+    });
+    if (clubIds.some((clubId) => !next.some((p) => p.clubId === clubId && p.role === "starter"))) throw new Error(t("Pilih minimal satu starter untuk setiap tim."));
+    if (clubIds.some((clubId) => next.filter((p) => p.clubId === clubId && p.role === "starter" && p.slot === "GK").length > 1)) throw new Error(t("Pilih satu kiper sebagai starter untuk setiap tim."));
+    if (onField && clubIds.some((clubId) => next.filter((p) => p.clubId === clubId && p.role === "starter").length > onField)) throw new Error(t("Maksimal {n} starter untuk setiap tim sesuai aturan KU.", { n: onField }));
+    await tx.insert(matchLineups).values(next);
+    for (const clubId of clubIds) {
+      // only the starting XI invalidates a coach's DSP: cadangan are whoever is left over
+      const key = (rows: { playerId: string; role: string; clubId: string }[]) => rows.filter((p) => p.clubId === clubId && p.role === "starter").map((p) => p.playerId).sort().join(",");
+      if (key(previous) !== key(next)) await tx.delete(matchDspSubmissions).where(and(eq(matchDspSubmissions.matchId, matchId), eq(matchDspSubmissions.clubId, clubId)));
+    }
+  });
+  await recordAudit({ actorId: user.id, actorName: user.name, actorRole: user.role, action: "match.squad", entityType: "match", entityId: matchId, summary: auditText("Pemain pertandingan dipilih: {n} pemain", { n: ids.length }) });
+  rev(matchId, m.tournamentId);
+}
 
 async function loadMatch(id: string) {
+  const t = await getT();
   const m = await db.query.matches.findFirst({ where: eq(matches.id, id) });
-  if (!m) throw new Error("Pertandingan tidak ditemukan");
+  if (!m) throw new Error(t("Pertandingan tidak ditemukan"));
   return m;
 }
 
@@ -50,85 +103,25 @@ function rev(id: string, tournamentId?: string) {
   revalidatePath(`/match-ops/${id}`);
   revalidatePath("/match-ops");
   revalidatePath("/command-center");
-  if (tournamentId) revalidatePath(`/kompetisi/${tournamentId}`, "layout");
+  // the KU's own pages and the Turnamen above it both show results and progress
+  if (tournamentId) {
+    revalidatePath(`/kompetisi/ku/${tournamentId}`, "layout");
+    revalidatePath("/kompetisi", "layout");
+  }
 }
 
 /* ── Penugasan wasit & operator ─────────────────────────────────────────── */
 
-/** Other matches within two hours that already use this referee or operator. */
-async function assignmentConflicts(
-  m: { id: string; scheduledAt: Date },
-  refereeId: string | null,
-  operatorId: string | null,
-) {
-  if (!refereeId && !operatorId) return [];
-  const hc = alias(clubs, "hc");
-  const ac = alias(clubs, "ac");
-  const lo = new Date(m.scheduledAt.getTime() - 2 * 3_600_000);
-  const hi = new Date(m.scheduledAt.getTime() + 2 * 3_600_000);
-  const rows = await db
-    .select({
-      scheduledAt: matches.scheduledAt,
-      refereeId: matches.refereeId,
-      operatorId: matches.operatorId,
-      home: hc.shortName,
-      away: ac.shortName,
-    })
-    .from(matches)
-    .leftJoin(hc, eq(hc.id, matches.homeClubId))
-    .leftJoin(ac, eq(ac.id, matches.awayClubId))
-    .where(
-      and(
-        ne(matches.id, m.id),
-        gte(matches.scheduledAt, lo),
-        lte(matches.scheduledAt, hi),
-        inArray(matches.status, ["scheduled", "live", "halftime"]),
-        or(
-          refereeId ? eq(matches.refereeId, refereeId) : undefined,
-          operatorId ? eq(matches.operatorId, operatorId) : undefined,
-        ),
-      ),
-    );
-  const out: string[] = [];
-  for (const r of rows) {
-    const where = `${r.home ?? "?"} vs ${r.away ?? "?"} (${formatDateTime(r.scheduledAt)})`;
-    if (refereeId && r.refereeId === refereeId) out.push(`Wasit juga bertugas di ${where}`);
-    if (operatorId && r.operatorId === operatorId) out.push(`Operator juga bertugas di ${where}`);
-  }
-  return out;
-}
-
-/** Assign (or change) the referee and operator. Allowed until the match kicks off. */
+/** Assign one referee and any number of operators before kick-off. */
 export async function assignOfficials(formData: FormData) {
   const user = await actionUser("match:assign");
-  const matchId = String(formData.get("matchId"));
+  const matchId = String(formData.get("matchId") ?? "");
   const refereeId = String(formData.get("refereeId") ?? "") || null;
-  const operatorId = String(formData.get("operatorId") ?? "") || null;
-  const m = await loadMatch(matchId);
-  if (m.status !== "scheduled") throw new Error("Penugasan hanya bisa diubah sebelum pertandingan dimulai");
-
-  let refereeName: string | null = null;
-  if (refereeId) {
-    const [r] = await db.select().from(referees).where(eq(referees.id, refereeId));
-    if (!r) throw new Error("Wasit tidak ditemukan");
-    const st = licenseStatus(r.licenseExpiry, r.status === "revoked");
-    if (st === "expired" || st === "revoked")
-      throw new Error(`Lisensi ${r.fullName} ${st === "expired" ? "sudah kedaluwarsa" : "telah dicabut"}`);
-    refereeName = r.fullName;
-  }
-  let operatorName: string | null = null;
-  if (operatorId) {
-    const [o] = await db
-      .select({ name: users.name, role: users.role, active: users.active })
-      .from(users)
-      .where(eq(users.id, operatorId));
-    if (!o || !o.active) throw new Error("Operator tidak ditemukan");
-    if (o.role !== "operator" && o.role !== "admin") throw new Error("Pengguna ini bukan operator kompetisi");
-    operatorName = o.name;
-  }
-
-  await db.update(matches).set({ refereeId, operatorId, updatedAt: new Date() }).where(eq(matches.id, matchId));
-
+  // Accept the former field as well for a console that was opened before an update.
+  const values = formData.has("operatorIds") ? formData.getAll("operatorIds") : formData.getAll("operatorId");
+  const operatorIds = values.map(String).filter(Boolean);
+  await assertMatchAccess(matchId);
+  const result = await saveMatchOfficials({ matchId, refereeId, operatorIds });
   await recordAudit({
     actorId: user.id,
     actorName: user.name,
@@ -136,39 +129,20 @@ export async function assignOfficials(formData: FormData) {
     action: "match.assign",
     entityType: "match",
     entityId: matchId,
-    summary: `Penugasan: wasit ${refereeName ?? "—"}, operator ${operatorName ?? "—"}`,
-    before: { refereeId: m.refereeId, operatorId: m.operatorId },
-    after: { refereeId, operatorId },
+    summary: auditText("Penugasan: wasit {referee}, operator {operators}", { referee: result.refereeName ?? "—", operators: result.operators.map((o) => o.name).join(", ") || "—" }),
+    before: result.before,
+    after: result.after,
   });
-  rev(matchId, m.tournamentId);
-  return { warnings: await assignmentConflicts(m, refereeId, operatorId) };
+  rev(matchId, result.match.tournamentId);
+  return { warnings: await officialAssignmentConflicts(result.match, refereeId, result.operators) };
 }
 
 /* ── Jalannya pertandingan ──────────────────────────────────────────────── */
 
 export async function startMatch(id: string, durationMinutes: number) {
   const user = await actionUser("match:operate");
-  const m = await loadMatch(id);
-  if (m.status === "completed") throw new Error("Pertandingan sudah selesai");
-  if (m.status !== "scheduled") throw new Error("Pertandingan sudah dimulai");
-  if (!m.refereeId || !m.operatorId)
-    throw new Error("Tugaskan wasit dan operator terlebih dahulu sebelum memulai pertandingan.");
-  const duration = Math.round(Number(durationMinutes));
-  if (!Number.isFinite(duration) || duration < MIN_MATCH_MINUTES || duration > MAX_MATCH_MINUTES) {
-    throw new Error(`Durasi harus antara ${MIN_MATCH_MINUTES} dan ${MAX_MATCH_MINUTES} menit`);
-  }
-
-  await db
-    .update(matches)
-    .set({
-      status: "live",
-      period: "first_half",
-      clockStartedAt: new Date(),
-      currentMinute: 0,
-      durationMinutes: duration,
-      updatedAt: new Date(),
-    })
-    .where(eq(matches.id, id));
+  await assertMatchAccess(id);
+  const m = await startAssignedMatch(id, durationMinutes);
 
   await recordAudit({
     actorId: user.id,
@@ -177,13 +151,14 @@ export async function startMatch(id: string, durationMinutes: number) {
     action: "match.start",
     entityType: "match",
     entityId: id,
-    summary: `Pertandingan dimulai (kick-off), durasi ${duration} menit`,
+    summary: auditText("Pertandingan dimulai (kick-off), durasi {n} menit", { n: m.durationMinutes }),
   });
   rev(id, m.tournamentId);
 }
 
 export async function pauseClock(id: string) {
   const user = await actionUser("match:operate");
+  await assertMatchAccess(id);
   const m = await loadMatch(id);
   const duration = await matchDuration(m);
   const minute = liveMinute(m, clockCap(duration));
@@ -194,13 +169,14 @@ export async function pauseClock(id: string) {
   await recordAudit({
     actorId: user.id, actorName: user.name, actorRole: user.role,
     action: "match.pause", entityType: "match", entityId: id,
-    summary: `Waktu dihentikan pada menit ${minute}`,
+    summary: auditText("Waktu dihentikan pada menit {n}", { n: minute }),
   });
   rev(id, m.tournamentId);
 }
 
 export async function resumeSecondHalf(id: string) {
   const user = await actionUser("match:operate");
+  await assertMatchAccess(id);
   const m = await loadMatch(id);
   const half = (m.homeScoreHt == null);
   const duration = await matchDuration(m);
@@ -218,13 +194,14 @@ export async function resumeSecondHalf(id: string) {
   await recordAudit({
     actorId: user.id, actorName: user.name, actorRole: user.role,
     action: "match.resume", entityType: "match", entityId: id,
-    summary: "Babak kedua dimulai",
+    summary: auditText("Babak kedua dimulai"),
   });
   rev(id, m.tournamentId);
 }
 
 export async function endMatch(id: string) {
   const user = await actionUser("match:operate");
+  await assertMatchAccess(id);
   const m = await loadMatch(id);
   const duration = await matchDuration(m);
   const minute = liveMinute(m, clockCap(duration));
@@ -241,7 +218,7 @@ export async function endMatch(id: string) {
   await recordAudit({
     actorId: user.id, actorName: user.name, actorRole: user.role,
     action: "match.end", entityType: "match", entityId: id,
-    summary: `Pertandingan berakhir ${m.homeScore}-${m.awayScore} pada menit ${minute}`,
+    summary: auditText("Pertandingan berakhir {a}-{b} pada menit {n}", { a: m.homeScore, b: m.awayScore, n: minute }),
   });
   rev(id, m.tournamentId);
 }
@@ -251,7 +228,7 @@ export async function endMatch(id: string) {
 const eventSchema = z.object({
   matchId: z.string(),
   type: z.enum([
-    "goal", "penalty_goal", "own_goal", "assist", "save", "yellow_card",
+    "goal", "penalty_goal", "own_goal", "assist", "yellow_card",
     "red_card", "second_yellow", "foul", "corner", "offside", "substitution",
     "shot_on", "shot_off", "injury", "interception",
   ]),
@@ -263,49 +240,18 @@ const eventSchema = z.object({
 });
 
 export async function addEvent(formData: FormData) {
-  const user = await actionUser("match:operate");
+  const t = await getT();
+  const user = await actionUser("match:events");
   const parsed = eventSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("Data kejadian tidak valid");
+  if (!parsed.success) throw new Error(t("Data kejadian tidak valid"));
   const v = parsed.data;
-  const m = await loadMatch(v.matchId);
-  const half = halfOf(await matchDuration(m));
-  const period = v.minute > half ? "second_half" : "first_half";
-
-  await db.insert(matchEvents).values({
-    matchId: v.matchId,
-    type: v.type,
-    minute: v.minute,
-    period,
-    clubId: v.clubId,
-    playerId: v.playerId || null,
-    relatedPlayerId: v.relatedPlayerId || null,
-    detail: v.note ? { note: v.note } : undefined,
-    createdBy: user.id,
-  });
-
-  // A goal's assister is stored on the goal (relatedPlayerId) *and* as its own
-  // "assist" event — the latter is what player statistics count.
-  if (v.type === "goal" && v.playerId && v.relatedPlayerId) {
-    await db.insert(matchEvents).values({
-      matchId: v.matchId,
-      type: "assist",
-      minute: v.minute,
-      period,
-      clubId: v.clubId,
-      playerId: v.relatedPlayerId,
-      relatedPlayerId: v.playerId,
-      createdBy: user.id,
-    });
-  }
-
-  if (["goal", "penalty_goal", "own_goal"].includes(v.type)) {
-    await recomputeMatchScore(v.matchId);
-  }
+  await assertMatchAccess(v.matchId);
+  const m = await recordManualMatchEvent(v, user.id);
 
   await recordAudit({
     actorId: user.id, actorName: user.name, actorRole: user.role,
     action: "match.event.create", entityType: "match", entityId: v.matchId,
-    summary: `Kejadian dicatat: ${v.type} menit ${v.minute}`,
+    summary: auditText("Kejadian dicatat: {type} menit {n}", { type: v.type, n: v.minute }),
   });
   rev(v.matchId, m.tournamentId);
 }
@@ -316,8 +262,10 @@ export async function addEvent(formData: FormData) {
  * can offer "Batalkan".
  */
 export async function quickEvent(input: { matchId: string; clubId: string; playerId: string; type: string }) {
-  const user = await actionUser("match:operate");
-  if (!(QUICK_TYPES as readonly string[]).includes(input.type)) throw new Error("Jenis kejadian tidak valid");
+  const t = await getT();
+  const user = await actionUser("match:events");
+  if (!(QUICK_TYPES as readonly string[]).includes(input.type)) throw new Error(t("Jenis kejadian tidak valid"));
+  await assertMatchAccess(input.matchId);
   const r = await recordQuickEvent({
     matchId: input.matchId,
     clubId: input.clubId,
@@ -328,7 +276,7 @@ export async function quickEvent(input: { matchId: string; clubId: string; playe
   await recordAudit({
     actorId: user.id, actorName: user.name, actorRole: user.role,
     action: "match.event.create", entityType: "match", entityId: input.matchId,
-    summary: `${EVENT_LABEL[r.type] ?? r.type} — ${r.jerseyNumber ? `#${r.jerseyNumber} ` : ""}${r.playerName}, menit ${r.minute}`,
+    summary: auditText("{event} — {player}, menit {n}", { event: EVENT_LABEL[r.type] ?? r.type, player: (r.jerseyNumber ? "#" + r.jerseyNumber + " " : "") + r.playerName, n: r.minute }),
   });
   rev(input.matchId, r.tournamentId);
   return {
@@ -341,73 +289,81 @@ export async function quickEvent(input: { matchId: string; clubId: string; playe
   };
 }
 
+/**
+ * A tap on a team counter (Pelanggaran / Sudut / Passing) for one club. The event has no player,
+ * so it never reaches player statistics. Passes are tapped constantly, so they leave no audit
+ * entry and only refresh the match page.
+ */
+export async function teamEvent(input: { matchId: string; clubId: string; type: string }) {
+  const t = await getT();
+  const user = await actionUser("match:events");
+  if (!(TEAM_COUNTER_TYPES as readonly string[]).includes(input.type)) throw new Error(t("Jenis kejadian tidak valid"));
+  await assertMatchAccess(input.matchId);
+  const type = input.type as TeamCounterType;
+  const r = await recordTeamEvent({ matchId: input.matchId, clubId: input.clubId, type, userId: user.id });
+  if (type === "pass") revalidatePath(`/match-ops/${input.matchId}`);
+  else {
+    await recordAudit({
+      actorId: user.id, actorName: user.name, actorRole: user.role,
+      action: "match.event.create", entityType: "match", entityId: input.matchId,
+      summary: auditText("{event} (tim), menit {n}", { event: EVENT_LABEL[type] ?? type, n: r.minute }),
+    });
+    rev(input.matchId, r.tournamentId);
+  }
+  return { minute: r.minute, count: r.count };
+}
+
+/** The "−" on a team counter: takes back the club's latest one. */
+export async function undoTeamEvent(input: { matchId: string; clubId: string; type: string }) {
+  const t = await getT();
+  const user = await actionUser("match:events");
+  if (!(TEAM_COUNTER_TYPES as readonly string[]).includes(input.type)) throw new Error(t("Jenis kejadian tidak valid"));
+  await assertMatchAccess(input.matchId);
+  const type = input.type as TeamCounterType;
+  const r = await removeLastTeamEvent({ matchId: input.matchId, clubId: input.clubId, type });
+  if (type === "pass") revalidatePath(`/match-ops/${input.matchId}`);
+  else {
+    await recordAudit({
+      actorId: user.id, actorName: user.name, actorRole: user.role,
+      action: "match.event.undo", entityType: "match", entityId: input.matchId,
+      summary: auditText("Kejadian {event} menit {n} dibatalkan (salah catat)", { event: EVENT_LABEL[type] ?? type, n: r.minute }),
+    });
+    rev(input.matchId, r.tournamentId);
+  }
+  return { count: r.count };
+}
+
 /** "Batalkan" on the toast that follows a quick event. */
 export async function undoEvent(input: { matchId: string; eventId: string }) {
-  const user = await actionUser("match:operate");
+  const user = await actionUser("match:events");
+  await assertMatchAccess(input.matchId);
   const r = await undoQuickEvent({
     matchId: input.matchId,
     eventId: input.eventId,
     userId: user.id,
-    isAdmin: user.role === "admin",
+    isAdmin: can(user, "match:undo-any"),
   });
   await recordAudit({
     actorId: user.id, actorName: user.name, actorRole: user.role,
     action: "match.event.undo", entityType: "match", entityId: input.matchId,
-    summary: `Kejadian ${EVENT_LABEL[r.type] ?? r.type} menit ${r.minute} dibatalkan (salah catat)`,
+    summary: auditText("Kejadian {event} menit {n} dibatalkan (salah catat)", { event: EVENT_LABEL[r.type] ?? r.type, n: r.minute }),
   });
   rev(input.matchId, r.tournamentId);
 }
 
 export async function voidEvent(formData: FormData) {
-  const user = await actionUser("match:operate");
+  const t = await getT();
+  const user = await actionUser("match:void");
   const eventId = String(formData.get("eventId"));
   const matchId = String(formData.get("matchId"));
-  const reason = String(formData.get("reason") ?? "Koreksi operator");
+  const reason = String(formData.get("reason") ?? t("Koreksi operator"));
+  await assertMatchAccess(matchId);
 
-  await db
-    .update(matchEvents)
-    .set({ voided: true, voidReason: reason })
-    .where(eq(matchEvents.id, eventId));
-  const [ev] = await db.select().from(matchEvents).where(eq(matchEvents.id, eventId));
-
-  // voiding a goal also voids the assist recorded with it
-  if (ev && (ev.type === "goal" || ev.type === "penalty_goal") && ev.playerId && ev.relatedPlayerId) {
-    await db
-      .update(matchEvents)
-      .set({ voided: true, voidReason: reason })
-      .where(
-        and(
-          eq(matchEvents.matchId, matchId),
-          eq(matchEvents.type, "assist"),
-          eq(matchEvents.playerId, ev.relatedPlayerId),
-          eq(matchEvents.relatedPlayerId, ev.playerId),
-          eq(matchEvents.minute, ev.minute),
-          eq(matchEvents.voided, false),
-        ),
-      );
-  }
-  // …and voiding an assist leaves its goal without an assister
-  if (ev && ev.type === "assist" && ev.playerId && ev.relatedPlayerId) {
-    await db
-      .update(matchEvents)
-      .set({ relatedPlayerId: null })
-      .where(
-        and(
-          eq(matchEvents.matchId, matchId),
-          inArray(matchEvents.type, ["goal", "penalty_goal"]),
-          eq(matchEvents.playerId, ev.relatedPlayerId),
-          eq(matchEvents.relatedPlayerId, ev.playerId),
-          eq(matchEvents.minute, ev.minute),
-        ),
-      );
-  }
-
-  await recomputeMatchScore(matchId);
-  const m = await loadMatch(matchId);
+  const m = await voidManualMatchEvent(matchId, eventId, reason);
   await recordAudit({
     actorId: user.id, actorName: user.name, actorRole: user.role,
     action: "match.event.void", entityType: "match", entityId: matchId,
-    summary: `Kejadian dibatalkan — ${reason}`,
+    summary: auditText("Kejadian dibatalkan — {reason}", { reason }),
   });
   rev(matchId, m.tournamentId);
 }
@@ -418,14 +374,15 @@ async function activeWeights() {
   const f = await db.query.scoringFormulas.findFirst({
     where: eq(scoringFormulas.isActive, true),
   });
-  return f?.weights ?? DEFAULT_WEIGHTS;
+  return normalizeWeights(f?.weights);
 }
 
 async function recomputeTournamentStandings(tournamentId: string) {
   const t = await db.query.tournaments.findFirst({
     where: (tt, { eq: e }) => e(tt.id, tournamentId),
   });
-  if (!t || t.format === "knockout") return;
+  // a Cup has no table (unless it is an older cup that still has a group stage)
+  if (!t || (t.format === "cup" && t.groupCount === 0)) return;
 
   const teams = await db
     .select({ clubId: tournamentTeams.clubId, group: tournamentTeams.groupLabel })
@@ -478,11 +435,29 @@ async function recomputeTournamentStandings(tournamentId: string) {
   }
 }
 
-export async function confirmResult(formData: FormData) {
+/** What happened to a Cup winner after a result was saved — shown to the person who saved it. */
+export type CupOutcome = { advancedTo: string | null; warning: string | null };
+
+async function cupOutcome(t: TFunction, matchId: string): Promise<CupOutcome> {
+  const r = await advanceCupWinner(matchId);
+  if (r.status === "advanced") return { advancedTo: r.to, warning: null };
+  if (r.status === "blocked") return { advancedTo: null, warning: r.reason };
+  if (r.status === "undecided") {
+    return { advancedTo: null, warning: t("Skor seri — isi skor adu penalti agar pemenang maju ke babak berikutnya.") };
+  }
+  return { advancedTo: null, warning: null };
+}
+
+export async function confirmResult(formData: FormData): Promise<CupOutcome> {
+  const t = await getT();
   const user = await actionUser("match:confirm");
   const id = String(formData.get("id"));
+  await assertMatchAccess(id);
   const m = await loadMatch(id);
-  if (m.status !== "completed") throw new Error("Selesaikan pertandingan terlebih dahulu");
+  if (m.status !== "completed") throw new Error(t("Selesaikan pertandingan terlebih dahulu"));
+  if (isCupStage(m.stage) && !matchWinnerSide(m)) {
+    throw new Error(t("Pertandingan sistem gugur tidak boleh berakhir seri. Isi skor adu penalti terlebih dahulu."));
+  }
 
   // Idempotent: confirming again only applies what changed since last time.
   await syncMatchStats(id, await activeWeights());
@@ -498,20 +473,60 @@ export async function confirmResult(formData: FormData) {
     .where(eq(matches.id, id));
 
   await recomputeTournamentStandings(m.tournamentId);
+  const outcome = await cupOutcome(t, id);
 
   await recordAudit({
     actorId: user.id, actorName: user.name, actorRole: user.role,
     action: "match.confirm", entityType: "match", entityId: id,
-    summary: `Hasil ${m.homeScore}-${m.awayScore} dikonfirmasi; klasemen & statistik diperbarui`,
+    summary: outcome.advancedTo
+      ? auditText("Hasil {a}-{b} dikonfirmasi; klasemen & statistik diperbarui; pemenang maju ke {slot}", { a: m.homeScore, b: m.awayScore, slot: outcome.advancedTo })
+      : auditText("Hasil {a}-{b} dikonfirmasi; klasemen & statistik diperbarui", { a: m.homeScore, b: m.awayScore }),
   });
   rev(id, m.tournamentId);
+  return outcome;
 }
 
-export async function amendResult(formData: FormData) {
+/** Records the shoot-out score of a Cup match that finished level. */
+export async function setShootout(input: { matchId: string; home: number; away: number }): Promise<CupOutcome> {
+  const t = await getT();
   const user = await actionUser("match:confirm");
+  const { matchId, home, away } = input;
+  await assertMatchAccess(matchId);
+  const m = await loadMatch(matchId);
+  if (!isCupStage(m.stage)) throw new Error(t("Adu penalti hanya untuk pertandingan sistem gugur"));
+  if (m.status !== "completed") throw new Error(t("Selesaikan pertandingan terlebih dahulu"));
+  if (m.homeScore !== m.awayScore) throw new Error(t("Skor tidak seri — adu penalti tidak diperlukan"));
+  const ok = (n: number) => Number.isInteger(n) && n >= 0 && n <= 30;
+  if (!ok(home) || !ok(away)) throw new Error(t("Skor penalti harus bilangan 0–30"));
+  if (home === away) throw new Error(t("Adu penalti harus ada pemenangnya — skor tidak boleh sama"));
+
+  await db
+    .update(matches)
+    .set({ homePenalties: home, awayPenalties: away, updatedAt: new Date() })
+    .where(eq(matches.id, matchId));
+
+  // an already confirmed result moves its winner on as soon as the shoot-out is known
+  const outcome =
+    m.resultStatus === "unconfirmed" ? { advancedTo: null, warning: null } : await cupOutcome(t, matchId);
+
+  await recordAudit({
+    actorId: user.id, actorName: user.name, actorRole: user.role,
+    action: "match.shootout", entityType: "match", entityId: matchId,
+    summary: outcome.advancedTo
+      ? auditText("Adu penalti {a}-{b} dicatat; pemenang maju ke {slot}", { a: home, b: away, slot: outcome.advancedTo })
+      : auditText("Adu penalti {a}-{b} dicatat", { a: home, b: away }),
+  });
+  rev(matchId, m.tournamentId);
+  return outcome;
+}
+
+export async function amendResult(formData: FormData): Promise<CupOutcome> {
+  const t = await getT();
+  const user = await actionUser("match:amend");
   const id = String(formData.get("id"));
   const reason = String(formData.get("reason") ?? "").trim();
-  if (!reason) throw new Error("Alasan koreksi wajib diisi");
+  if (!reason) throw new Error(t("Alasan koreksi wajib diisi"));
+  await assertMatchAccess(id);
   const m = await loadMatch(id);
 
   // Scoreline from the current events, then only the difference in player stats.
@@ -532,11 +547,16 @@ export async function amendResult(formData: FormData) {
   await recomputeTournamentStandings(m.tournamentId);
 
   const after = await loadMatch(id);
+  // a corrected score may change who won: move the (new) winner on
+  const outcome = await cupOutcome(t, id);
   await recordAudit({
     actorId: user.id, actorName: user.name, actorRole: user.role,
     action: "match.amend", entityType: "match", entityId: id,
-    summary: `Hasil dikoreksi menjadi ${after.homeScore}-${after.awayScore} — ${reason}`,
+    summary: outcome.advancedTo
+      ? auditText("Hasil dikoreksi menjadi {a}-{b} — {reason}; pemenang maju ke {slot}", { a: after.homeScore, b: after.awayScore, reason, slot: outcome.advancedTo })
+      : auditText("Hasil dikoreksi menjadi {a}-{b} — {reason}", { a: after.homeScore, b: after.awayScore, reason }),
   });
   rev(id, m.tournamentId);
+  return outcome;
 }
 

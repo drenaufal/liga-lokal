@@ -5,6 +5,8 @@ import {
   positionLine,
   type PositionLine,
 } from "@/lib/positions";
+import type { TFunction } from "@/lib/i18n/translate";
+import { msg } from "@/lib/i18n/translate";
 
 type Tone =
   | "neutral"
@@ -19,21 +21,27 @@ type Tone =
 type Meta = { label: string; tone: Tone };
 
 export const VERIFICATION: Record<string, Meta> = {
-  verified: { label: "Terverifikasi", tone: "success" },
-  pending: { label: "Menunggu", tone: "info" },
-  flagged: { label: "Ditandai", tone: "warn" },
-  rejected: { label: "Ditolak", tone: "danger" },
+  verified: { label: msg("Terverifikasi"), tone: "success" },
+  pending: { label: msg("Menunggu"), tone: "info" },
+  flagged: { label: msg("Ditandai"), tone: "warn" },
+  rejected: { label: msg("Ditolak"), tone: "danger" },
 };
 
 export const REFEREE_STATUS: Record<string, Meta> = {
-  active: { label: "Aktif", tone: "success" },
-  expiring: { label: "Akan Kedaluwarsa", tone: "warn" },
-  expired: { label: "Kedaluwarsa", tone: "danger" },
-  revoked: { label: "Dicabut", tone: "neutral" },
+  active: { label: msg("Aktif"), tone: "success" },
+  expiring: { label: msg("Akan Kedaluwarsa"), tone: "warn" },
+  expired: { label: msg("Kedaluwarsa"), tone: "danger" },
+  revoked: { label: msg("Dicabut"), tone: "neutral" },
 };
 
-/** Coaches use the same license lifecycle as referees. */
-export const COACH_STATUS = REFEREE_STATUS;
+/** Referee license levels, lowest to highest. */
+export const REFEREE_LICENSE_LEVELS = ["C-3", "C-2", "C-1", "Nasional"];
+export const REFEREE_SPECIALTIES = ["Wasit", "Asisten Wasit", "Wasit ke-4"];
+
+/** Display name of a stored referee specialty. */
+export function refereeSpecialtyLabel(t: TFunction, value: string) {
+  return value === "Wasit" ? t("Wasit::spesialisasi") : t.dyn(value);
+}
 
 export const COACH_LICENSE_LEVELS = ["D Nasional", "C AFC", "B AFC", "A AFC", "Pro AFC"];
 export const COACH_SPECIALTIES = [
@@ -60,48 +68,48 @@ export function licenseStatus(expiry: string, revoked = false, today = new Date(
 }
 
 export const TOURNAMENT_STATUS: Record<string, Meta> = {
-  draft: { label: "Draf", tone: "neutral" },
-  registration: { label: "Registrasi", tone: "info" },
-  verification: { label: "Verifikasi", tone: "violet" },
-  ready: { label: "Siap", tone: "brand" },
-  ongoing: { label: "Berlangsung", tone: "success" },
-  completed: { label: "Selesai", tone: "neutral" },
-  archived: { label: "Arsip", tone: "neutral" },
+  draft: { label: msg("Draf"), tone: "neutral" },
+  registration: { label: msg("Registrasi"), tone: "info" },
+  verification: { label: msg("Verifikasi"), tone: "violet" },
+  ready: { label: msg("Siap"), tone: "brand" },
+  ongoing: { label: msg("Berlangsung"), tone: "success" },
+  completed: { label: msg("Selesai"), tone: "neutral" },
+  archived: { label: msg("Arsip"), tone: "neutral" },
 };
 
 export const MATCH_STATUS: Record<string, Meta> = {
-  scheduled: { label: "Terjadwal", tone: "info" },
-  live: { label: "Langsung", tone: "danger" },
-  halftime: { label: "Jeda", tone: "warn" },
-  completed: { label: "Selesai", tone: "neutral" },
-  postponed: { label: "Ditunda", tone: "warn" },
-  cancelled: { label: "Dibatalkan", tone: "neutral" },
+  scheduled: { label: msg("Terjadwal"), tone: "info" },
+  live: { label: msg("Langsung"), tone: "danger" },
+  halftime: { label: msg("Jeda"), tone: "warn" },
+  completed: { label: msg("Selesai"), tone: "neutral" },
+  postponed: { label: msg("Ditunda"), tone: "warn" },
+  cancelled: { label: msg("Dibatalkan"), tone: "neutral" },
 };
 
 export const RESULT_STATUS: Record<string, Meta> = {
-  unconfirmed: { label: "Belum Dikonfirmasi", tone: "warn" },
-  confirmed: { label: "Terkonfirmasi", tone: "success" },
-  disputed: { label: "Disengketakan", tone: "danger" },
-  amended: { label: "Dikoreksi", tone: "violet" },
+  unconfirmed: { label: msg("Belum Dikonfirmasi"), tone: "warn" },
+  confirmed: { label: msg("Terkonfirmasi"), tone: "success" },
+  disputed: { label: msg("Disengketakan"), tone: "danger" },
+  amended: { label: msg("Dikoreksi"), tone: "violet" },
 };
 
 export const REGISTRATION_STATUS: Record<string, Meta> = {
-  invited: { label: "Diundang", tone: "neutral" },
-  registered: { label: "Terdaftar", tone: "info" },
-  verified: { label: "Terverifikasi", tone: "success" },
-  rejected: { label: "Ditolak", tone: "danger" },
-  withdrawn: { label: "Mengundurkan Diri", tone: "neutral" },
+  invited: { label: msg("Diundang"), tone: "neutral" },
+  registered: { label: msg("Terdaftar"), tone: "info" },
+  verified: { label: msg("Terverifikasi"), tone: "success" },
+  rejected: { label: msg("Ditolak"), tone: "danger" },
+  withdrawn: { label: msg("Mengundurkan Diri"), tone: "neutral" },
 };
 
 export const IMPORT_BATCH_STATUS: Record<string, Meta> = {
-  uploaded: { label: "Terunggah", tone: "neutral" },
-  validating: { label: "Validasi", tone: "info" },
-  validated: { label: "Tervalidasi", tone: "info" },
+  uploaded: { label: msg("Terunggah"), tone: "neutral" },
+  validating: { label: msg("Validasi"), tone: "info" },
+  validated: { label: msg("Tervalidasi"), tone: "info" },
   staged: { label: "Staging", tone: "violet" },
-  needs_review: { label: "Perlu Tinjauan", tone: "warn" },
-  importing: { label: "Mengimpor", tone: "info" },
-  completed: { label: "Selesai", tone: "success" },
-  failed: { label: "Gagal", tone: "danger" },
+  needs_review: { label: msg("Perlu Tinjauan"), tone: "warn" },
+  importing: { label: msg("Mengimpor"), tone: "info" },
+  completed: { label: msg("Selesai"), tone: "success" },
+  failed: { label: msg("Gagal"), tone: "danger" },
 };
 
 const LINE_TONE: Record<PositionLine, Tone> = {
@@ -125,34 +133,35 @@ export const POSITION: Record<string, { label: string; tone: Tone }> = {
 };
 
 export const STAGE_LABEL: Record<string, string> = {
-  league: "Liga",
-  group: "Fase Grup",
-  round_of_32: "32 Besar",
-  round_of_16: "16 Besar",
-  quarter: "Perempat Final",
-  semi: "Semifinal",
+  league: msg("Liga"),
+  group: msg("Fase Grup"),
+  round_of_32: msg("32 Besar"),
+  round_of_16: msg("16 Besar"),
+  quarter: msg("Perempat Final"),
+  semi: msg("Semifinal"),
   final: "Final",
-  third_place: "Perebutan Tempat Ketiga",
+  third_place: msg("Perebutan Tempat Ketiga"),
 };
 
 export const EVENT_LABEL: Record<string, string> = {
-  goal: "Gol",
-  own_goal: "Gol Bunuh Diri",
-  penalty_goal: "Gol Penalti",
-  penalty_missed: "Penalti Gagal",
+  goal: msg("Gol"),
+  own_goal: msg("Gol Bunuh Diri"),
+  penalty_goal: msg("Gol Penalti"),
+  penalty_missed: msg("Penalti Gagal"),
   assist: "Assist",
-  shot_on: "Tembakan Tepat",
-  shot_off: "Tembakan Meleset",
-  save: "Penyelamatan",
-  yellow_card: "Kartu Kuning",
-  red_card: "Kartu Merah",
-  second_yellow: "Kartu Kuning Kedua",
-  foul: "Pelanggaran",
+  shot_on: msg("Tembakan Tepat"),
+  shot_off: msg("Tembakan Meleset"),
+  save: msg("Penyelamatan"),
+  yellow_card: msg("Kartu Kuning"),
+  red_card: msg("Kartu Merah"),
+  second_yellow: msg("Kartu Kuning Kedua"),
+  foul: msg("Pelanggaran"),
   offside: "Offside",
-  corner: "Tendangan Sudut",
-  substitution: "Pergantian",
-  injury: "Cedera",
-  var_check: "Tinjauan",
-  period: "Babak",
-  interception: "Intersep",
+  corner: msg("Tendangan Sudut"),
+  substitution: msg("Pergantian"),
+  injury: msg("Cedera"),
+  var_check: msg("Tinjauan"),
+  period: msg("Babak"),
+  interception: msg("Intersep"),
+  pass: msg("Passing"),
 };

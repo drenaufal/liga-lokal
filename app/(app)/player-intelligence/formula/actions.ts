@@ -6,14 +6,9 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { playerStats, scoringFormulas, players } from "@/lib/db/schema";
 import { actionUser } from "@/lib/auth/session";
-import { recordAudit } from "@/lib/audit";
-import { computeRating, computeScore } from "@/lib/scoring";
-import type { FormulaWeights } from "@/lib/db/schema";
-
-const weightKeys = [
-  "goal", "assist", "save", "tackle", "interception", "cleanSheet",
-  "keyPass", "duelWon", "yellowCard", "redCard", "minutesPer90", "motm",
-] as const;
+import { auditText, recordAudit } from "@/lib/audit";
+import { computeRating, computeScore, normalizeWeights, weightsFromInput } from "@/lib/scoring";
+import { getT } from "@/lib/i18n/server";
 
 const schema = z.object({
   id: z.string(),
@@ -28,14 +23,13 @@ export async function saveFormula(input: {
   description?: string;
   weights: Record<string, number>;
 }) {
-  const user = await actionUser("formula:write");
+  const t = await getT();
+  const user = await actionUser("intelligence.formula:edit");
   const parsed = schema.safeParse(input);
-  if (!parsed.success) throw new Error("Data formula tidak valid");
+  if (!parsed.success) throw new Error(t("Data formula tidak valid"));
   const v = parsed.data;
 
-  const weights = Object.fromEntries(
-    weightKeys.map((k) => [k, Number(v.weights[k] ?? 0)]),
-  ) as unknown as FormulaWeights;
+  const weights = weightsFromInput(v.weights);
 
   await db
     .update(scoringFormulas)
@@ -55,7 +49,7 @@ export async function saveFormula(input: {
     action: "formula.update",
     entityType: "scoring_formula",
     entityId: v.id,
-    summary: `Bobot formula "${v.name}" diperbarui`,
+    summary: auditText('Bobot formula "{name}" diperbarui', { name: v.name }),
     after: weights as unknown as Record<string, unknown>,
   });
 
@@ -63,30 +57,26 @@ export async function saveFormula(input: {
 }
 
 export async function activateFormula(formData: FormData) {
-  const user = await actionUser("formula:write");
+  const t = await getT();
+  const user = await actionUser("intelligence.formula:activate");
   const id = String(formData.get("id"));
   const f = await db.query.scoringFormulas.findFirst({
     where: eq(scoringFormulas.id, id),
   });
-  if (!f) throw new Error("Formula tidak ditemukan");
+  if (!f) throw new Error(t("Formula tidak ditemukan"));
 
   await db.update(scoringFormulas).set({ isActive: false });
   await db.update(scoringFormulas).set({ isActive: true }).where(eq(scoringFormulas.id, id));
 
   // recompute every player's score & rating under the newly active formula
+  const weights = normalizeWeights(f.weights);
   const rows = await db.select().from(playerStats);
   for (const r of rows) {
-    const scorable = {
-      goals: r.goals, assists: r.assists, saves: r.saves, tackles: r.tackles,
-      interceptions: r.interceptions, keyPasses: r.keyPasses, duelsWon: r.duelsWon,
-      cleanSheets: r.cleanSheets, yellowCards: r.yellowCards, redCards: r.redCards,
-      minutesPlayed: r.minutesPlayed, motm: r.motm,
-    };
     await db
       .update(playerStats)
       .set({
-        score: computeScore(scorable, f.weights),
-        rating: computeRating(scorable, r.appearances || 1, f.weights),
+        score: computeScore(r, weights),
+        rating: computeRating(r, r.appearances || 1, weights),
       })
       .where(eq(playerStats.id, r.id));
   }
@@ -98,7 +88,7 @@ export async function activateFormula(formData: FormData) {
     action: "formula.activate",
     entityType: "scoring_formula",
     entityId: id,
-    summary: `Formula "${f.name}" diaktifkan; ${rows.length} baris statistik dihitung ulang`,
+    summary: auditText('Formula "{name}" diaktifkan; {n} baris statistik dihitung ulang', { name: f.name, n: rows.length }),
   });
 
   revalidatePath("/player-intelligence/formula");

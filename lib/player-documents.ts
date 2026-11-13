@@ -3,36 +3,38 @@
  * column on `players` that points at a private `document` media row (only
  * people who verify registrations can open it).
  */
+import { msg } from "@/lib/i18n/translate";
+
 export const PLAYER_DOCUMENTS = [
   {
     key: "kiaUrl",
     short: "KIA",
-    label: "KIA (Kartu Identitas Anak)",
-    hint: "Scan / foto KIA — JPG, PNG, atau PDF · maks 5 MB.",
+    label: msg("KIA (Kartu Identitas Anak)"),
+    hint: msg("Scan / foto KIA — JPG, PNG, atau PDF · maks 5 MB."),
   },
   {
     key: "kkUrl",
     short: "KK",
-    label: "Kartu Keluarga (KK)",
-    hint: "Halaman KK yang memuat nama pemain — JPG, PNG, atau PDF · maks 5 MB.",
+    label: msg("Kartu Keluarga (KK)"),
+    hint: msg("Halaman KK yang memuat nama pemain — JPG, PNG, atau PDF · maks 5 MB."),
   },
   {
     key: "aktaUrl",
-    short: "Akta",
-    label: "Akta Kelahiran",
-    hint: "Dipakai untuk mencocokkan tanggal lahir — JPG, PNG, atau PDF · maks 5 MB.",
+    short: msg("Akta"),
+    label: msg("Akta Kelahiran"),
+    hint: msg("Dipakai untuk mencocokkan tanggal lahir — JPG, PNG, atau PDF · maks 5 MB."),
   },
   {
     key: "ijazahUrl",
-    short: "Ijazah",
-    label: "Ijazah",
-    hint: "Ijazah / surat keterangan lulus terakhir — JPG, PNG, atau PDF · maks 5 MB.",
+    short: msg("Ijazah"),
+    label: msg("Ijazah"),
+    hint: msg("Ijazah / surat keterangan lulus terakhir — JPG, PNG, atau PDF · maks 5 MB."),
   },
   {
     key: "raporUrl",
-    short: "Rapor",
-    label: "Rapor",
-    hint: "Rapor semester terakhir; gabungkan beberapa halaman menjadi satu PDF · maks 5 MB.",
+    short: msg("Rapor"),
+    label: msg("Rapor"),
+    hint: msg("Rapor semester terakhir; gabungkan beberapa halaman menjadi satu PDF · maks 5 MB."),
   },
 ] as const;
 

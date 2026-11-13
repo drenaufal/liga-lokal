@@ -11,16 +11,19 @@ import { Avatar } from "@/components/ui/avatar";
 import { toast } from "@/components/ui/toaster";
 import { runSearch, saveShortlist, type SearchState } from "./actions";
 import { EMPHASIS_LABEL } from "@/lib/ai/parse";
-import { POSITION } from "@/lib/status";
+import { positionText } from "@/lib/positions";
+import { useT } from "@/lib/i18n/client";
+import { msg } from "@/lib/i18n/translate";
 
 const EXAMPLES = [
-  "Cari gelandang serang KU-12 dengan assist banyak dan visi bermain baik",
-  "Penyerang KU-14 klinis dan haus gol",
-  "Bek KU-16 solid, kuat duel, dan disiplin tanpa kartu",
-  "Kiper KU-12 dengan refleks bagus dan banyak nirbobol",
+  msg("Cari gelandang serang KU-12 dengan assist banyak dan visi bermain baik"),
+  msg("Penyerang KU-14 klinis dan haus gol"),
+  msg("Bek KU-16 solid, kuat duel, dan disiplin tanpa kartu"),
+  msg("Kiper KU-12 dengan refleks bagus dan banyak nirbobol"),
 ];
 
-export function TalentSearch() {
+export function TalentSearch({ canShortlist }: { canShortlist: boolean }) {
+  const t = useT();
   const [state, action, pending] = useActionState<SearchState, FormData>(runSearch, undefined);
   const [query, setQuery] = React.useState("");
   const [savePending, startSave] = React.useTransition();
@@ -28,7 +31,7 @@ export function TalentSearch() {
   const save = () => {
     if (!state?.results?.length) return;
     const fd = new FormData();
-    fd.set("name", `Kandidat: ${state.query?.slice(0, 40)}`);
+    fd.set("name", t("Kandidat: {query}", { query: state.query?.slice(0, 40) ?? "" }));
     fd.set("query", state.query ?? "");
     fd.set(
       "items",
@@ -39,9 +42,9 @@ export function TalentSearch() {
     startSave(async () => {
       try {
         await saveShortlist(fd);
-        toast.success("Shortlist disimpan");
+        toast.success(t("Shortlist disimpan"));
       } catch (e) {
-        toast.error("Gagal", e instanceof Error ? e.message : undefined);
+        toast.error(t("Gagal"), e instanceof Error ? e.message : undefined);
       }
     });
   };
@@ -50,7 +53,7 @@ export function TalentSearch() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Sparkles className="size-4 text-violet" /> Pencarian Talenta — Bahasa Natural
+          <Sparkles className="size-4 text-violet" /> {t("Pencarian Talenta — Bahasa Natural")}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -61,7 +64,7 @@ export function TalentSearch() {
               name="query"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Deskripsikan pemain yang Anda cari…"
+              placeholder={t("Deskripsikan pemain yang Anda cari…")}
               rows={2}
               className="w-full rounded-lg border border-line bg-base/60 py-2.5 pl-9 pr-3 text-sm text-ink outline-none focus:border-brand/50"
             />
@@ -71,16 +74,16 @@ export function TalentSearch() {
               <button
                 key={ex}
                 type="button"
-                onClick={() => setQuery(ex)}
+                onClick={() => setQuery(t(ex))}
                 className="rounded-full border border-line px-2 py-1 text-[10px] text-ink-muted transition-colors hover:border-brand/40 hover:text-ink"
               >
-                {ex}
+                {t(ex)}
               </button>
             ))}
           </div>
           <Button type="submit" size="sm" disabled={pending}>
             {pending ? <Loader2 className="animate-spin" /> : <Sparkles className="size-3.5" />}
-            Cari Talenta
+            {t("Cari Talenta")}
           </Button>
         </form>
 
@@ -94,14 +97,14 @@ export function TalentSearch() {
           <div className="mt-4">
             {state.filters && (
               <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-muted">
-                <span>Filter terdeteksi:</span>
+                <span>{t("Filter terdeteksi:")}</span>
                 {state.filters.position && (
-                  <Badge tone="info">{POSITION[state.filters.position].label}</Badge>
+                  <Badge tone="info">{positionText(state.filters.position, t)}</Badge>
                 )}
                 {state.filters.ageCode && <Badge>{state.filters.ageCode}</Badge>}
                 {state.filters.emphasis.map((e) => (
                   <Badge key={e} tone="violet">
-                    {EMPHASIS_LABEL[e]}
+                    {t.dyn(EMPHASIS_LABEL[e])}
                   </Badge>
                 ))}
               </div>
@@ -109,22 +112,24 @@ export function TalentSearch() {
 
             {state.results.length === 0 ? (
               <p className="py-4 text-center text-xs text-ink-muted">
-                Tidak ada pemain yang cocok dengan kriteria.
+                {t("Tidak ada pemain yang cocok dengan kriteria.")}
               </p>
             ) : (
               <>
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-xs font-medium text-ink-secondary">
-                    {state.results.length} kandidat teratas
+                    {t("{n} kandidat teratas", { n: state.results.length })}
                   </span>
-                  <Button size="sm" variant="ghost" disabled={savePending} onClick={save}>
-                    {savePending ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <BookmarkPlus className="size-3.5" />
-                    )}
-                    Simpan shortlist
-                  </Button>
+                  {canShortlist && (
+                    <Button size="sm" variant="ghost" disabled={savePending} onClick={save}>
+                      {savePending ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <BookmarkPlus className="size-3.5" />
+                      )}
+                      {t("Simpan shortlist")}
+                    </Button>
+                  )}
                 </div>
                 <ol className="space-y-1.5">
                   {state.results.map((r, i) => (
@@ -140,8 +145,8 @@ export function TalentSearch() {
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-xs font-medium text-ink">{r.name}</p>
                           <p className="text-[10px] text-ink-muted">
-                            {r.club} · {POSITION[r.position].label} · {r.ageCode} ·{" "}
-                            {r.goals}G {r.assists}A {r.saves}P · rating {r.rating.toFixed(1)}
+                            {r.club} · {positionText(r.position, t)} · {r.ageCode} ·{" "}
+                            {t("{goals}G {assists}A {saves}P · rating {rating}", { goals: r.goals, assists: r.assists, saves: r.saves, rating: r.rating.toFixed(1) })}
                           </p>
                         </div>
                         <span className="shrink-0 rounded-md bg-violet/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet">

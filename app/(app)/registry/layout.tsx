@@ -1,4 +1,5 @@
-import { requireCapability } from "@/lib/auth/session";
+import { requireAnyCapability } from "@/lib/auth/session";
+import { allowedChildHrefs, moduleViewCaps } from "@/lib/nav";
 import { RegistryTabs } from "./tabs";
 
 export default async function RegistryLayout({
@@ -6,10 +7,11 @@ export default async function RegistryLayout({
 }: {
   children: React.ReactNode;
 }) {
-  await requireCapability("registry:read");
+  // Each tab has its own "view" permission; the menu opens when at least one is allowed.
+  const user = await requireAnyCapability(moduleViewCaps("registry"));
   return (
     <div>
-      <RegistryTabs />
+      <RegistryTabs allowed={allowedChildHrefs("registry", user)} />
       {children}
     </div>
   );

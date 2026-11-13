@@ -21,12 +21,14 @@ import { FootPicker, type Foot } from "@/components/app/foot-icon";
 import { POSITION_LINES, POSITION_NAME } from "@/lib/positions";
 import { PLAYER_DOCUMENTS, type PlayerDocumentKey } from "@/lib/player-documents";
 import type { Player } from "@/lib/db/schema";
+import { rich } from "@/lib/i18n/rich";
+import { useT } from "@/lib/i18n/client";
 
 type AgeOption = {
   id: string;
   code: string;
+  /** Oldest eligible birth year: a player born in or after it may play in the category. */
   birthYearFrom: number | null;
-  birthYearTo: number | null;
 };
 
 const DOC_ICON: Record<PlayerDocumentKey, React.ComponentType<{ className?: string }>> = {
@@ -50,6 +52,7 @@ export function PlayerForm({
   /** File name / size of already-uploaded documents (only loaded for people who may open them). */
   docMeta?: Partial<Record<PlayerDocumentKey, DocumentMeta | null>>;
 }) {
+  const t = useT();
   const action = player ? updatePlayer.bind(null, player.id) : createPlayer;
   const [state, formAction, pending] = useActionState<PlayerFormState, FormData>(
     action,
@@ -66,23 +69,18 @@ export function PlayerForm({
   const [dob, setDob] = React.useState(val("dob"));
   const ageRef = React.useRef<HTMLSelectElement>(null);
   const birthYear = dob ? Number(dob.slice(0, 4)) : null;
-  const suggested = birthYear
-    ? ageCategories.find(
-        (a) =>
-          a.birthYearFrom != null &&
-          a.birthYearTo != null &&
-          birthYear >= a.birthYearFrom &&
-          birthYear <= a.birthYearTo,
-      )
-    : undefined;
+  // A category only has an upper age limit, so a young player fits several; the
+  // suggestion is the tightest one (the youngest category he still qualifies for).
+  const bestFit = (year: number) =>
+    ageCategories
+      .filter((a) => a.birthYearFrom != null && year >= a.birthYearFrom)
+      .sort((a, b) => (b.birthYearFrom ?? 0) - (a.birthYearFrom ?? 0))[0];
+  const suggested = birthYear ? bestFit(birthYear) : undefined;
 
   const onDob = (value: string) => {
     setDob(value);
     // Fill the category automatically only while it is still unset.
-    const y = Number(value.slice(0, 4));
-    const match = ageCategories.find(
-      (a) => a.birthYearFrom != null && a.birthYearTo != null && y >= a.birthYearFrom && y <= a.birthYearTo,
-    );
+    const match = bestFit(Number(value.slice(0, 4)));
     if (match && ageRef.current && !ageRef.current.value) ageRef.current.value = match.id;
   };
 
@@ -92,7 +90,7 @@ export function PlayerForm({
   React.useEffect(() => {
     if (!/^\d{10}$/.test(nisn)) return;
     let cancelled = false;
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       try {
         const r = await checkNisn(nisn, player?.id);
         if (!cancelled) setNisnCheck({ value: nisn, ...(r.ok ? { ok: true } : { ok: false, message: r.message }) });
@@ -102,7 +100,7 @@ export function PlayerForm({
     }, 350);
     return () => {
       cancelled = true;
-      clearTimeout(t);
+      clearTimeout(timer);
     };
   }, [nisn, player?.id]);
   // a result only counts for the exact NISN it was computed for
@@ -119,27 +117,27 @@ export function PlayerForm({
 
   return (
     <form action={formAction} className="space-y-6">
-      <Section title="Identitas pemain">
+      <Section title={t("Identitas pemain")}>
         <div className="sm:col-span-2">
           <ImageUpload
             name="photoUrl"
-            label="Foto pemain"
-            displayName={player?.fullName ?? "Pemain Baru"}
+            label={t("Foto pemain")}
+            displayName={player?.fullName ?? t("Pemain Baru")}
             shape="square"
             defaultValue={player?.photoUrl}
           />
           {fe.photoUrl && <p className="mt-1 text-[11px] text-danger">{fe.photoUrl}</p>}
         </div>
-        <Field label="Nama lengkap" error={fe.fullName} className="sm:col-span-2">
-          <Input name="fullName" required defaultValue={val("fullName")} placeholder="mis. Arya Pratama" />
+        <Field label={t("Nama lengkap")} error={fe.fullName} className="sm:col-span-2">
+          <Input name="fullName" required defaultValue={val("fullName")} placeholder={t("mis. Arya Pratama")} />
         </Field>
-        <Field label="Nama panggilan" error={fe.nickname}>
-          <Input name="nickname" defaultValue={val("nickname")} placeholder="Opsional" />
+        <Field label={t("Nama panggilan")} error={fe.nickname}>
+          <Input name="nickname" defaultValue={val("nickname")} placeholder={t("Opsional")} />
         </Field>
         <Field
-          label="NISN (wajib)"
+          label={t("NISN (wajib)")}
           error={nisnError}
-          hint="Nomor Induk Siswa Nasional · 10 digit · tidak boleh sama dengan pemain lain"
+          hint={t("Nomor Induk Siswa Nasional · 10 digit · tidak boleh sama dengan pemain lain")}
         >
           <Input
             name="nisn"
@@ -150,56 +148,56 @@ export function PlayerForm({
             minLength={10}
             maxLength={10}
             pattern="\d{10}"
-            title="10 digit angka"
+            title={t("10 digit angka")}
             placeholder="0123456789"
             aria-invalid={!!nisnError}
             className="font-mono tracking-wider"
           />
-          {nisnState?.ok && <p className="mt-1 text-[11px] text-success">✓ NISN tersedia</p>}
+          {nisnState?.ok && <p className="mt-1 text-[11px] text-success">{t("✓ NISN tersedia")}</p>}
         </Field>
-        <Field label="Tanggal lahir" error={fe.dob}>
+        <Field label={t("Tanggal lahir")} error={fe.dob}>
           <Input name="dob" type="date" required defaultValue={val("dob")} onChange={(e) => onDob(e.target.value)} />
         </Field>
-        <Field label="Tempat lahir" error={fe.birthPlace}>
-          <Input name="birthPlace" defaultValue={val("birthPlace")} placeholder="Kota kelahiran" />
+        <Field label={t("Tempat lahir")} error={fe.birthPlace}>
+          <Input name="birthPlace" defaultValue={val("birthPlace")} placeholder={t("Kota kelahiran")} />
         </Field>
       </Section>
 
-      <Section title="Profil bermain">
-        <Field label="Posisi" error={fe.position} hint="13 peran: kiper, bek, gelandang, dan penyerang">
+      <Section title={t("Profil bermain")}>
+        <Field label={t("Posisi")} error={fe.position} hint={t("13 peran: kiper, bek, gelandang, dan penyerang")}>
           <Select name="position" required defaultValue={val("position")}>
             <option value="" disabled>
-              Pilih posisi…
+              {t("Pilih posisi…")}
             </option>
             {POSITION_LINES.map((l) => (
-              <optgroup key={l.line} label={l.label}>
+              <optgroup key={l.line} label={t.dyn(l.label)}>
                 {l.roles.map((r) => (
                   <option key={r} value={r}>
-                    {r} — {POSITION_NAME[r]}
+                    {r} — {t.dyn(POSITION_NAME[r])}
                   </option>
                 ))}
               </optgroup>
             ))}
           </Select>
         </Field>
-        <Field label="Nomor punggung" error={fe.jerseyNumber}>
+        <Field label={t("Nomor punggung")} error={fe.jerseyNumber}>
           <Input name="jerseyNumber" type="number" min={1} max={99} defaultValue={val("jerseyNumber")} />
         </Field>
-        <Field label="Kaki dominan" error={fe.foot} className="sm:col-span-2">
+        <Field label={t("Kaki dominan")} error={fe.foot} className="sm:col-span-2">
           <FootPicker name="foot" defaultValue={(val("foot") || "right") as Foot} />
         </Field>
-        <Field label="Tinggi (cm)" error={fe.heightCm}>
+        <Field label={t("Tinggi (cm)")} error={fe.heightCm}>
           <Input name="heightCm" type="number" min={90} max={220} defaultValue={val("heightCm")} />
         </Field>
-        <Field label="Berat (kg)" error={fe.weightKg}>
+        <Field label={t("Berat (kg)")} error={fe.weightKg}>
           <Input name="weightKg" type="number" min={20} max={150} defaultValue={val("weightKg")} />
         </Field>
       </Section>
 
-      <Section title="Klub & kategori">
-        <Field label="Klub utama" error={fe.clubId}>
+      <Section title={t("Klub & kategori")}>
+        <Field label={t("Klub utama")} error={fe.clubId}>
           <Select name="clubId" value={clubId} onChange={(e) => onPrimaryClub(e.target.value)}>
-            <option value="">Tanpa klub</option>
+            <option value="">{t("Tanpa klub")}</option>
             {clubs.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -208,12 +206,12 @@ export function PlayerForm({
           </Select>
         </Field>
         <Field
-          label="Klub kedua (opsional)"
+          label={t("Klub kedua (opsional)")}
           error={fe.secondClubId}
           hint={
             clubId
-              ? "Maksimal 2 klub. Statistik pemain dapat difilter per klub."
-              : "Pilih klub utama dahulu untuk menambah klub kedua."
+              ? t("Maksimal 2 klub. Statistik pemain dapat difilter per klub.")
+              : t("Pilih klub utama dahulu untuk menambah klub kedua.")
           }
         >
           <Select
@@ -222,7 +220,7 @@ export function PlayerForm({
             onChange={(e) => setSecondClubId(e.target.value)}
             disabled={!clubId}
           >
-            <option value="">Tidak ada</option>
+            <option value="">{t("Tidak ada")}</option>
             {clubs
               .filter((c) => c.id !== clubId)
               .map((c) => (
@@ -233,19 +231,19 @@ export function PlayerForm({
           </Select>
         </Field>
         <Field
-          label="Kategori usia"
+          label={t("Kategori usia")}
           error={fe.ageCategoryId}
           className="sm:col-span-2"
           hint={
             suggested
-              ? `Sesuai tahun lahir ${birthYear}: ${suggested.code}`
+              ? t("Sesuai tahun lahir {year}: {code}", { year: birthYear!, code: suggested.code })
               : birthYear
-                ? `Belum ada kategori untuk kelahiran ${birthYear}`
+                ? t("Belum ada kategori untuk kelahiran {year}", { year: birthYear })
                 : undefined
           }
         >
           <Select ref={ageRef} name="ageCategoryId" defaultValue={val("ageCategoryId")}>
-            <option value="">Belum ditentukan</option>
+            <option value="">{t("Belum ditentukan")}</option>
             {ageCategories.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.code}
@@ -255,26 +253,27 @@ export function PlayerForm({
         </Field>
       </Section>
 
-      <Section title="Orang tua / wali">
-        <Field label="Nama wali" error={fe.guardianName}>
-          <Input name="guardianName" defaultValue={val("guardianName")} placeholder="Orang tua / wali" />
+      <Section title={t("Orang tua / wali")}>
+        <Field label={t("Nama wali")} error={fe.guardianName}>
+          <Input name="guardianName" defaultValue={val("guardianName")} placeholder={t("Orang tua / wali")} />
         </Field>
-        <Field label="Kontak wali" error={fe.guardianPhone}>
+        <Field label={t("Kontak wali")} error={fe.guardianPhone}>
           <Input name="guardianPhone" defaultValue={val("guardianPhone")} placeholder="08xx" />
         </Field>
       </Section>
 
-      <Section title="Dokumen pemain">
+      <Section title={t("Dokumen pemain")}>
         <p className="rounded-lg bg-surface-2/60 px-3 py-2 text-[11px] leading-relaxed text-ink-muted sm:col-span-2">
-          Dokumen bersifat <strong className="text-ink-secondary">privat</strong> — hanya admin & operator yang dapat
-          membukanya. Boleh diunggah bertahap; kelengkapannya tampil di profil dan daftar pemain.
+          {rich(t("Dokumen bersifat <b>privat</b> — hanya admin & operator yang dapat membukanya. Boleh diunggah bertahap; kelengkapannya tampil di profil dan daftar pemain."), {
+            b: (c) => <strong className="text-ink-secondary">{c}</strong>,
+          })}
         </p>
         {PLAYER_DOCUMENTS.map((d) => (
           <div key={d.key} className="sm:col-span-2">
             <DocumentUpload
               name={d.key}
-              label={d.label}
-              hint={d.hint}
+              label={t.dyn(d.label)}
+              hint={t.dyn(d.hint)}
               icon={DOC_ICON[d.key]}
               defaultValue={player?.[d.key]}
               defaultMeta={docMeta?.[d.key]}
@@ -293,11 +292,11 @@ export function PlayerForm({
       <div className="flex gap-2">
         <Button type="submit" disabled={pending || nisnState?.ok === false}>
           {pending ? <Loader2 className="animate-spin" /> : player ? <Save /> : <UserPlus />}
-          {player ? "Simpan perubahan" : "Daftarkan pemain"}
+          {player ? t("Simpan perubahan") : t("Daftarkan pemain")}
         </Button>
         {player && (
           <Button variant="ghost" href={`/registry/pemain/${player.id}`}>
-            Batal
+            {t("Batal")}
           </Button>
         )}
       </div>

@@ -1,4 +1,5 @@
 import type { Tiebreaker } from "@/lib/db/schema";
+import { msg, type MessageId } from "@/lib/i18n/translate";
 
 export const DEFAULT_TIEBREAKERS: Tiebreaker[] = [
   "points",
@@ -9,14 +10,15 @@ export const DEFAULT_TIEBREAKERS: Tiebreaker[] = [
   "fairPlay",
 ];
 
-export const TIEBREAKER_LABEL: Record<Tiebreaker, string> = {
-  points: "Poin",
-  headToHead: "Head-to-head",
-  goalDifference: "Selisih gol",
-  goalsFor: "Gol memasukkan",
-  wins: "Jumlah kemenangan",
-  fairPlay: "Fair play",
-  drawLots: "Undian",
+/** Message ids — render with `t(TIEBREAKER_LABEL[tb])`. */
+export const TIEBREAKER_LABEL: Record<Tiebreaker, MessageId> = {
+  points: msg("Poin::urutan"),
+  headToHead: msg("Head-to-head"),
+  goalDifference: msg("Selisih gol"),
+  goalsFor: msg("Gol memasukkan"),
+  wins: msg("Jumlah kemenangan"),
+  fairPlay: msg("Fair play"),
+  drawLots: msg("Undian"),
 };
 
 export type MatchResultInput = {

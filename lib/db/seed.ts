@@ -20,14 +20,16 @@ import {
   VENUES,
 } from "./seed-data";
 import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/demo-accounts";
-import { COACH_LICENSE_LEVELS, COACH_SPECIALTIES, licenseStatus } from "@/lib/status";
+import { assertDemoSeedAllowed } from "./seed-guard";
+import { BCRYPT_COST } from "@/lib/auth/password";
+import { COACH_LICENSE_LEVELS, COACH_SPECIALTIES } from "@/lib/status";
 import { DEFAULT_WEIGHTS, computeScore, computeRating } from "@/lib/scoring";
 import {
   DEFAULT_TIEBREAKERS,
   computeStandings,
   type MatchResultInput,
 } from "@/lib/standings";
-import { groupStage, roundRobin } from "@/lib/fixtures";
+import { cupBracket, roundRobin } from "@/lib/fixtures";
 import { LEGACY_ROLE_SPREAD, positionLine } from "@/lib/positions";
 
 const db = drizzle(createPool(process.env.DATABASE_URL!), { schema: s, mode: "planetscale" });
@@ -112,12 +114,14 @@ type SeedPlayer = typeof s.players.$inferSelect & { _cat: string; _potential: nu
 /* ══════════════════════════════════════════════════════════════════ */
 
 async function main() {
+  // Never creates the shared-password demo accounts in a production environment (see seed-guard.ts).
+  assertDemoSeedAllowed();
   console.log("→ Reset");
   await truncateAll(process.env.DATABASE_URL!);
 
   /* ── Users ──────────────────────────────────────────────────────── */
   console.log("→ Users");
-  const pwHash = hashSync(DEMO_PASSWORD, 10);
+  const pwHash = hashSync(DEMO_PASSWORD, BCRYPT_COST);
   const users = await insertReturning(db, s.users, DEMO_ACCOUNTS.map((a) => ({
         name: a.name,
         email: a.email,
@@ -136,10 +140,8 @@ async function main() {
   const ages = await insertReturning(db, s.ageCategories, AGE_CATEGORIES.map((a, i) => ({
         code: a.code,
         label: a.label,
-        minAge: a.minAge,
         maxAge: a.maxAge,
         birthYearFrom: 2026 - a.maxAge,
-        birthYearTo: 2026 - a.minAge,
         rules: a.rules,
         sortOrder: i,
       })));
@@ -165,9 +167,8 @@ async function main() {
           ...DEFAULT_WEIGHTS,
           goal: 9,
           assist: 6,
-          keyPass: 1.4,
-          save: 1,
-          tackle: 0.8,
+          shotOn: 1.4,
+          shotOff: 0.3,
         },
         isActive: false,
         version: 1,
@@ -193,26 +194,20 @@ async function main() {
 
   /* ── Clubs ──────────────────────────────────────────────────────── */
   console.log("→ Clubs");
-  const clubs = await insertReturning(db, s.clubs, CLUBS.map((c, i) => ({
+  const clubs = await insertReturning(db, s.clubs, CLUBS.map((c) => ({
         name: c.name,
         shortName: c.short,
         slug: c.name.toLowerCase().replace(/[^\w]+/g, "-").replace(/(^-|-$)/g, ""),
         type: c.type,
         city: c.city,
         province: c.province,
+        address: `Jl. ${pick(LAST_NAMES)} No. ${int(1, 90)}, ${c.city}`,
+        askot: `Askot PSSI ${c.city}`,
+        asprov: `Asprov PSSI ${c.province}`,
         foundedYear: c.founded,
-        primaryColor: c.colors[0],
-        secondaryColor: c.colors[1],
-        homeVenueId: venues[i % venues.length].id,
         contactName: fullName(),
         contactEmail: `sekretariat@${c.short.toLowerCase()}.or.id`,
         contactPhone: `08${int(11, 89)}${int(10000000, 99999999)}`,
-        accreditation: pick([
-          "Terakreditasi A",
-          "Terakreditasi B",
-          "Anggota Asprov",
-          "Binaan Askot",
-        ]),
         logoUrl: null,
       })));
 
@@ -224,9 +219,11 @@ async function main() {
         if (expOffset < 0) status = "expired";
         else if (expOffset < 45) status = "expiring";
         if (i === 3) status = "revoked";
+        const city = pick(CITIES)[0];
         return {
           fullName: fullName(),
-          city: pick(CITIES)[0],
+          city,
+          askot: `Askot PSSI ${city}`,
           licenseLevel: pick(REFEREE_LEVELS),
           licenseNumber: `WST-${SEASON}-${String(1000 + i)}`,
           licenseIssuedAt: ymd(daysAgo(int(200, 900))),
@@ -245,10 +242,9 @@ async function main() {
   const cpick = <T>(arr: readonly T[]): T => arr[Math.floor(crnd() * arr.length)];
   const cint = (min: number, max: number) => Math.floor(crnd() * (max - min + 1)) + min;
   let coachNo = 101;
-  const coaches = await insertReturning(db, s.coaches, clubs.flatMap((club, ci) =>
+  const coaches = await insertReturning(db, s.coaches, clubs.flatMap((club) =>
         COACH_SPECIALTIES.slice(0, club.type === "academy" ? 3 : 2).map((specialty, si) => {
           const head = si === 0;
-          const expiry = ymd(daysAhead(cint(-90, 720)));
           const levels = head ? COACH_LICENSE_LEVELS.slice(1, 4) : COACH_LICENSE_LEVELS.slice(0, 2);
           return {
             fullName: `${cpick(FIRST_NAMES)} ${cpick(LAST_NAMES)}`,
@@ -258,10 +254,6 @@ async function main() {
             specialty,
             licenseLevel: cpick(levels),
             licenseNumber: `PLT-${SEASON}-${String(coachNo++).padStart(4, "0")}`,
-            licenseIssuedAt: ymd(daysAgo(cint(300, 1500))),
-            licenseExpiry: expiry,
-            status: licenseStatus(expiry, ci === 5 && si === 1, now),
-            experienceYears: head ? cint(6, 22) : cint(1, 9),
             phone: `08${cint(11, 89)}${cint(10000000, 99999999)}`,
             email: `pelatih${coachNo}@${club.shortName.toLowerCase()}.or.id`,
             photoUrl: null,
@@ -290,7 +282,9 @@ async function main() {
     idx: number,
   ): typeof s.players.$inferInsert & { _cat: string; _potential: number } => {
     const cat = ageByCode[catCode];
-    const birthYear = int(cat.birthYearFrom!, cat.birthYearTo!);
+    // spread birth years over the category's typical ages (the DB keeps only the upper limit)
+    const typical = AGE_CATEGORIES.find((a) => a.code === catCode)!;
+    const birthYear = int(2026 - typical.maxAge, 2026 - typical.minAge);
     const dob = new Date(birthYear, int(0, 11), int(1, 28));
     let line: "GK" | "DF" | "MF" | "FW";
     if (idx < 2) line = "GK";
@@ -623,58 +617,84 @@ async function main() {
     return { home: hg, away: ag };
   }
 
-  /* ── Tournaments ────────────────────────────────────────────────── */
-  console.log("→ Turnamen");
+  /* ── Turnamen & KU ──────────────────────────────────────────────── */
+  console.log("→ Turnamen & KU");
+  const COMPETITION_SPECS = [
+    { key: "liga-pelajar", name: "Liga Pelajar Jabodetabek 2026", organizer: "Asprov PSSI DKI Jakarta", start: daysAgo(70) },
+    { key: "piala-garuda", name: "Piala Garuda Muda 2026", organizer: "Yayasan Garuda Muda", start: daysAgo(38) },
+    { key: "kemerdekaan", name: "Turnamen Kemerdekaan 2026", organizer: "KONI Kota Bogor", start: daysAgo(46) },
+    { key: "liga-akademi", name: "Liga Akademi Seri 2 2026", organizer: "Konsorsium Akademi Jabodetabek", start: daysAhead(20) },
+  ];
+  const competitions = await insertReturning(db, s.competitions, COMPETITION_SPECS.map((c) => ({
+        name: c.name,
+        slug: c.name.toLowerCase().replace(/[^\w]+/g, "-").replace(/(^-|-$)/g, ""),
+        season: SEASON,
+        organizer: c.organizer,
+        description: `Turnamen yang diselenggarakan oleh ${c.organizer}. Terdiri dari beberapa KU, dikelola penuh melalui LigaLokal — registrasi, verifikasi, penjadwalan, hingga operasional pertandingan real-time.`,
+        createdBy: operator.id,
+        createdAt: c.start,
+      })));
+  const competitionByKey = Object.fromEntries(COMPETITION_SPECS.map((c, i) => [c.key, competitions[i]]));
+
+  // One row per KU. Liga Pelajar has two KUs, the others one each (more can be added in the app).
   const TSPECS = [
     {
-      name: "Liga Pelajar U-14 Jabodetabek 2026",
+      comp: "liga-pelajar",
       cat: "KU-14",
       format: "league" as const,
       status: "ongoing" as const,
       teamCount: 8,
       completedRatio: 0.82,
       live: 1,
-      host: "Asprov PSSI DKI Jakarta",
       city: "Jakarta Selatan",
       start: daysAgo(70),
       end: daysAhead(35),
     },
     {
-      name: "Piala Garuda Muda U-12 2026",
+      comp: "liga-pelajar",
+      cat: "KU-12",
+      format: "league" as const,
+      status: "ongoing" as const,
+      teamCount: 6,
+      completedRatio: 0.55,
+      live: 0,
+      city: "Jakarta Selatan",
+      start: daysAgo(60),
+      end: daysAhead(40),
+    },
+    {
+      // a Cup in progress: round 1 played, its winners already placed in the semi-finals
+      comp: "piala-garuda",
       cat: "KU-12",
       format: "cup" as const,
       status: "ongoing" as const,
       teamCount: 8,
-      groups: 2,
-      completedRatio: 0.75,
+      completedRatio: 0.5,
       live: 1,
-      host: "Yayasan Garuda Muda",
       city: "Depok",
       start: daysAgo(38),
       end: daysAhead(10),
     },
     {
-      name: "Turnamen Kemerdekaan U-16 2026",
+      comp: "kemerdekaan",
       cat: "KU-16",
-      format: "knockout" as const,
+      format: "cup" as const,
       status: "completed" as const,
       teamCount: 8,
       completedRatio: 1,
       live: 0,
-      host: "KONI Kota Bogor",
       city: "Bogor",
       start: daysAgo(46),
       end: daysAgo(31),
     },
     {
-      name: "Liga Akademi U-16 Seri 2 2026",
+      comp: "liga-akademi",
       cat: "KU-16",
       format: "league" as const,
       status: "registration" as const,
       teamCount: 8,
       completedRatio: 0,
       live: 0,
-      host: "Konsorsium Akademi Jabodetabek",
       city: "Tangerang",
       start: daysAhead(20),
       end: daysAhead(120),
@@ -682,29 +702,25 @@ async function main() {
   ];
 
   const tournaments = await insertReturning(db, s.tournaments, TSPECS.map((t) => ({
-        name: t.name,
-        slug: t.name.toLowerCase().replace(/[^\w]+/g, "-").replace(/(^-|-$)/g, ""),
-        season: SEASON,
+        competitionId: competitionByKey[t.comp].id,
         format: t.format,
         status: t.status,
         ageCategoryId: ageByCode[t.cat].id,
         scoringFormulaId: activeFormula.id,
-        description: `Kompetisi ${t.cat} yang diselenggarakan oleh ${t.host}. Dikelola penuh melalui LigaLokal — registrasi, verifikasi, penjadwalan, hingga operasional pertandingan real-time.`,
-        host: t.host,
         city: t.city,
         startDate: ymd(t.start),
         endDate: ymd(t.end),
-        groupCount: t.groups ?? 0,
-        teamsPerGroup: t.groups ? t.teamCount / t.groups : 0,
-        advancePerGroup: 2,
         pointsWin: 3,
         pointsDraw: 1,
         pointsLoss: 0,
         tiebreakers: DEFAULT_TIEBREAKERS,
-        logoUrl: null,
         createdBy: operator.id,
         createdAt: t.start,
       })));
+  // "<turnamen> · KU-14": how a KU is named in badge awards and reports
+  const kuName = new Map(
+    tournaments.map((t, i) => [t.id, `${competitionByKey[TSPECS[i].comp].name} · ${TSPECS[i].cat}`]),
+  );
 
   const teamRows: (typeof s.tournamentTeams.$inferInsert)[] = [];
   const squadRows: (typeof s.tournamentSquad.$inferInsert)[] = [];
@@ -726,12 +742,11 @@ async function main() {
     const groupsByClub: Record<string, string> = {};
 
     teamClubs.forEach((c, i) => {
-      const g = spec.groups ? "AB"[i % spec.groups] : "-";
-      groupsByClub[c.id] = g;
+      groupsByClub[c.id] = "-"; // no group stage any more
       teamRows.push({
         tournamentId: tour.id,
         clubId: c.id,
-        groupLabel: spec.groups ? g : null,
+        groupLabel: null,
         seed: i + 1,
         registrationStatus:
           spec.status === "registration"
@@ -783,21 +798,17 @@ async function main() {
   const pending: PendingMatch[] = [];
 
   for (const tour of tournaments) {
-    const { spec, teamClubs, groupsByClub } = (tour as Record<string, unknown>)
+    const { spec, teamClubs } = (tour as Record<string, unknown>)
       ._plan as {
       spec: (typeof TSPECS)[number];
       teamClubs: typeof clubs;
-      groupsByClub: Record<string, string>;
     };
     const ids = teamClubs.map((c) => c.id);
-    const venueOf = (clubId: string) =>
-      teamClubs.find((c) => c.id === clubId)?.homeVenueId ?? pick(venues).id;
+    // no home venue is stored any more: give every club a stable "home ground" just for the demo schedule
+    const venueOf = (clubId: string) => venues[Math.max(0, clubs.findIndex((c) => c.id === clubId)) % venues.length].id;
 
-    if (spec.format === "league" || spec.format === "cup") {
-      const fixtures =
-        spec.format === "league"
-          ? roundRobin(ids, { stage: "league" })
-          : groupStage(ids, spec.groups ?? 2, false);
+    if (spec.format === "league") {
+      const fixtures = roundRobin(ids, { stage: "league" });
       const total = fixtures.length;
       const completeCount = Math.round(total * spec.completedRatio);
       let liveLeft = spec.live;
@@ -815,9 +826,9 @@ async function main() {
         pending.push({
           row: {
             tournamentId: tour.id,
-            stage: spec.format === "cup" ? "group" : "league",
+            stage: "league",
             round: fx.round,
-            groupLabel: fx.groupLabel ?? null,
+            groupLabel: null,
             homeClubId: fx.home,
             awayClubId: fx.away,
             venueId: venueOf(fx.home!),
@@ -854,85 +865,10 @@ async function main() {
               : undefined,
         });
       });
-
-      // cup: seed a knockout bracket from provisional group standings (drawn, not played)
-      if (spec.format === "cup") {
-        const provisional = computeStandings(
-          ids,
-          pending
-            .filter(
-              (p) =>
-                p.row.tournamentId === tour.id &&
-                p.sim &&
-                !p.sim.live &&
-                p.row.homeClubId &&
-                p.row.awayClubId,
-            )
-            .map((p) => ({
-              homeClubId: p.row.homeClubId!,
-              awayClubId: p.row.awayClubId!,
-              homeScore: 0,
-              awayScore: 0,
-              groupLabel: p.row.groupLabel,
-            })) as MatchResultInput[],
-          { pointsWin: 3, pointsDraw: 1, pointsLoss: 0, tiebreakers: DEFAULT_TIEBREAKERS },
-          groupsByClub,
-        );
-        const winnerA = provisional.find((r) => r.groupLabel === "A" && r.rank === 1);
-        const runnerA = provisional.find((r) => r.groupLabel === "A" && r.rank === 2);
-        const winnerB = provisional.find((r) => r.groupLabel === "B" && r.rank === 1);
-        const runnerB = provisional.find((r) => r.groupLabel === "B" && r.rank === 2);
-        const semis: [string | null, string | null, string][] = [
-          [winnerA?.clubId ?? null, runnerB?.clubId ?? null, "SF1"],
-          [winnerB?.clubId ?? null, runnerA?.clubId ?? null, "SF2"],
-        ];
-        semis.forEach(([h, a, slot]) => {
-          pending.push({
-            row: {
-              tournamentId: tour.id,
-              stage: "semi",
-              round: 99,
-              bracketSlot: slot,
-              homeClubId: h,
-              awayClubId: a,
-              homePlaceholder: h ? null : "Juara Grup",
-              awayPlaceholder: a ? null : "Runner-up Grup",
-              venueId: pick(venues).id,
-              refereeId: pick(activeRefs).id,
-              scheduledAt: koTime(spec.end, -6),
-              status: "scheduled",
-              period: "not_started",
-              homeFormation: "4-3-3",
-              awayFormation: "4-3-3",
-              createdAt: spec.start,
-            },
-          });
-        });
-        pending.push({
-          row: {
-            tournamentId: tour.id,
-            stage: "final",
-            round: 100,
-            bracketSlot: "F",
-            homeClubId: null,
-            awayClubId: null,
-            homePlaceholder: "Pemenang SF1",
-            awayPlaceholder: "Pemenang SF2",
-            venueId: venues[1].id,
-            refereeId: pick(activeRefs).id,
-            scheduledAt: koTime(spec.end, -2),
-            status: "scheduled",
-            period: "not_started",
-            homeFormation: "4-3-3",
-            awayFormation: "4-3-3",
-            createdAt: spec.start,
-          },
-        });
-      }
     }
 
-    if (spec.format === "knockout") {
-      // fully-resolved single elimination — decide every scoreline on paper first
+    if (spec.format === "cup") {
+      // single elimination — decide every scoreline on paper first
       const strengthOf = (clubId: string) => {
         const sq = squadOf(clubId, spec.cat);
         return sq.reduce((a, p) => a + p._potential, 0) / Math.max(1, sq.length);
@@ -950,6 +886,66 @@ async function main() {
         return { hs, as, winner: hs > as ? h : a, loser: hs > as ? a : h };
       };
 
+      if (spec.status !== "completed") {
+        // in progress: round 1 is played, its winners already stand in round 2,
+        // and every later round still reads "Pemenang <slot>"
+        const bracket = cupBracket(shuffle(ids));
+        const winners = new Map<string, string>(); // bracket slot -> the club that won it
+        const slotOf = (placeholder?: string) => placeholder?.replace("Pemenang ", "") ?? "";
+        let liveLeft = spec.live;
+        bracket.forEach((fx) => {
+          const home = fx.home ?? winners.get(slotOf(fx.homePlaceholder)) ?? null;
+          const away = fx.away ?? winners.get(slotOf(fx.awayPlaceholder)) ?? null;
+          const played = fx.round === 1;
+          const isLive = !played && liveLeft > 0 && !!home && !!away;
+          if (isLive) liveLeft--;
+          const status: "completed" | "live" | "scheduled" = played ? "completed" : isLive ? "live" : "scheduled";
+          const kickoff = played
+            ? koTime(spec.start, int(0, 6))
+            : isLive
+              ? now
+              : koTime(now, int(2, 10) + (fx.round - 2) * 7);
+          const liveMinute = int(52, 74);
+          let forcedScore: { home: number; away: number } | undefined;
+          if (played) {
+            const d = decide(home!, away!);
+            winners.set(fx.bracketSlot, d.winner);
+            forcedScore = { home: d.hs, away: d.as };
+          }
+          pending.push({
+            row: {
+              tournamentId: tour.id,
+              stage: fx.stage,
+              round: fx.round,
+              bracketSlot: fx.bracketSlot,
+              homeClubId: home,
+              awayClubId: away,
+              homePlaceholder: home ? null : (fx.homePlaceholder ?? null),
+              awayPlaceholder: away ? null : (fx.awayPlaceholder ?? null),
+              venueId: pick(venues).id,
+              refereeId: pick(activeRefs).id,
+              scheduledAt: kickoff,
+              status,
+              period: status === "completed" ? "full_time" : status === "live" ? "second_half" : "not_started",
+              currentMinute:
+                status === "completed" ? ageByCode[spec.cat].rules.matchDuration : status === "live" ? liveMinute - 2 : 0,
+              clockStartedAt: status === "live" ? new Date(Date.now() - 2 * 60000) : null,
+              homeFormation: pick(["4-3-3", "4-4-2"]),
+              awayFormation: pick(["4-3-3", "3-4-3"]),
+              resultStatus: status === "completed" ? "confirmed" : "unconfirmed",
+              confirmedBy: status === "completed" ? operator.id : null,
+              confirmedAt: status === "completed" ? kickoff : null,
+              attendance: status !== "scheduled" ? int(150, 900) : null,
+              weather: pick(["Cerah", "Cerah berawan", "Berawan"]),
+              createdAt: spec.start,
+            },
+            sim:
+              status !== "scheduled"
+                ? { catCode: spec.cat, live: status === "live", liveMinute, withLineups: true, forcedScore }
+                : undefined,
+          });
+        });
+      } else {
       let round = shuffle(ids);
       let roundNum = 1;
       const losersBySemi: string[] = [];
@@ -1031,6 +1027,7 @@ async function main() {
           },
         });
       }
+      }
     }
   }
 
@@ -1045,6 +1042,10 @@ async function main() {
     .update(s.matches)
     .set({ operatorId: operator.id })
     .where(inArray(s.matches.status, ["live", "halftime", "completed"]));
+  const operatedMatches = insertedMatches.filter((m) => ["live", "halftime", "completed"].includes(m.status));
+  if (operatedMatches.length) {
+    await db.insert(s.matchOperators).values(operatedMatches.map((m) => ({ matchId: m.id, userId: operator.id })));
+  }
 
   console.log(`→ Simulasi ${insertedMatches.length} pertandingan`);
   const scoreUpdates: {
@@ -1104,7 +1105,7 @@ async function main() {
       teamClubs: typeof clubs;
       groupsByClub: Record<string, string>;
     };
-    if (spec.format === "knockout") continue;
+    if (spec.format === "cup") continue;
     const ids = teamClubs.map((c) => c.id);
     const results: MatchResultInput[] = insertedMatches
       .filter(
@@ -1178,19 +1179,17 @@ async function main() {
       continue;
     }
     for (const [scope, a] of Object.entries(scopes)) {
+      // The demo data does not simulate shots; real match events fill them in later.
       const scorable = {
         goals: a.goals,
         assists: a.assists,
-        saves: a.saves,
-        tackles: a.tackles,
+        shotsOnTarget: 0,
+        shotsOffTarget: 0,
         interceptions: a.interceptions,
-        keyPasses: a.keyPasses,
-        duelsWon: a.duelsWon,
-        cleanSheets: a.cleanSheets,
+        saves: a.saves,
         yellowCards: a.yellowCards,
         redCards: a.redCards,
         minutesPlayed: a.minutesPlayed,
-        motm: a.motm,
       };
       statRows.push({
         playerId: p.id,
@@ -1260,7 +1259,7 @@ async function main() {
         playerId,
         badgeId: badgeByCode[code].id,
         tournamentId: tour.id,
-        context: tour.name,
+        context: kuName.get(tour.id) ?? null,
         awardedAt: daysAgo(int(1, 30)),
       });
     };
@@ -1386,7 +1385,7 @@ async function main() {
     kind: "competition_insight",
     subjectType: "tournament",
     subjectId: tournaments[0].id,
-    subjectLabel: tournaments[0].name,
+    subjectLabel: kuName.get(tournaments[0].id),
     model: "demo",
     result: {
       headline: "Tren paruh musim Liga Pelajar U-14: keunggulan tim dengan transisi cepat",
@@ -1500,9 +1499,23 @@ async function main() {
     ],
   );
 
+  console.log("→ Akun pelatih & contoh DSP");
+  const { seedCoachDsp } = await import("./seed-coach-dsp");
+  const dspSeed = await seedCoachDsp(db);
+  console.log(`   ${dspSeed.matches.length} pertandingan · ${dspSeed.matches.length * 2} DSP · ${dspSeed.accounts.filter((a) => a.created).length} akun pelatih baru`);
+
+  // Keuangan: the Buku-besar workbooks. Logins for the units are only created when a password is supplied.
+  console.log("→ Keuangan (unit bisnis & buku besar)");
+  try {
+    const { seedFinance } = await import("@/lib/finance/seed");
+    const finance = await seedFinance(db, { accountPassword: process.env.FINANCE_UNIT_PASSWORD || undefined });
+    console.log(`   ${finance.units.length} unit · ${finance.tables.filter((t) => t.action !== "skipped").reduce((n, t) => n + t.rows, 0)} baris${finance.accounts.length ? ` · ${finance.accounts.length} akun unit` : ""}`);
+  } catch (e) {
+    console.warn("   dilewati — tabel keuangan belum ada (jalankan `npm run db:migrate`):", e instanceof Error ? e.message : e);
+  }
   console.log("\n✓ Seed selesai.");
   console.log(
-    `  ${users.length} pengguna · ${clubs.length} klub · ${P.length} pemain · ${referees.length} wasit · ${coaches.length} pelatih · ${venues.length} venue`,
+    `  ${users.length + dspSeed.accounts.filter((a) => a.created).length} pengguna · ${clubs.length} klub · ${P.length} pemain · ${referees.length} wasit · ${coaches.length} pelatih · ${venues.length} venue`,
   );
   console.log(
     `  ${tournaments.length} turnamen · ${insertedMatches.length} pertandingan · ${eventRows.length} kejadian`,

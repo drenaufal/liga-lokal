@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { EVENT_LABEL } from "@/lib/status";
 import { voidEvent } from "@/app/(app)/match-ops/[id]/actions";
 import { toast } from "@/components/ui/toaster";
+import { useT } from "@/lib/i18n/client";
 
 export type TimelineEvent = {
   id: string;
@@ -27,6 +28,7 @@ export type TimelineEvent = {
   addedTime?: number | null;
   clubId: string | null;
   playerName?: string | null;
+  recorderName?: string | null;
   relatedPlayerId?: string | null;
   voided: boolean;
   detail?: Record<string, unknown> | null;
@@ -75,13 +77,14 @@ export function MatchTimeline({
   canEdit?: boolean;
   playerLookup?: Record<string, string>;
 }) {
+  const t = useT();
   const [pending, start] = React.useTransition();
   const visible = events.filter((e) => e.type !== "var_check" || (e.detail as { award?: string })?.award);
 
   if (visible.length === 0) {
     return (
       <p className="py-8 text-center text-xs text-ink-muted">
-        Belum ada kejadian tercatat.
+        {t("Belum ada kejadian tercatat.")}
       </p>
     );
   }
@@ -90,13 +93,13 @@ export function MatchTimeline({
     const fd = new FormData();
     fd.set("eventId", id);
     fd.set("matchId", matchId);
-    fd.set("reason", "Koreksi operator dari lini masa");
+    fd.set("reason", t("Koreksi operator dari lini masa"));
     start(async () => {
       try {
         await voidEvent(fd);
-        toast.success("Kejadian dibatalkan");
+        toast.success(t("Kejadian dibatalkan"));
       } catch (e) {
-        toast.error("Gagal", e instanceof Error ? e.message : undefined);
+        toast.error(t("Gagal"), e instanceof Error ? e.message : undefined);
       }
     });
   };
@@ -174,26 +177,28 @@ function EventBody({
   onVoid?: () => void;
   pending?: boolean;
 }) {
+  const t = useT();
   return (
     <div className="group flex min-w-0 max-w-full items-center gap-1.5 rounded-xl px-2 py-1.5 hover:bg-surface-2">
       <Icon className={cn("size-3.5 shrink-0", tone ?? "text-ink-muted")} />
       <div className="min-w-0">
         <p className="truncate text-xs font-semibold text-ink">
-          {award ?? e.playerName ?? EVENT_LABEL[e.type]}
+          {award ?? e.playerName ?? t.dyn(EVENT_LABEL[e.type])}
         </p>
         <p className="truncate text-[10px] text-ink-muted">
-          {award ? "Pemain Terbaik" : EVENT_LABEL[e.type]}
+          {award ? t("Pemain Terbaik") : t.dyn(EVENT_LABEL[e.type])}
           {e.relatedPlayerId && playerLookup?.[e.relatedPlayerId]
-            ? ` · assist ${playerLookup[e.relatedPlayerId].split(" ").slice(-1)}`
+            ? ` · ${t("assist {name}", { name: String(playerLookup[e.relatedPlayerId].split(" ").slice(-1)) })}`
             : ""}
         </p>
+        {e.recorderName && <p className="truncate text-[9px] text-ink-muted">{t("Dicatat oleh {name}", { name: e.recorderName })}</p>}
       </div>
       {canEdit && (
         <button
           onClick={onVoid}
           disabled={pending}
           className="opacity-0 transition-opacity group-hover:opacity-100"
-          title="Batalkan kejadian"
+          title={t("Batalkan kejadian")}
         >
           <Ban className="size-3 text-danger" />
         </button>

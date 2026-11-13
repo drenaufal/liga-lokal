@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { TFunction } from "@/lib/i18n/translate";
 
 /* Shared helpers for registry form server actions. */
 
@@ -26,16 +27,17 @@ export function requiredInt(min: number, max: number, message: string) {
 function echo(formData: FormData) {
   const values: Record<string, string> = {};
   formData.forEach((v, k) => {
-    if (typeof v === "string" && !k.startsWith("$ACTION")) values[k] = v;
+    if (typeof v === "string" && !k.startsWith("$ACTION") && !/password/i.test(k)) values[k] = v;
   });
   return values;
 }
 
 /** Builds the failed-submit state from a Zod error or explicit field errors. */
 export function formError(
+  t: TFunction,
   err: z.ZodError | Record<string, string>,
   formData: FormData,
-  message = "Periksa kembali isian formulir.",
+  message: string = t("Periksa kembali isian formulir."),
 ): FormState {
   const fieldErrors =
     err instanceof z.ZodError

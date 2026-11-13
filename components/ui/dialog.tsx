@@ -4,6 +4,7 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/client";
 
 type DialogCtx = { open: boolean; setOpen: (v: boolean) => void };
 const Ctx = React.createContext<DialogCtx | null>(null);
@@ -60,6 +61,7 @@ export function DialogContent({
   title?: string;
   description?: string;
 }) {
+  const t = useT();
   const ctx = React.useContext(Ctx)!;
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
@@ -93,7 +95,7 @@ export function DialogContent({
       >
         <button
           onClick={() => ctx.setOpen(false)}
-          aria-label="Tutup"
+          aria-label={t("Tutup")}
           className="absolute right-4 top-4 z-10 grid size-8 place-items-center rounded-full bg-surface-2 text-ink-muted transition-colors hover:bg-elevated hover:text-ink"
         >
           <X className="size-4" />

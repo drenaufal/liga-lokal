@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "footgrit-scratch",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:/Users/user/AppData/Local/Temp/claude/D--WORK-My-Company-Projects-football-system-footgrit/6fb3afbb-02cf-4c4f-9580-ebdab40540ae/scratchpad/run-scratch.mjs"],
+      "port": 3100
     }
   ]
 }

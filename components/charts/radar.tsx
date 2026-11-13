@@ -2,13 +2,14 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/client";
 
 export type RadarAxis = { key: string; label: string };
 export type RadarSeries = { label: string; color: string; values: Record<string, number> };
 
 /**
- * Radar / spider chart for a player's multi-metric profile (values 0–100,
- * already normalised to percentile or scaled). 1–3 series; legend for ≥2;
+ * Radar / spider chart for a player's multi-metric profile (actual counters,
+ * scaled to a shared maximum across all series). 1–3 series; legend for ≥2;
  * axis labels always visible; hover a vertex for the exact value.
  */
 export function Radar({
@@ -22,12 +23,14 @@ export function Radar({
   size?: number;
   className?: string;
 }) {
+  const t = useT();
   const [hover, setHover] = React.useState<{ s: number; a: number } | null>(null);
   const cx = size / 2;
   const cy = size / 2;
   const r = size / 2 - 46;
   const n = axes.length;
 
+  const maxValue = Math.max(1, ...series.flatMap((s) => axes.map((a) => s.values[a.key] ?? 0)));
   const point = (axisIdx: number, value: number) => {
     const angle = (Math.PI * 2 * axisIdx) / n - Math.PI / 2;
     const dist = (value / 100) * r;
@@ -38,7 +41,7 @@ export function Radar({
 
   return (
     <div className={cn("flex flex-col items-center", className)}>
-      <svg width={size} height={size} className="overflow-visible">
+      <svg viewBox={"-45 -20 " + (size + 90) + " " + (size + 40)} width={size + 90} height={size + 40} className="max-w-full" role="img" aria-label={t("Radar statistik pertandingan")}>
         {/* grid rings */}
         {rings.map((ring) => (
           <polygon
@@ -68,7 +71,7 @@ export function Radar({
         })}
         {/* series */}
         {series.map((s, si) => {
-          const pts = axes.map((a, i) => point(i, s.values[a.key] ?? 0));
+          const pts = axes.map((a, i) => point(i, ((s.values[a.key] ?? 0) / maxValue) * 100));
           return (
             <g key={s.label}>
               <polygon
@@ -114,7 +117,7 @@ export function Radar({
         {hover && (
           <g>
             {(() => {
-              const [x, y] = point(hover.a, series[hover.s].values[axes[hover.a].key] ?? 0);
+              const [x, y] = point(hover.a, ((series[hover.s].values[axes[hover.a].key] ?? 0) / maxValue) * 100);
               return (
                 <text
                   x={x}

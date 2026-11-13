@@ -8,9 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/utils";
-import { WEIGHT_LABELS, computeScore, type ScorableStats } from "@/lib/scoring";
+import { WEIGHT_KEYS, WEIGHT_LABELS, WEIGHT_RANGE, computeScore, type ScorableStats } from "@/lib/scoring";
 import type { FormulaWeights } from "@/lib/db/schema";
 import { saveFormula, activateFormula } from "./actions";
+import { IntelligenceFilters, IntelligencePagination } from "../filters";
+import { playerFilterFields, parsePlayerFilters, paramValue, pageWindow, sortPlayerRows, type PlayerFilterOptions, type IntelligenceParams, type FilterField } from "@/lib/intelligence-filters";
+import { useT } from "@/lib/i18n/client";
 
 type Formula = {
   id: string;
@@ -26,19 +29,25 @@ type PreviewPlayer = {
   name: string;
   club: string | null;
   position: string;
-} & ScorableStats & { appearances: number };
+} & ScorableStats & { appearances: number; rating: number; ageCode: string | null };
 
-const KEYS = Object.keys(WEIGHT_LABELS) as (keyof FormulaWeights)[];
 
 export function FormulaWorkbench({
   formulas,
   preview,
   canEdit,
+  canActivate,
+  params,
+  filterOptions,
 }: {
   formulas: Formula[];
   preview: PreviewPlayer[];
   canEdit: boolean;
+  canActivate: boolean;
+  params: IntelligenceParams;
+  filterOptions: PlayerFilterOptions;
 }) {
+  const t = useT();
   const [selectedId, setSelectedId] = React.useState(
     formulas.find((f) => f.isActive)?.id ?? formulas[0]?.id,
   );
@@ -47,41 +56,38 @@ export function FormulaWorkbench({
   const [name, setName] = React.useState(selected.name);
   const [pending, start] = React.useTransition();
 
-  React.useEffect(() => {
-    setDraft(selected.weights);
-    setName(selected.name);
-  }, [selectedId]); // eslint-disable-line
-
   const dirty =
     JSON.stringify(draft) !== JSON.stringify(selected.weights) || name !== selected.name;
 
-  // live preview ranking under the draft weights
+  const filters = parsePlayerFilters(params, 3);
   const ranked = React.useMemo(() => {
-    return [...preview]
-      .map((p) => ({
-        ...p,
-        newScore: computeScore(p, draft),
-        oldScore: computeScore(p, selected.weights),
-      }))
-      .sort((a, b) => b.newScore - a.newScore)
-      .slice(0, 12)
-      .map((p, i) => {
-        const oldRank =
-          [...preview]
-            .map((x) => ({ id: x.id, s: computeScore(x, selected.weights) }))
-            .sort((a, b) => b.s - a.s)
-            .findIndex((x) => x.id === p.id) + 1;
-        return { ...p, newRank: i + 1, oldRank };
-      });
+    const scored = preview.map((p) => ({ ...p, newScore: computeScore(p, draft), oldScore: computeScore(p, selected.weights) }));
+    const oldIds = sortPlayerRows(scored, "score", "desc", (p) => p.oldScore).map((p) => p.id);
+    return sortPlayerRows(scored, "score", "desc", (p) => p.newScore)
+      .map((p, i) => ({ ...p, newRank: i + 1, oldRank: oldIds.indexOf(p.id) + 1 }));
   }, [draft, preview, selected.weights]);
+  const displayed = sortPlayerRows(ranked, filters.sort, filters.order, (p, key) => key === "score" ? p.newScore : p[key]);
+  const pagination = pageWindow(displayed.length, filters.page, filters.pageSize);
+  const pageRows = displayed.slice(pagination.offset, pagination.offset + pagination.pageSize);
+  const formulaQuery = paramValue(params, "formulaQ").trim().toLowerCase();
+  const formulaStatus = paramValue(params, "formulaStatus");
+  const formulaSort = paramValue(params, "formulaSort");
+  const visibleFormulas = formulas.filter((f) => (!formulaQuery || [f.name, f.description ?? "", t.dyn(f.name), f.description ? t.dyn(f.description) : ""].join(" ").toLowerCase().includes(formulaQuery)) &&
+    (formulaStatus === "active" ? f.isActive : formulaStatus === "inactive" ? !f.isActive : true))
+    .sort((a, b) => formulaSort === "name" ? a.name.localeCompare(b.name, "id") : formulaSort === "version" ? b.version - a.version || a.name.localeCompare(b.name, "id") : Number(b.isActive) - Number(a.isActive) || b.version - a.version || a.name.localeCompare(b.name, "id"));
+  const formulaFields: FilterField[] = [
+    { key: "formulaQ", label: t("Cari formula"), placeholder: t("Nama atau deskripsi…") },
+    { key: "formulaStatus", label: t("Status"), placeholder: t("Semua status"), options: [{ value: "active", label: t("Aktif") }, { value: "inactive", label: t("Tidak aktif") }] },
+    { key: "formulaSort", label: t("Urutkan formula"), defaultValue: "active", options: [{ value: "active", label: t("Aktif dahulu") }, { value: "name", label: t("Nama A–Z") }, { value: "version", label: t("Versi tertinggi") }] },
+  ];
 
   const doSave = () =>
     start(async () => {
       try {
         await saveFormula({ id: selectedId, name, description: selected.description ?? "", weights: draft });
-        toast.success("Formula disimpan");
+        toast.success(t("Formula disimpan"));
       } catch (e) {
-        toast.error("Gagal", e instanceof Error ? e.message : undefined);
+        toast.error(t("Gagal"), e instanceof Error ? e.message : undefined);
       }
     });
 
@@ -91,9 +97,9 @@ export function FormulaWorkbench({
     start(async () => {
       try {
         await activateFormula(fd);
-        toast.success("Formula diaktifkan", "Skor & rating seluruh pemain dihitung ulang");
+        toast.success(t("Formula diaktifkan"), t("Skor & rating seluruh pemain dihitung ulang"));
       } catch (e) {
-        toast.error("Gagal", e instanceof Error ? e.message : undefined);
+        toast.error(t("Gagal"), e instanceof Error ? e.message : undefined);
       }
     });
   };
@@ -103,13 +109,16 @@ export function FormulaWorkbench({
       <div className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>Formula Penilaian</CardTitle>
+            <CardTitle>{t("Formula Penilaian")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {formulas.map((f) => (
+            <IntelligenceFilters params={params} fields={formulaFields} title={t("Filter formula")} preserve={playerFilterFields(filterOptions, t, 3).map((f) => f.key)} />
+            <p className="text-[11px] text-ink-muted">{t("{n} dari {total} formula", { n: visibleFormulas.length, total: formulas.length })}</p>
+            {!visibleFormulas.length && <p className="py-4 text-center text-xs text-ink-muted">{t("Tidak ada formula yang cocok.")}</p>}
+            {visibleFormulas.map((f) => (
               <button
                 key={f.id}
-                onClick={() => setSelectedId(f.id)}
+                onClick={() => { setSelectedId(f.id); setDraft(f.weights); setName(f.name); }}
                 className={cn(
                   "flex w-full items-start justify-between gap-3 rounded-lg border p-3 text-left transition-colors",
                   selectedId === f.id ? "border-brand/50 bg-brand/5" : "border-line hover:border-ink/25",
@@ -118,11 +127,11 @@ export function FormulaWorkbench({
                 <div className="min-w-0">
                   <span className="flex items-center gap-2 text-sm font-medium text-ink">
                     <Gauge className="size-3.5 text-brand" />
-                    {f.name}
-                    {f.isActive && <Badge tone="brand">Aktif</Badge>}
+                    {t.dyn(f.name)}
+                    {f.isActive && <Badge tone="brand">{t("Aktif")}</Badge>}
                   </span>
                   <span className="mt-0.5 block text-[11px] text-ink-muted">
-                    v{f.version} · {f.description}
+                    v{f.version} · {f.description ? t.dyn(f.description) : ""}
                   </span>
                 </div>
               </button>
@@ -132,8 +141,8 @@ export function FormulaWorkbench({
 
         <Card>
           <CardHeader>
-            <CardTitle>Bobot Metrik</CardTitle>
-            {dirty && <span className="text-[11px] text-warn">Perubahan belum disimpan</span>}
+            <CardTitle>{t("Bobot Metrik")}</CardTitle>
+            {dirty && <span className="text-[11px] text-warn">{t("Perubahan belum disimpan")}</span>}
           </CardHeader>
           <CardContent className="space-y-3">
             {canEdit && (
@@ -143,17 +152,20 @@ export function FormulaWorkbench({
                 className="text-sm font-medium"
               />
             )}
+            <p className="text-[11px] leading-relaxed text-ink-muted">
+              {t("Bobot mengikuti tombol pencatatan di halaman pertandingan, ditambah penyelamatan kiper (dihitung otomatis) dan waktu bermain (menit / 90).")}
+            </p>
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-              {KEYS.map((k) => (
+              {WEIGHT_KEYS.map((k) => (
                 <div key={k}>
                   <div className="mb-1 flex items-center justify-between text-[11px]">
-                    <span className="text-ink-secondary">{WEIGHT_LABELS[k]}</span>
+                    <span className="text-ink-secondary">{t.dyn(WEIGHT_LABELS[k])}</span>
                     <span className="tabular-nums text-ink">{draft[k]}</span>
                   </div>
                   <input
                     type="range"
-                    min={k === "yellowCard" || k === "redCard" ? -8 : 0}
-                    max={k === "goal" || k === "motm" ? 12 : 8}
+                    min={WEIGHT_RANGE[k][0]}
+                    max={WEIGHT_RANGE[k][1]}
                     step={0.1}
                     value={draft[k]}
                     disabled={!canEdit}
@@ -165,24 +177,28 @@ export function FormulaWorkbench({
                 </div>
               ))}
             </div>
-            {canEdit && (
+            {(canEdit || canActivate) && (
               <div className="flex gap-2 border-t border-line-soft pt-3">
-                <Button size="sm" disabled={!dirty || pending} onClick={doSave}>
-                  {pending ? <Loader2 className="animate-spin" /> : <Save className="size-3.5" />}
-                  Simpan
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={!dirty}
-                  onClick={() => {
-                    setDraft(selected.weights);
-                    setName(selected.name);
-                  }}
-                >
-                  <RotateCcw className="size-3.5" /> Reset
-                </Button>
-                {!selected.isActive && (
+                {canEdit && (
+                  <>
+                    <Button size="sm" disabled={!dirty || pending} onClick={doSave}>
+                      {pending ? <Loader2 className="animate-spin" /> : <Save className="size-3.5" />}
+                      {t("Simpan")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={!dirty}
+                      onClick={() => {
+                        setDraft(selected.weights);
+                        setName(selected.name);
+                      }}
+                    >
+                      <RotateCcw className="size-3.5" /> {t("Reset")}
+                    </Button>
+                  </>
+                )}
+                {canActivate && !selected.isActive && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -190,7 +206,7 @@ export function FormulaWorkbench({
                     disabled={pending || dirty}
                     onClick={() => doActivate(selected.id)}
                   >
-                    <Check className="size-3.5" /> Aktifkan
+                    <Check className="size-3.5" /> {t("Aktifkan")}
                   </Button>
                 )}
               </div>
@@ -201,24 +217,25 @@ export function FormulaWorkbench({
 
       <Card className="h-fit">
         <CardHeader>
-          <CardTitle>Pratinjau Dampak — Papan Peringkat</CardTitle>
+          <CardTitle>{t("Pratinjau Dampak — Papan Peringkat")}</CardTitle>
           <span className="text-[11px] text-ink-muted">
-            {selected.isActive ? "vs formula aktif" : "vs formula ini tersimpan"}
+            {selected.isActive ? t("vs formula aktif") : t("vs formula ini tersimpan")}
           </span>
         </CardHeader>
         <CardContent className="p-0">
+          <div className="p-3"><IntelligenceFilters params={params} fields={playerFilterFields(filterOptions, t, 3, true)} title={t("Filter & urutkan pratinjau pemain")} preserve={["formulaQ", "formulaStatus", "formulaSort"]} /></div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b border-line text-left text-[10px] uppercase tracking-wider text-ink-muted">
                 <tr>
                   <th className="px-4 py-2">#</th>
-                  <th className="px-2 py-2">Pemain</th>
-                  <th className="px-2 py-2 text-right">Skor draf</th>
-                  <th className="px-4 py-2 text-right">Δ Peringkat</th>
+                  <th className="px-2 py-2">{t("Pemain")}</th>
+                  <th className="px-2 py-2 text-right">{t("Skor draf")}</th>
+                  <th className="px-4 py-2 text-right">{t("Δ Peringkat")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line-soft">
-                {ranked.map((p) => {
+                {pageRows.map((p) => {
                   const move = p.oldRank - p.newRank;
                   return (
                     <tr key={p.id} className="hover:bg-surface-2/40">
@@ -226,7 +243,7 @@ export function FormulaWorkbench({
                       <td className="px-2 py-2">
                         <span className="block truncate text-xs font-medium text-ink">{p.name}</span>
                         <span className="text-[10px] text-ink-muted">
-                          {p.club} · {p.goals}G {p.assists}A {p.saves}S
+                          {p.club} · {p.position} · {p.ageCode} · {p.goals}G {p.assists}A {p.shotsOnTarget}SoT
                         </span>
                       </td>
                       <td className="px-2 py-2 text-right font-semibold tabular-nums text-ink">
@@ -252,6 +269,8 @@ export function FormulaWorkbench({
               </tbody>
             </table>
           </div>
+          {!displayed.length && <p className="p-6 text-center text-xs text-ink-muted">{t("Tidak ada pemain yang cocok. Sesuaikan atau reset filter.")}</p>}
+          <IntelligencePagination params={params} total={pagination.total} page={pagination.page} pageSize={pagination.pageSize} label={t("pemain")} />
         </CardContent>
       </Card>
     </div>

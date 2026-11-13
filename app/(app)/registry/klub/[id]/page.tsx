@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, MapPin, Mail, Phone, User, Pencil, UserPlus } from "lucide-react";
+import { ArrowLeft, MapPin, Mail, Phone, User, Pencil, UserPlus, Landmark } from "lucide-react";
 import { getClubProfile } from "@/lib/queries/registry";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCapability, getClubScope } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { Button } from "@/components/ui/button";
 import { ClubCrest } from "@/components/app/club-crest";
@@ -12,8 +12,10 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/app/status-badge";
 import { EmptyState } from "@/components/ui/misc";
-import { STAGE_LABEL, POSITION } from "@/lib/status";
-import { formatDate } from "@/lib/utils";
+import { STAGE_LABEL } from "@/lib/status";
+import { positionText } from "@/lib/positions";
+import { inClubScope } from "@/lib/club-scope";
+import { getI18n } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +26,8 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   const d = await getClubProfile(id);
-  return { title: d?.club.name ?? "Klub" };
+  const { t } = await getI18n();
+  return { title: d?.club.name ?? t("Klub") };
 }
 
 export default async function ClubProfilePage({
@@ -32,12 +35,14 @@ export default async function ClubProfilePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { t, fmt } = await getI18n();
+  const user = await requireCapability("registry.club:view");
   const { id } = await params;
-  const d = await getClubProfile(id);
+  const d = inClubScope(await getClubScope(), id) ? await getClubProfile(id) : null;
   if (!d) notFound();
   const { club, squad, comps, recentMatches, staff } = d;
-  const user = await getCurrentUser();
-  const canWrite = can(user?.role, "registry:write");
+  const canWrite = can(user, "registry.club:edit");
+  const canAddCoach = can(user, "registry.coach:create");
 
   const byCategory = squad.reduce<Record<string, typeof squad>>((acc, p) => {
     const k = p.ageCode ?? "Lainnya";
@@ -51,42 +56,45 @@ export default async function ClubProfilePage({
         href="/registry/klub"
         className="mb-4 inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink"
       >
-        <ArrowLeft className="size-3.5" /> Kembali ke daftar klub
+        <ArrowLeft className="size-3.5" /> {t("Kembali ke daftar SSB")}
       </Link>
 
       <Card className="mb-4">
         <CardContent className="flex flex-col gap-5 sm:flex-row sm:items-center">
-          <ClubCrest logoUrl={club.logoUrl} short={club.shortName} color={club.primaryColor} size={80} />
+          <ClubCrest logoUrl={club.logoUrl} short={club.shortName} size={80} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl font-semibold tracking-tight text-ink">{club.name}</h1>
               <Badge tone={club.type === "academy" ? "violet" : "info"}>
-                {club.type === "academy" ? "Akademi" : "Klub"}
+                {club.type === "academy" ? t("Akademi") : t("Klub")}
               </Badge>
-              <span
-                className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-[10px] text-ink-muted"
-              >
-                <span className="size-2 rounded-full" style={{ background: club.primaryColor ?? "var(--color-brand)" }} />
-                Warna klub
-              </span>
               {canWrite && (
                 <Button variant="outline" size="sm" href={`/registry/klub/${club.id}/edit`} className="ml-auto">
-                  <Pencil className="size-3.5" /> Ubah data & logo
+                  <Pencil className="size-3.5" /> {t("Ubah data & logo")}
                 </Button>
               )}
             </div>
             <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-secondary">
               <span className="flex items-center gap-1.5">
-                <MapPin className="size-3" /> {club.city}, {club.province}
+                <MapPin className="size-3" /> {[club.city, club.province].filter(Boolean).join(", ")}
               </span>
-              {club.homeVenue && (
-                <Link href={`/registry/venue/${club.homeVenue.id}`} className="hover:text-ink">
-                  Kandang: {club.homeVenue.name}
-                </Link>
+              <span>{t("Berdiri {year}", { year: club.foundedYear ?? "—" })}</span>
+              {club.askot && (
+                <span className="flex items-center gap-1.5">
+                  <Landmark className="size-3" /> {club.askot}
+                </span>
               )}
-              <span>Berdiri {club.foundedYear ?? "—"}</span>
-              {club.accreditation && <span className="text-brand">{club.accreditation}</span>}
+              {club.asprov && (
+                <span className="flex items-center gap-1.5">
+                  <Landmark className="size-3" /> {club.asprov}
+                </span>
+              )}
             </div>
+            {club.address && (
+              <p className="mt-2 max-w-xl whitespace-pre-line text-xs leading-relaxed text-ink-muted">
+                {club.address}
+              </p>
+            )}
             <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-ink-muted">
               {club.contactName && (
                 <span className="flex items-center gap-1"><User className="size-3" /> {club.contactName}</span>
@@ -102,17 +110,17 @@ export default async function ClubProfilePage({
           <div className="grid grid-cols-3 gap-3 text-center sm:grid-cols-1 sm:gap-1.5">
             <div>
               <div className="text-lg font-semibold tabular-nums text-ink">{squad.length}</div>
-              <div className="text-[10px] text-ink-muted">Pemain</div>
+              <div className="text-[10px] text-ink-muted">{t("Pemain")}</div>
             </div>
             <div>
               <div className="text-lg font-semibold tabular-nums text-ink">{comps.length}</div>
-              <div className="text-[10px] text-ink-muted">Kompetisi</div>
+              <div className="text-[10px] text-ink-muted">{t("Kompetisi")}</div>
             </div>
             <div>
               <div className="text-lg font-semibold tabular-nums text-ink">
                 {Object.keys(byCategory).length}
               </div>
-              <div className="text-[10px] text-ink-muted">Kelompok umur</div>
+              <div className="text-[10px] text-ink-muted">{t("Kelompok umur")}</div>
             </div>
           </div>
         </CardContent>
@@ -122,8 +130,8 @@ export default async function ClubProfilePage({
         <div className="space-y-4 lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Skuad</CardTitle>
-              <span className="text-[11px] text-ink-muted">{squad.length} pemain terdaftar</span>
+              <CardTitle>{t("Skuad")}</CardTitle>
+              <span className="text-[11px] text-ink-muted">{t("{n} pemain terdaftar", { n: squad.length })}</span>
             </CardHeader>
             <CardContent className="space-y-5">
               {Object.entries(byCategory)
@@ -131,8 +139,8 @@ export default async function ClubProfilePage({
                 .map(([cat, list]) => (
                   <div key={cat}>
                     <div className="mb-2 flex items-center gap-2">
-                      <Badge tone="info">{cat}</Badge>
-                      <span className="text-[11px] text-ink-muted">{list.length} pemain</span>
+                      <Badge tone="info">{t.dyn(cat)}</Badge>
+                      <span className="text-[11px] text-ink-muted">{t("{n} pemain", { n: list.length })}</span>
                     </div>
                     <div className="grid gap-1.5 sm:grid-cols-2">
                       {list.map((p) => (
@@ -149,7 +157,7 @@ export default async function ClubProfilePage({
                               {p.fullName}
                             </span>
                             <span className="text-[10px] text-ink-muted">
-                              {POSITION[p.position].label} · {p.apps} main · {p.goals} gol
+                              {positionText(p.position, t)} · {t("{apps} main · {goals} gol", { apps: p.apps, goals: p.goals })}
                             </span>
                           </span>
                           <StatusBadge kind="verification" value={p.verificationStatus} />
@@ -165,13 +173,13 @@ export default async function ClubProfilePage({
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Staf Pelatih</CardTitle>
-              {canWrite && (
+              <CardTitle>{t("Staf Pelatih")}</CardTitle>
+              {canAddCoach && (
                 <Link
                   href={`/registry/pelatih/baru?club=${club.id}`}
                   className="flex items-center gap-1 text-[11px] text-ink-muted hover:text-brand"
                 >
-                  <UserPlus className="size-3" /> Tambah
+                  <UserPlus className="size-3" /> {t("Tambah")}
                 </Link>
               )}
             </CardHeader>
@@ -188,23 +196,28 @@ export default async function ClubProfilePage({
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-xs font-medium text-ink">{c.fullName}</span>
                           <span className="text-[10px] text-ink-muted">
-                            {c.specialty ?? "Pelatih"} · {c.licenseLevel}
+                            {t.dyn(c.specialty ?? t("Pelatih::peran"))}{c.licenseLevel ? ` · ${t.dyn(c.licenseLevel)}` : ""}
                           </span>
                         </span>
-                        <StatusBadge kind="coach" value={c.status} />
+                        <span
+                          className={`shrink-0 text-[10px] tabular-nums ${Number(c.docs) >= Number(c.docsNeeded) ? "text-success" : "text-ink-muted"}`}
+                          title={t("Dokumen lisensi & KTP yang sudah diunggah")}
+                        >
+                          {t("{n}/{total} dok", { n: Math.min(Number(c.docs), Number(c.docsNeeded)), total: Number(c.docsNeeded) })}
+                        </span>
                       </Link>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="py-4 text-center text-xs text-ink-muted">Belum ada pelatih terdaftar.</p>
+                <p className="py-4 text-center text-xs text-ink-muted">{t("Belum ada pelatih terdaftar.")}</p>
               )}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Riwayat Kompetisi</CardTitle>
+              <CardTitle>{t("Riwayat Kompetisi")}</CardTitle>
             </CardHeader>
             <CardContent>
               {comps.length ? (
@@ -212,7 +225,7 @@ export default async function ClubProfilePage({
                   {comps.map((c) => (
                     <li key={c.tournamentId}>
                       <Link
-                        href={`/kompetisi/${c.tournamentId}`}
+                        href={`/kompetisi/ku/${c.tournamentId}`}
                         className="block rounded-lg border border-line-soft bg-surface-2/40 p-2.5 transition-colors hover:border-brand/30"
                       >
                         <div className="flex items-center justify-between gap-2">
@@ -221,7 +234,7 @@ export default async function ClubProfilePage({
                         </div>
                         {c.played != null && c.played > 0 && (
                           <p className="mt-1 text-[10px] text-ink-muted">
-                            Peringkat {c.rank} · {c.played} main · {c.won}M {c.drawn}S {c.lost}K · {c.points} poin
+                            {t("Peringkat {rank} · {played} main · {won}M {drawn}S {lost}K · {points} poin", { rank: c.rank ?? "—", played: c.played, won: c.won ?? 0, drawn: c.drawn ?? 0, lost: c.lost ?? 0, points: c.points ?? 0 })}
                           </p>
                         )}
                       </Link>
@@ -229,14 +242,14 @@ export default async function ClubProfilePage({
                   ))}
                 </ul>
               ) : (
-                <EmptyState title="Belum ikut kompetisi" />
+                <EmptyState title={t("Belum ikut kompetisi")} />
               )}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Pertandingan Terakhir</CardTitle>
+              <CardTitle>{t("Pertandingan Terakhir")}</CardTitle>
             </CardHeader>
             <CardContent>
               {recentMatches.length ? (
@@ -258,7 +271,7 @@ export default async function ClubProfilePage({
                             </span>
                           ) : (
                             <span className="shrink-0 text-[10px] text-ink-muted">
-                              {formatDate(m.scheduledAt)}
+                              {fmt.date(m.scheduledAt)}
                             </span>
                           )}
                         </Link>
@@ -267,7 +280,7 @@ export default async function ClubProfilePage({
                   })}
                 </ul>
               ) : (
-                <p className="py-4 text-center text-xs text-ink-muted">Belum ada pertandingan.</p>
+                <p className="py-4 text-center text-xs text-ink-muted">{t("Belum ada pertandingan.")}</p>
               )}
             </CardContent>
           </Card>

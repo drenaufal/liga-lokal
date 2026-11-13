@@ -12,6 +12,7 @@ import {
   generateMatchReport,
   generateCompetitionReport,
 } from "./actions";
+import { useT } from "@/lib/i18n/client";
 
 export function ReportGenerators({
   options,
@@ -22,6 +23,7 @@ export function ReportGenerators({
     tournaments: { id: string; name: string }[];
   };
 }) {
+  const t = useT();
   const [pending, start] = React.useTransition();
   const [player, setPlayer] = React.useState(options.players[0]?.id ?? "");
   const [match, setMatch] = React.useState(options.matches[0]?.id ?? "");
@@ -36,7 +38,7 @@ export function ReportGenerators({
         await fn(fd);
       } catch (e) {
         rethrowControlFlow(e);
-        toast.error("Gagal", e instanceof Error ? e.message : undefined);
+        toast.error(t("Gagal"), e instanceof Error ? e.message : undefined);
       }
     });
   };
@@ -45,11 +47,11 @@ export function ReportGenerators({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Sparkles className="size-4 text-violet" /> Buat Laporan AI
+          <Sparkles className="size-4 text-violet" /> {t("Buat Laporan AI")}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Block icon={Users} label="Analisis Pemain">
+        <Block icon={Users} label={t("Analisis Pemain")}>
           <Select value={player} onChange={(e) => setPlayer(e.target.value)} className="text-xs">
             {options.players.map((p) => (
               <option key={p.id} value={p.id}>
@@ -64,11 +66,11 @@ export function ReportGenerators({
             onClick={() => run(generatePlayerReport, "playerId", player)}
           >
             {pending ? <Loader2 className="animate-spin" /> : <Sparkles className="size-3.5" />}
-            Analisis kekuatan & jenjang
+            {t("Analisis kekuatan & jenjang")}
           </Button>
         </Block>
 
-        <Block icon={Radio} label="Ringkasan Pasca-Laga">
+        <Block icon={Radio} label={t("Ringkasan Pasca-Laga")}>
           <Select value={match} onChange={(e) => setMatch(e.target.value)} className="text-xs">
             {options.matches.map((m) => (
               <option key={m.id} value={m.id}>
@@ -83,15 +85,15 @@ export function ReportGenerators({
             disabled={pending}
             onClick={() => run(generateMatchReport, "matchId", match)}
           >
-            Ringkas pola taktik
+            {t("Ringkas pola taktik")}
           </Button>
         </Block>
 
-        <Block icon={Trophy} label="Wawasan Kompetisi">
+        <Block icon={Trophy} label={t("Wawasan Kompetisi")}>
           <Select value={tour} onChange={(e) => setTour(e.target.value)} className="text-xs">
-            {options.tournaments.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
+            {options.tournaments.map((tn) => (
+              <option key={tn.id} value={tn.id}>
+                {tn.name}
               </option>
             ))}
           </Select>
@@ -102,7 +104,7 @@ export function ReportGenerators({
             disabled={pending}
             onClick={() => run(generateCompetitionReport, "tournamentId", tour)}
           >
-            Analisis tren turnamen
+            {t("Analisis tren turnamen")}
           </Button>
         </Block>
       </CardContent>

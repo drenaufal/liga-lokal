@@ -6,12 +6,18 @@ import { listAgeCategories } from "@/lib/queries/registry";
 import { Card, CardContent } from "@/components/ui/card";
 import { CategoryForm } from "../category-form";
 import { MAX_CATEGORY_AGE, type CategoryDefaults } from "../shared";
+import { getT } from "@/lib/i18n/server";
+import { getI18n } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Kategori Usia Baru" };
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getI18n();
+  return { title: t("Kategori Usia Baru") };
+}
 export const dynamic = "force-dynamic";
 
 export default async function NewCategoryPage() {
-  await requireCapability("registry:write");
+  const t = await getT();
+  await requireCapability("registry.category:create");
   const cats = await listAgeCategories();
 
   // Suggest the next two-year band above the oldest existing category (capped
@@ -20,19 +26,17 @@ export default async function NewCategoryPage() {
   const oldest = cats.reduce((m, c) => Math.max(m, c.category.maxAge), 0);
   const capped = oldest >= MAX_CATEGORY_AGE;
   const maxAge = Math.min(MAX_CATEGORY_AGE, oldest ? oldest + 2 : 8);
-  const minAge = capped ? maxAge - 1 : Math.min(maxAge, oldest ? oldest + 1 : 6);
   const defaults: CategoryDefaults = {
     code: capped ? "" : `KU-${maxAge}`,
-    label: capped ? "" : `Kelompok Umur ${maxAge}`,
-    minAge,
+    label: capped ? "" : t("Kelompok Umur {n}", { n: maxAge }),
     maxAge,
     halfDuration: maxAge >= 17 ? 45 : 40,
     playersOnField: 11,
     maxSquad: maxAge >= 17 ? 23 : 20,
     ballSize: 5,
-    substitutions: "Maksimal 5 pemain (3 kesempatan)",
-    fieldType: "Lapangan penuh",
-    notes: "Aturan pertandingan mengikuti Laws of the Game",
+    substitutions: t("Maksimal 5 pemain (3 kesempatan)"),
+    fieldType: t("Lapangan penuh"),
+    notes: t("Aturan pertandingan mengikuti Laws of the Game"),
   };
 
   return (
@@ -41,11 +45,11 @@ export default async function NewCategoryPage() {
         href="/registry/kategori-usia"
         className="mb-4 inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink"
       >
-        <ArrowLeft className="size-3.5" /> Kembali
+        <ArrowLeft className="size-3.5" /> {t("Kembali")}
       </Link>
-      <h1 className="text-lg font-semibold tracking-tight text-ink">Tambah Kategori Usia</h1>
+      <h1 className="text-lg font-semibold tracking-tight text-ink">{t("Tambah Kategori Usia")}</h1>
       <p className="mt-1 text-sm text-ink-muted">
-        Buat kelompok umur baru hingga usia {MAX_CATEGORY_AGE} tahun beserta aturan pertandingannya.
+        {t("Buat kelompok umur baru hingga usia {max} tahun beserta aturan pertandingannya.", { max: MAX_CATEGORY_AGE })}
       </p>
       <Card className="mt-5">
         <CardContent>

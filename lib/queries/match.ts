@@ -1,13 +1,19 @@
 import { and, asc, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
+import { matchScopeFilter } from "@/lib/club-scope";
+import { competitionScopeFilter } from "@/lib/competition-scope";
 import { alias } from "drizzle-orm/mysql-core";
 import { db } from "@/lib/db";
 import { MATCH_DURATION_SQL } from "@/lib/match-clock";
+import { getEligibleMatchPlayers } from "@/lib/queries/match-roster";
+import { getAssignedOperators } from "@/lib/match-officials";
 import {
   ageCategories,
   clubs,
+  competitions,
   matchEvents,
   matchLineups,
   matches,
+  operatorCompetitions,
   players,
   referees,
   tournaments,
@@ -16,6 +22,8 @@ import {
 } from "@/lib/db/schema";
 import { ascNullsLast } from "@/lib/db/order";
 import { licenseStatus } from "@/lib/status";
+import { kuNameSql } from "@/lib/queries/ku";
+import { withMatchGoals } from "@/lib/queries/match-goals";
 
 const hc = () => alias(clubs, "hc");
 const ac = () => alias(clubs, "ac");
@@ -26,10 +34,15 @@ export type MatchListParams = {
   q?: string;
 };
 
-export async function listMatches(params: MatchListParams) {
+/** `scope`: SSB scope (getClubScope); `competitionScope`: Turnamen scope of an operator (getCompetitionScope). */
+export async function listMatches(params: MatchListParams, scope: string[] | null = null, competitionScope: string[] | null = null) {
   const H = hc();
   const A = ac();
   const conds = [];
+  const scoped = matchScopeFilter(scope);
+  if (scoped) conds.push(scoped);
+  const inTurnamen = competitionScopeFilter(competitions.id, competitionScope);
+  if (inTurnamen) conds.push(inTurnamen);
   if (params.status)
     conds.push(
       eq(
@@ -53,20 +66,22 @@ export async function listMatches(params: MatchListParams) {
       duration: sql<number>`${sql.raw(MATCH_DURATION_SQL)}`,
       homeScore: matches.homeScore,
       awayScore: matches.awayScore,
+      homeClubId: matches.homeClubId,
+      awayClubId: matches.awayClubId,
       resultStatus: matches.resultStatus,
       homeName: H.name,
       homeShort: H.shortName,
-      homeColor: H.primaryColor,
       homeLogo: H.logoUrl,
       awayName: A.name,
       awayShort: A.shortName,
-      awayColor: A.primaryColor,
       awayLogo: A.logoUrl,
-      tournamentName: tournaments.name,
+      tournamentName: kuNameSql,
       venue: venues.name,
     })
     .from(matches)
     .innerJoin(tournaments, eq(tournaments.id, matches.tournamentId))
+    .innerJoin(competitions, eq(competitions.id, tournaments.competitionId))
+    .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
     .leftJoin(H, eq(H.id, matches.homeClubId))
     .leftJoin(A, eq(A.id, matches.awayClubId))
     .leftJoin(venues, eq(venues.id, matches.venueId))
@@ -77,12 +92,20 @@ export async function listMatches(params: MatchListParams) {
     )
     .limit(120);
 
+  // One entry per KU, grouped by Turnamen in the filter.
   const tournamentOpts = await db
-    .select({ id: tournaments.id, name: tournaments.name })
+    .select({
+      id: tournaments.id,
+      competition: competitions.name,
+      ageCode: ageCategories.code,
+    })
     .from(tournaments)
-    .orderBy(asc(tournaments.name));
+    .innerJoin(competitions, eq(competitions.id, tournaments.competitionId))
+    .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
+    .where(competitionScopeFilter(competitions.id, competitionScope))
+    .orderBy(asc(competitions.name), ascNullsLast(ageCategories.sortOrder));
 
-  return { rows, tournamentOpts };
+  return { rows: await withMatchGoals(rows), tournamentOpts };
 }
 
 export async function getMatchConsole(id: string) {
@@ -91,16 +114,15 @@ export async function getMatchConsole(id: string) {
   const rows = await db
     .select({
       m: matches,
-      tournamentName: tournaments.name,
+      tournamentName: kuNameSql,
       tournamentId: tournaments.id,
+      competitionId: competitions.id,
       ageDuration: ageCategories.rules,
       homeName: H.name,
       homeShort: H.shortName,
-      homeColor: H.primaryColor,
       homeLogo: H.logoUrl,
       awayName: A.name,
       awayShort: A.shortName,
-      awayColor: A.primaryColor,
       awayLogo: A.logoUrl,
       venue: venues.name,
       referee: referees.fullName,
@@ -109,6 +131,7 @@ export async function getMatchConsole(id: string) {
     })
     .from(matches)
     .innerJoin(tournaments, eq(tournaments.id, matches.tournamentId))
+    .innerJoin(competitions, eq(competitions.id, tournaments.competitionId))
     .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
     .leftJoin(H, eq(H.id, matches.homeClubId))
     .leftJoin(A, eq(A.id, matches.awayClubId))
@@ -120,6 +143,8 @@ export async function getMatchConsole(id: string) {
   if (!rows.length) return null;
   const row = rows[0];
   const m = row.m;
+  const operators = await getAssignedOperators(id, m.operatorId);
+  const recorder = alias(users, "event_recorder");
 
   const events = await db
     .select({
@@ -134,10 +159,12 @@ export async function getMatchConsole(id: string) {
       voided: matchEvents.voided,
       detail: matchEvents.detail,
       playerName: players.fullName,
+      recorderName: recorder.name,
       createdAt: matchEvents.createdAt,
     })
     .from(matchEvents)
     .leftJoin(players, eq(players.id, matchEvents.playerId))
+    .leftJoin(recorder, eq(recorder.id, matchEvents.createdBy))
     .where(eq(matchEvents.matchId, id))
     .orderBy(asc(matchEvents.minute), asc(matchEvents.createdAt));
 
@@ -161,44 +188,17 @@ export async function getMatchConsole(id: string) {
 
   // squad options for event entry — players of either club in this tournament's age category
   const squadIds = [m.homeClubId, m.awayClubId].filter(Boolean) as string[];
-  const ageCategoryId = await db
-    .select({ id: tournaments.ageCategoryId })
-    .from(tournaments)
-    .where(eq(tournaments.id, m.tournamentId))
-    .then((r) => r[0]?.id ?? null);
+  const squads = await getEligibleMatchPlayers(m.tournamentId, squadIds);
 
-  const squadRows = squadIds.length
-    ? await db
-        .select({
-          id: players.id,
-          name: players.fullName,
-          clubId: players.clubId,
-          secondClubId: players.secondClubId,
-          position: players.position,
-          jersey: players.jerseyNumber,
-        })
-        .from(players)
-        .where(
-          and(
-            or(inArray(players.clubId, squadIds), inArray(players.secondClubId, squadIds)),
-            ageCategoryId ? eq(players.ageCategoryId, ageCategoryId) : undefined,
-          ),
-        )
-        .orderBy(ascNullsLast(players.jerseyNumber))
-    : [];
-  // One entry per (player, club in this match). Someone registered with BOTH clubs
-  // of the match plays for his main club only.
-  const squads = squadRows.flatMap((p) => {
-    const here = [p.clubId, p.secondClubId].filter((c): c is string => !!c && squadIds.includes(c));
-    const clubId = here.length === 2 ? p.clubId! : here[0];
-    return clubId ? [{ id: p.id, name: p.name, clubId, position: p.position, jersey: p.jersey }] : [];
-  });
-
-  return { ...row, m, events, lineups, squads };
+  const [scorers] = await withMatchGoals([{ id }]);
+  return { ...row, m, operators, events, lineups, squads, goals: scorers.goals };
 }
 
-/** Referees with a valid license and the people who can run a match console. */
-export async function getOfficialOptions() {
+/**
+ * Referees with a valid license and the people who can run a match console. With `competitionId`
+ * the operators are narrowed to those assigned to that Turnamen (admins are always listed).
+ */
+export async function getOfficialOptions(competitionId?: string) {
   const [refs, ops] = await Promise.all([
     db
       .select({
@@ -214,7 +214,26 @@ export async function getOfficialOptions() {
     db
       .select({ id: users.id, name: users.name, role: users.role })
       .from(users)
-      .where(and(eq(users.active, true), inArray(users.role, ["operator", "admin"])))
+      .where(
+        and(
+          eq(users.active, true),
+          competitionId
+            ? or(
+                eq(users.role, "admin"),
+                and(
+                  eq(users.role, "operator"),
+                  inArray(
+                    users.id,
+                    db
+                      .select({ id: operatorCompetitions.userId })
+                      .from(operatorCompetitions)
+                      .where(eq(operatorCompetitions.competitionId, competitionId)),
+                  ),
+                ),
+              )
+            : inArray(users.role, ["operator", "admin"]),
+        ),
+      )
       .orderBy(asc(users.name)),
   ]);
   return {

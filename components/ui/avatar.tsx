@@ -25,12 +25,14 @@ export function Avatar({
   name,
   size = 36,
   square,
+  fit = "cover",
   className,
 }: {
   src?: string | null;
   name: string;
   size?: number;
   square?: boolean;
+  fit?: "cover" | "contain";
   className?: string;
 }) {
   const [errored, setErrored] = React.useState(false);
@@ -52,7 +54,7 @@ export function Avatar({
         <img
           src={src}
           alt={name}
-          className="absolute inset-0 h-full w-full object-cover"
+          className={cn("absolute inset-0 h-full w-full", fit === "contain" ? "object-contain" : "object-cover")}
           onError={() => setErrored(true)}
         />
       ) : (

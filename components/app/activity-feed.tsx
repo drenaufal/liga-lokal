@@ -9,7 +9,8 @@ import {
   UserCheck,
   ScrollText,
 } from "lucide-react";
-import { relativeTime } from "@/lib/utils";
+import { getI18n } from "@/lib/i18n/server";
+import { localizeAudit } from "@/lib/audit-display";
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   "player.verify": UserCheck,
@@ -24,7 +25,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   "standings.recompute": Trophy,
 };
 
-export function ActivityFeed({
+export async function ActivityFeed({
   items,
 }: {
   items: {
@@ -36,6 +37,7 @@ export function ActivityFeed({
     createdAt: Date | string;
   }[];
 }) {
+  const { t, fmt, locale } = await getI18n();
   return (
     <ul className="space-y-0.5">
       {items.map((it) => {
@@ -46,9 +48,9 @@ export function ActivityFeed({
               <Icon className="size-3.5" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-xs text-ink-secondary">{it.summary}</p>
+              <p className="text-xs text-ink-secondary">{localizeAudit(t, locale, it.summary)}</p>
               <p className="mt-0.5 text-[10px] text-ink-muted">
-                {it.actorName ?? "Sistem"} · {relativeTime(it.createdAt)}
+                {it.actorName ?? t("Sistem")} · {fmt.relative(it.createdAt)}
               </p>
             </div>
           </li>

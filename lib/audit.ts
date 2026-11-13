@@ -1,5 +1,16 @@
 import { db } from "@/lib/db";
 import { auditLogs } from "@/lib/db/schema";
+import { createT, type MessageId, type Vars } from "@/lib/i18n/translate";
+
+const STORED = createT("id", {});
+
+/**
+ * The text of an audit entry. The trail is always written in Indonesian, whoever acts; each viewer
+ * reads it in their own language through `localizeAudit` (lib/audit-display.ts).
+ */
+export function auditText(id: MessageId, vars?: Vars) {
+  return STORED(id, vars);
+}
 
 const FIELD_LABEL: Record<string, string> = {
   fullName: "nama",
@@ -30,20 +41,20 @@ const FIELD_LABEL: Record<string, string> = {
   jerseyNumber: "nomor punggung",
   guardianName: "nama wali",
   guardianPhone: "kontak wali",
-  primaryColor: "warna utama",
-  secondaryColor: "warna kedua",
-  homeVenueId: "venue kandang",
+  address: "alamat",
+  askot: "Askot",
+  asprov: "Asprov",
   contactName: "kontak",
   contactEmail: "email",
   contactPhone: "telepon",
-  accreditation: "akreditasi",
   specialty: "peran",
   licenseLevel: "tingkat lisensi",
   licenseNumber: "nomor lisensi",
   licenseIssuedAt: "tanggal terbit",
   licenseExpiry: "masa berlaku",
+  licenseDocUrl: "dokumen lisensi",
+  ktpUrl: "KTP",
   status: "status",
-  experienceYears: "pengalaman",
   phone: "telepon",
   email: "email",
 };

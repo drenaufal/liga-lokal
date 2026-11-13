@@ -1,13 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Mail, Phone, MapPin, ScrollText } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, ScrollText, Pencil, Landmark } from "lucide-react";
 import { getRefereeProfile } from "@/lib/queries/registry";
+import { requireCapability } from "@/lib/auth/session";
+import { can } from "@/lib/auth/rbac";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/app/status-badge";
-import { formatDate } from "@/lib/utils";
+import { refereeSpecialtyLabel } from "@/lib/status";
+import { getI18n } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +22,8 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   const d = await getRefereeProfile(id);
-  return { title: d?.referee.fullName ?? "Wasit" };
+  const { t } = await getI18n();
+  return { title: d?.referee.fullName ?? t("Wasit::peran") };
 }
 
 export default async function RefereeProfilePage({
@@ -26,10 +31,13 @@ export default async function RefereeProfilePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { t, fmt } = await getI18n();
+  const user = await requireCapability("registry.referee:view");
   const { id } = await params;
   const d = await getRefereeProfile(id);
   if (!d) notFound();
   const { referee: r, assignments } = d;
+  const canWrite = can(user, "registry.referee:edit");
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -37,7 +45,7 @@ export default async function RefereeProfilePage({
         href="/registry/wasit"
         className="mb-4 inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink"
       >
-        <ArrowLeft className="size-3.5" /> Kembali
+        <ArrowLeft className="size-3.5" /> {t("Kembali")}
       </Link>
 
       <Card className="mb-4">
@@ -46,19 +54,26 @@ export default async function RefereeProfilePage({
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-lg font-semibold tracking-tight text-ink">{r.fullName}</h1>
-              <Badge tone="violet">{r.licenseLevel}</Badge>
+              <Badge tone="violet">{t.dyn(r.licenseLevel)}</Badge>
               <StatusBadge kind="referee" value={r.status} dot />
+              {canWrite && (
+                <Button variant="outline" size="sm" href={`/registry/wasit/${r.id}/edit`} className="ml-auto">
+                  <Pencil className="size-3.5" /> {t("Ubah data")}
+                </Button>
+              )}
             </div>
+            {r.specialty && <p className="mt-0.5 text-xs text-ink-muted">{refereeSpecialtyLabel(t, r.specialty)}</p>}
             <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-secondary">
               <span className="flex items-center gap-1"><ScrollText className="size-3" /> {r.licenseNumber}</span>
+              {r.askot && <span className="flex items-center gap-1"><Landmark className="size-3" /> {t("Asal {askot}", { askot: r.askot })}</span>}
               {r.city && <span className="flex items-center gap-1"><MapPin className="size-3" /> {r.city}</span>}
               {r.email && <span className="flex items-center gap-1"><Mail className="size-3" /> {r.email}</span>}
               {r.phone && <span className="flex items-center gap-1"><Phone className="size-3" /> {r.phone}</span>}
             </div>
             <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
-              <Info label="Diterbitkan">{r.licenseIssuedAt ? formatDate(r.licenseIssuedAt) : "—"}</Info>
-              <Info label="Berlaku s.d.">{r.licenseExpiry ? formatDate(r.licenseExpiry) : "—"}</Info>
-              <Info label="Total memimpin">{r.matchesOfficiated} laga</Info>
+              <Info label={t("Diterbitkan")}>{r.licenseIssuedAt ? fmt.date(r.licenseIssuedAt) : "—"}</Info>
+              <Info label={t("Berlaku s.d.")}>{r.licenseExpiry ? fmt.date(r.licenseExpiry) : "—"}</Info>
+              <Info label={t("Total memimpin")}>{t("{n} laga", { n: r.matchesOfficiated })}</Info>
             </div>
           </div>
         </CardContent>
@@ -66,7 +81,7 @@ export default async function RefereeProfilePage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Penugasan Pertandingan</CardTitle>
+          <CardTitle>{t("Penugasan Pertandingan")}</CardTitle>
         </CardHeader>
         <CardContent>
           {assignments.length ? (
@@ -87,7 +102,7 @@ export default async function RefereeProfilePage({
                           {m.homeScore}–{m.awayScore}
                         </span>
                       ) : (
-                        <span className="text-[11px] text-ink-muted">{formatDate(m.scheduledAt)}</span>
+                        <span className="text-[11px] text-ink-muted">{fmt.date(m.scheduledAt)}</span>
                       )}
                       <StatusBadge kind="match" value={m.status} />
                     </span>
@@ -96,7 +111,7 @@ export default async function RefereeProfilePage({
               ))}
             </ul>
           ) : (
-            <p className="py-6 text-center text-xs text-ink-muted">Belum ada penugasan.</p>
+            <p className="py-6 text-center text-xs text-ink-muted">{t("Belum ada penugasan.")}</p>
           )}
         </CardContent>
       </Card>

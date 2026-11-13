@@ -1,25 +1,33 @@
-import { getPlayerRadarData, getPeerPool, searchPlayersForRadar } from "@/lib/queries/intelligence";
+import { getPlayerRadarData, getPeerPool, searchPlayersForRadar, getPlayerFilterOptions } from "@/lib/queries/intelligence";
+import { getClubScope } from "@/lib/auth/session";
+import { requireViewerCapability } from "@/lib/auth/session";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Radar } from "@/components/charts/radar";
-import { RADAR_AXES, radarValues, per90Summary, percentileOf } from "@/lib/player-metrics";
-import { POSITION } from "@/lib/status";
-import { LINE_LABEL, positionLine } from "@/lib/positions";
+import { RADAR_AXES, radarValues, per90Summary } from "@/lib/player-metrics";
+import { LINE_LABEL, positionLine, positionText } from "@/lib/positions";
 import { PlayerPicker } from "./player-picker";
+import { IntelligenceFilters, IntelligencePagination } from "./filters";
+import { playerFilterFields, paramValue, withoutSortFields, type IntelligenceParams } from "@/lib/intelligence-filters";
+import { getI18n } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function RadarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ player?: string; q?: string; position?: string; age?: string }>;
+  searchParams: Promise<IntelligenceParams>;
 }) {
+  const { t } = await getI18n();
+  await requireViewerCapability("intelligence.radar:view");
   const sp = await searchParams;
-  const list = await searchPlayersForRadar(sp.q, sp.position, sp.age);
-  const selectedId = sp.player ?? list[0]?.id;
+  const scope = await getClubScope();
+  const [results, filterOptions] = await Promise.all([searchPlayersForRadar(sp, scope, true), getPlayerFilterOptions(scope)]);
+  const list = results.rows;
+  const selectedId = paramValue(sp, "player") || list[0]?.id;
   const [rows] = await Promise.all([
-    selectedId ? getPlayerRadarData([selectedId]) : Promise.resolve([]),
+    selectedId ? getPlayerRadarData([selectedId], scope) : Promise.resolve([]),
   ]);
   const row = rows[0];
 
@@ -29,16 +37,23 @@ export default async function RadarPage({
   const radar = row ? radarValues(row.stat) : null;
   const p90 = row ? per90Summary(row.stat) : null;
 
-  const pct = (v: number, pool: number[]) => percentileOf(v, pool);
+  // A bar is the player's per-90 figure against the best figure among the same peers.
+  const share = (v: number, pool: number[]) => {
+    const best = Math.max(0, ...pool);
+    return best > 0 ? Math.min(100, Math.round((v / best) * 100)) : 0;
+  };
 
   return (
+    <div className="space-y-4">
+      <IntelligenceFilters params={sp} fields={withoutSortFields(playerFilterFields(filterOptions, t))} title={t("Filter pemain & radar")} />
     <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
       <Card className="h-fit">
         <CardHeader>
-          <CardTitle>Pilih Pemain</CardTitle>
+          <CardTitle>{t("Pilih Pemain")}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <PlayerPicker players={list} selectedId={selectedId} />
+          <PlayerPicker players={list} selectedId={selectedId} rankOffset={results.offset} />
+          <IntelligencePagination params={sp} total={results.total} page={results.page} pageSize={results.pageSize} label={t("pemain")} />
         </CardContent>
       </Card>
 
@@ -50,25 +65,21 @@ export default async function RadarPage({
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-lg font-semibold text-ink">{row.name}</h2>
-                  <Badge tone="info">{POSITION[row.position].label}</Badge>
+                  <Badge tone="info">{positionText(row.position, t)}</Badge>
                   {row.ageCode && <Badge>{row.ageCode}</Badge>}
                   <span className="text-xs text-ink-muted">{row.club}</span>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-secondary">
-                  <span>{row.stat.appearances} penampilan</span>
-                  <span>{row.stat.goals} gol · {row.stat.assists} assist</span>
-                  <span>Rating {row.stat.rating.toFixed(1)}</span>
-                  <span className="text-brand">Skor {Math.round(row.stat.score)}</span>
+                  <span>{t("{n} penampilan", { n: row.stat.appearances })}</span>
+                  <span>{t("{goals} gol · {assists} assist", { goals: row.stat.goals, assists: row.stat.assists })}</span>
+                  <span>{t("Rating {value}", { value: row.stat.rating.toFixed(1) })}</span>
                 </div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-semibold tabular-nums text-brand">
-                  {pct(row.stat.score, peers.map((x) => x.score)) ?? "—"}
+                  {Math.round(row.stat.score)}
                 </div>
-                <div className="text-[10px] text-ink-muted">
-                  Persentil<br />
-                  {LINE_LABEL[positionLine(row.position)]} {row.ageCode}
-                </div>
+                <div className="text-[10px] text-ink-muted">{t("Skor performa")}</div>
               </div>
             </CardContent>
           </Card>
@@ -76,12 +87,12 @@ export default async function RadarPage({
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Radar Performa</CardTitle>
-                <span className="text-[11px] text-ink-muted">skala per-90 vs batas referensi</span>
+                <CardTitle>{t("Radar Performa")}</CardTitle>
+                <span className="text-[11px] text-ink-muted">{t("Total statistik pertandingan")}</span>
               </CardHeader>
               <CardContent>
                 <Radar
-                  axes={RADAR_AXES.map((a) => ({ key: a.key, label: a.label }))}
+                  axes={RADAR_AXES.map((a) => ({ key: a.key, label: t(a.label) }))}
                   series={[{ label: row.name, color: "var(--color-chart-1)", values: radar }]}
                 />
               </CardContent>
@@ -89,38 +100,35 @@ export default async function RadarPage({
 
             <Card>
               <CardHeader>
-                <CardTitle>Persentil vs Rekan Seposisi</CardTitle>
+                <CardTitle>{t("Statistik per 90 Menit")}</CardTitle>
                 <span className="text-[11px] text-ink-muted">
-                  {peers.length} pemain {LINE_LABEL[positionLine(row.position)]} {row.ageCode}
+                  {t("Dibanding {n} pemain {line} {age}", { n: peers.length, line: t.dyn(LINE_LABEL[positionLine(row.position)]), age: row.ageCode ?? "" })}
                 </span>
               </CardHeader>
               <CardContent className="space-y-3">
                 {[
-                  ["Gol / 90", p90.goals, peers.map((x) => (x.minutesPlayed ? (x.goals / x.minutesPlayed) * 90 : 0))],
-                  ["Assist / 90", p90.assists, peers.map((x) => (x.minutesPlayed ? (x.assists / x.minutesPlayed) * 90 : 0))],
-                  ["Umpan kunci / 90", p90.keyPasses, peers.map((x) => (x.minutesPlayed ? (x.keyPasses / x.minutesPlayed) * 90 : 0))],
-                  ["Tekel / 90", p90.tackles, peers.map((x) => (x.minutesPlayed ? (x.tackles / x.minutesPlayed) * 90 : 0))],
-                  ["Penyelamatan / 90", p90.saves, peers.map((x) => (x.minutesPlayed ? (x.saves / x.minutesPlayed) * 90 : 0))],
+                  [t("Gol / 90"), p90.goals, peers.map((x) => (x.minutesPlayed ? (x.goals / x.minutesPlayed) * 90 : 0))],
+                  [t("Assist / 90"), p90.assists, peers.map((x) => (x.minutesPlayed ? (x.assists / x.minutesPlayed) * 90 : 0))],
+                  [t("Umpan kunci / 90"), p90.keyPasses, peers.map((x) => (x.minutesPlayed ? (x.keyPasses / x.minutesPlayed) * 90 : 0))],
+                  [t("Tekel / 90"), p90.tackles, peers.map((x) => (x.minutesPlayed ? (x.tackles / x.minutesPlayed) * 90 : 0))],
+                  [t("Penyelamatan / 90"), p90.saves, peers.map((x) => (x.minutesPlayed ? (x.saves / x.minutesPlayed) * 90 : 0))],
                 ].map(([label, value, pool]) => {
-                  const percentile = pct(value as number, pool as number[]) ?? 50;
+                  const fill = share(value as number, pool as number[]);
                   return (
                     <div key={label as string}>
                       <div className="mb-1 flex items-center justify-between text-xs">
                         <span className="text-ink-secondary">{label}</span>
-                        <span className="tabular-nums text-ink">
-                          {(value as number).toFixed(2)}{" "}
-                          <span className="text-ink-muted">· p{percentile}</span>
-                        </span>
+                        <span className="tabular-nums text-ink">{(value as number).toFixed(2)}</span>
                       </div>
                       <div className="h-2 overflow-hidden rounded-full bg-surface-2">
                         <div
                           className="h-full rounded-full"
                           style={{
-                            width: `${percentile}%`,
+                            width: `${fill}%`,
                             background:
-                              percentile >= 75
+                              fill >= 75
                                 ? "var(--color-success)"
-                                : percentile >= 40
+                                : fill >= 40
                                   ? "var(--color-info)"
                                   : "var(--color-warn)",
                           }}
@@ -136,10 +144,11 @@ export default async function RadarPage({
       ) : (
         <Card>
           <CardContent className="py-16 text-center text-sm text-ink-muted">
-            Pilih pemain di panel kiri untuk melihat profil radar.
+            {t("Pilih pemain di panel kiri untuk melihat profil radar.")}
           </CardContent>
         </Card>
       )}
+    </div>
     </div>
   );
 }

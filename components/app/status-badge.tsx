@@ -1,6 +1,9 @@
+"use client";
+
 import { Badge } from "@/components/ui/badge";
+import { useT } from "@/lib/i18n/client";
+import { positionText } from "@/lib/positions";
 import {
-  COACH_STATUS,
   IMPORT_BATCH_STATUS,
   MATCH_STATUS,
   POSITION,
@@ -14,7 +17,6 @@ import {
 const MAPS = {
   verification: VERIFICATION,
   referee: REFEREE_STATUS,
-  coach: COACH_STATUS,
   tournament: TOURNAMENT_STATUS,
   match: MATCH_STATUS,
   result: RESULT_STATUS,
@@ -32,11 +34,12 @@ export function StatusBadge({
   value: string;
   dot?: boolean;
 }) {
+  const t = useT();
   const meta = (MAPS[kind] as Record<string, { label: string; tone: never }>)[value];
   if (!meta) return <Badge>{value}</Badge>;
   return (
     <Badge tone={meta.tone} dot={dot}>
-      {meta.label}
+      {kind === "position" ? positionText(value, t) : t.dyn(meta.label)}
     </Badge>
   );
 }

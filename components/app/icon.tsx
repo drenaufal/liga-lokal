@@ -13,6 +13,7 @@ import {
   Hand,
   Heart,
   LayoutDashboard,
+  Newspaper,
   Radar,
   Radio,
   Settings,
@@ -23,12 +24,14 @@ import {
   TrendingUp,
   Trophy,
   Users,
+  Wallet,
   Wand2,
   type LucideProps,
 } from "lucide-react";
 
 const MAP = {
   LayoutDashboard,
+  Newspaper,
   Database,
   FileInput,
   Trophy,
@@ -45,6 +48,7 @@ const MAP = {
   ShieldCheck,
   CheckCircle2,
   TrendingUp,
+  Wallet,
   // badge icons
   target: Target,
   wand: Wand2,
