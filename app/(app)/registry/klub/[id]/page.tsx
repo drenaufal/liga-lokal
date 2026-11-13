@@ -196,14 +196,14 @@ export default async function ClubProfilePage({
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-xs font-medium text-ink">{c.fullName}</span>
                           <span className="text-[10px] text-ink-muted">
-                            {t.dyn(c.specialty ?? t("Pelatih::peran"))} · {t.dyn(c.licenseLevel)}
+                            {t.dyn(c.specialty ?? t("Pelatih::peran"))}{c.licenseLevel ? ` · ${t.dyn(c.licenseLevel)}` : ""}
                           </span>
                         </span>
                         <span
-                          className={`shrink-0 text-[10px] tabular-nums ${Number(c.docs) === 2 ? "text-success" : "text-ink-muted"}`}
+                          className={`shrink-0 text-[10px] tabular-nums ${Number(c.docs) >= Number(c.docsNeeded) ? "text-success" : "text-ink-muted"}`}
                           title={t("Dokumen lisensi & KTP yang sudah diunggah")}
                         >
-                          {t("{n}/2 dok", { n: Number(c.docs) })}
+                          {t("{n}/{total} dok", { n: Math.min(Number(c.docs), Number(c.docsNeeded)), total: Number(c.docsNeeded) })}
                         </span>
                       </Link>
                     </li>

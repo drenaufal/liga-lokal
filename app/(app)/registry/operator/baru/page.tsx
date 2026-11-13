@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { OperatorForm } from "../operator-form";
 import { getT } from "@/lib/i18n/server";
 import { getI18n } from "@/lib/i18n/server";
+import { getCompetitionChoices } from "@/lib/operator-accounts";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getI18n();
@@ -15,6 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function NewOperatorPage() {
   const t = await getT();
   await requireCapability("registry.operator:create");
+  const competitions = await getCompetitionChoices();
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -27,7 +29,7 @@ export default async function NewOperatorPage() {
       </p>
       <Card className="mt-5">
         <CardContent>
-          <OperatorForm />
+          <OperatorForm competitions={competitions} />
         </CardContent>
       </Card>
     </div>

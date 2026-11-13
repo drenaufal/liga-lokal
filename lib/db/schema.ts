@@ -163,6 +163,8 @@ export const matchEventType = [
   "var_check",
   "period",
   "interception",
+  /** A team pass. Never tied to a player; only feeds ball possession and stays off the timeline. */
+  "pass",
 ] as const;
 export const lineupRole = ["starter", "substitute"] as const;
 
@@ -370,8 +372,9 @@ export const coaches = mysqlTable(
     clubId: uuid("club_id").references(() => clubs.id, { onDelete: "set null" }),
     /** A coach may look after a second SSB — two at most. `clubId` stays the primary one. */
     secondClubId: uuid("second_club_id").references(() => clubs.id, { onDelete: "set null" }),
-    licenseLevel: varchar("license_level", { length: 24 }).notNull(), // D Nasional … Pro AFC
-    licenseNumber: varchar("license_number", { length: 40 }).notNull().unique(),
+    /** Optional: a coach may be registered without a coaching license. */
+    licenseLevel: varchar("license_level", { length: 24 }), // D Nasional … Pro AFC
+    licenseNumber: varchar("license_number", { length: 40 }).unique(),
     // Private scans (see lib/coach-documents.ts): URLs of `document` media rows.
     licenseDocUrl: text("license_doc_url"), // scan sertifikat lisensi kepelatihan
     ktpUrl: text("ktp_url"), // KTP
@@ -729,6 +732,23 @@ export const matchOperators = mysqlTable(
   ],
 );
 
+/**
+ * The Turnamen an operator account is assigned to. An account without `scope:all-competitions`
+ * (operators, out of the box) only sees these Turnamen, their KUs and their matches.
+ */
+export const operatorCompetitions = mysqlTable(
+  "operator_competitions",
+  {
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    competitionId: uuid("competition_id").notNull().references(() => competitions.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").default(NOW).notNull(),
+  },
+  (t) => [
+    uniqueIndex("operator_competition_idx").on(t.userId, t.competitionId),
+    index("operator_competition_comp_idx").on(t.competitionId),
+  ],
+);
+
 export const matchEvents = mysqlTable("match_events", {
   id: id(),
   matchId: uuid("match_id")
@@ -819,6 +839,8 @@ export const playerMatchStats = mysqlTable(
     yellowCards: int("yellow_cards").notNull().default(0),
     redCards: int("red_cards").notNull().default(0),
     motm: int("motm").notNull().default(0),
+    /** 1 when a goalkeeper conceded nothing while he was on the pitch. */
+    cleanSheets: int("clean_sheets").notNull().default(0),
   },
   (t) => [uniqueIndex("player_match_stats_idx").on(t.matchId, t.playerId)],
 );

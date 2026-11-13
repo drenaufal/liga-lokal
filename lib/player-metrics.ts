@@ -8,8 +8,6 @@ export const RADAR_AXES = [
   { key: "saves", label: msg("Saves") },
   { key: "interceptions", label: msg("Intercept") },
   { key: "shotsOffTarget", label: msg("Shot off target") },
-  { key: "redCards", label: msg("Red card") },
-  { key: "yellowCards", label: msg("Yellow card") },
 ] as const;
 
 /** Actual counters from recorded match statistics. */

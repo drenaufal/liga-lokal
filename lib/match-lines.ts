@@ -18,6 +18,7 @@ export const LINE_COUNTERS = [
   "yellowCards",
   "redCards",
   "motm",
+  "cleanSheets",
 ] as const;
 
 export type LineCounter = (typeof LINE_COUNTERS)[number];
@@ -60,8 +61,16 @@ export function emptyLine(playerId: string, clubId: string | null): MatchLine {
     yellowCards: 0,
     redCards: 0,
     motm: 0,
+    cleanSheets: 0,
   };
 }
+
+/** The keeper of a line-up, as the automatic saves see him: the GK slot, or a GK with no slot set. */
+function isKeeper(l: LineLineup | undefined) {
+  return !!l && (l.slot === "GK" || (!l.slot && l.position === "GK"));
+}
+
+const SCORED = ["goal", "penalty_goal"];
 
 /**
  * Who took part and what they did.
@@ -125,8 +134,8 @@ export function buildMatchLines(input: {
     }
   }
 
-  /** Minutes on the pitch, adding up every stint. */
-  const minutesOn = (pid: string, role: LineLineup["role"] | undefined) => {
+  /** Every stint on the pitch as [from, to] minutes. */
+  const stintsOf = (pid: string, role: LineLineup["role"] | undefined) => {
     const list = (marks.get(pid) ?? []).sort((x, y) => x.minute - y.minute); // stable: ties keep match order
     // Where the first stint starts. A reserve who was never sent on (he only has events) is assumed
     // to have been on from his first event; someone with no line-up row who first appears coming on
@@ -135,25 +144,40 @@ export function buildMatchLines(input: {
     if (role === "starter") from = 0;
     else if (role === "substitute") from = list.some((m) => m.on) ? null : (firstMinute.get(pid) ?? 0);
     else from = list[0]?.on ? null : 0;
-    let total = 0;
+    const stints: [number, number][] = [];
     for (const m of list) {
       if (m.on && from === null) from = m.minute;
       else if (!m.on && from !== null) {
-        total += Math.max(0, m.minute - from);
+        stints.push([from, m.minute]);
         from = null;
       }
     }
-    if (from !== null) total += Math.max(0, length - from);
-    return total;
+    if (from !== null) stints.push([from, length]);
+    return stints;
   };
+  /** Minutes on the pitch, adding up every stint. */
+  const minutesOn = (stints: [number, number][]) => stints.reduce((sum, [from, to]) => sum + Math.max(0, to - from), 0);
+
+  /** Minutes at which `clubId` let in a goal: the opponent scored, or one of its own players put it in his own net. */
+  const concededAt = (clubId: string) =>
+    events
+      .filter((e) => e.clubId && ((SCORED.includes(e.type) && e.clubId !== clubId) || (e.type === "own_goal" && e.clubId === clubId)))
+      .map((e) => e.minute);
 
   const lines = new Map<string, MatchLine>();
   for (const pid of participants) {
     const lu = lineupOf.get(pid);
     const clubId = lu?.clubId ?? clubSeen.get(pid) ?? fallbackClub?.(pid) ?? null;
     const line = emptyLine(pid, clubId);
+    const stints = stintsOf(pid, lu?.role);
     line.appearances = 1;
-    line.minutesPlayed = Math.max(1, Math.min(length, minutesOn(pid, lu?.role)));
+    line.minutesPlayed = Math.max(1, Math.min(length, minutesOn(stints)));
+    // Clean sheet: goalkeepers only, +1 when nothing went in while he was on the pitch.
+    if (clubId && isKeeper(lu)) {
+      const conceded = concededAt(clubId);
+      const breached = conceded.some((minute) => stints.some(([from, to]) => minute >= from && minute <= to));
+      if (!breached) line.cleanSheets = 1;
+    }
     lines.set(pid, line);
   }
 

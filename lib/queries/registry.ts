@@ -606,6 +606,8 @@ export async function getClubProfile(id: string) {
       specialty: coaches.specialty,
       licenseLevel: coaches.licenseLevel,
       docs: sql<number>`((${coaches.licenseDocUrl} is not null) + (${coaches.ktpUrl} is not null))`,
+      // the license scan is only required from a coach who holds a license
+      docsNeeded: sql<number>`(1 + (${coaches.licenseLevel} is not null))`,
     })
     .from(coaches)
     .where(coachOfClub(id))
@@ -624,7 +626,7 @@ export async function listCoaches(params: {
   q?: string;
   level?: string;
   club?: string;
-  /** "lengkap" = license + KTP both uploaded, "kurang" = at least one missing. */
+  /** "lengkap" = KTP (+ license scan when licensed) uploaded, "kurang" = something missing. */
   docs?: string;
 }, scope: string[] | null = null) {
   const sc2 = alias(clubs, "coach_second_club");
@@ -638,9 +640,9 @@ export async function listCoaches(params: {
   if (params.level) conds.push(eq(coaches.licenseLevel, params.level));
   if (params.club) conds.push(coachOfClub(params.club));
   if (params.docs === "lengkap")
-    conds.push(and(isNotNull(coaches.licenseDocUrl), isNotNull(coaches.ktpUrl))!);
+    conds.push(and(or(isNotNull(coaches.licenseDocUrl), isNull(coaches.licenseLevel)), isNotNull(coaches.ktpUrl))!);
   if (params.docs === "kurang")
-    conds.push(or(isNull(coaches.licenseDocUrl), isNull(coaches.ktpUrl))!);
+    conds.push(or(and(isNull(coaches.licenseDocUrl), isNotNull(coaches.licenseLevel)), isNull(coaches.ktpUrl))!);
 
   return db
     .select({

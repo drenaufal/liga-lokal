@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Layers, Pencil, Plus, Radio, UserRound } from "lucide-react";
 import { getCompetition, getCompetitionImpact, getCompetitionSummary } from "@/lib/queries/competition";
-import { requireViewerCapability } from "@/lib/auth/session";
+import { getCompetitionScope, requireViewerCapability } from "@/lib/auth/session";
+import { inCompetitionScope } from "@/lib/competition-scope";
 import { can } from "@/lib/auth/rbac";
 import { StatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
@@ -33,7 +34,7 @@ export default async function CompetitionLayout({
   const user = await requireViewerCapability("competition:view");
   const { id } = await params;
   const c = await getCompetition(id);
-  if (!c) notFound();
+  if (!c || !inCompetitionScope(await getCompetitionScope(), c.id)) notFound();
   const canAddKu = can(user, "ku:create");
   const canEdit = can(user, "competition:edit");
   const canDelete = can(user, "competition:delete");

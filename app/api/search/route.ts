@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { and, like, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { clubs, coaches, competitions, players, referees, venues } from "@/lib/db/schema";
-import { getClubScope, getCurrentUser } from "@/lib/auth/session";
+import { getClubScope, getCompetitionScope, getCurrentUser } from "@/lib/auth/session";
+import { competitionScopeFilter } from "@/lib/competition-scope";
 import { clubScopeFilter, coachScopeFilter, playerScopeFilter } from "@/lib/club-scope";
 import { can } from "@/lib/auth/rbac";
 import { getT } from "@/lib/i18n/server";
@@ -19,6 +20,7 @@ export async function GET(req: Request) {
 
   // Each kind of result is only searched for people who may open its menu, and only within their SSB.
   const scope = await getClubScope();
+  const competitionScope = await getCompetitionScope();
   const none = Promise.resolve([] as never[]);
   const [pl, cl, rf, co, tn, vn] = await Promise.all([
     can(user, "registry.player:view")
@@ -62,7 +64,7 @@ export async function GET(req: Request) {
       ? db
           .select({ id: competitions.id, name: competitions.name, season: competitions.season })
           .from(competitions)
-          .where(or(like(competitions.name, pattern), like(competitions.organizer, pattern)))
+          .where(and(or(like(competitions.name, pattern), like(competitions.organizer, pattern)), competitionScopeFilter(competitions.id, competitionScope)))
           .limit(4)
       : none,
     can(user, "registry.venue:view")
@@ -102,7 +104,7 @@ export async function GET(req: Request) {
     ...co.map((r) => ({
       type: t("Pelatih::jenis"),
       label: r.name,
-      sub: r.level,
+      sub: r.level ?? "",
       href: `/registry/pelatih/${r.id}`,
     })),
     ...vn.map((r) => ({

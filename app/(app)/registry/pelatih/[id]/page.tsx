@@ -71,7 +71,7 @@ export default async function CoachProfilePage({
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-lg font-semibold tracking-tight text-ink">{c.fullName}</h1>
-              <Badge tone="violet">{t.dyn(c.licenseLevel)}</Badge>
+              {c.licenseLevel ? <Badge tone="violet">{t.dyn(c.licenseLevel)}</Badge> : <Badge tone="neutral">{t("Belum berlisensi")}</Badge>}
               {canWrite && (
                 <Button variant="outline" size="sm" href={`/registry/pelatih/${c.id}/edit`} className="ml-auto">
                   <Pencil className="size-3.5" /> {t("Ubah data")}
@@ -80,7 +80,7 @@ export default async function CoachProfilePage({
             </div>
             {c.specialty && <p className="mt-0.5 text-xs text-ink-muted">{t.dyn(c.specialty)}</p>}
             <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-secondary">
-              <span className="flex items-center gap-1"><ScrollText className="size-3" /> {c.licenseNumber}</span>
+              {c.licenseNumber && <span className="flex items-center gap-1"><ScrollText className="size-3" /> {c.licenseNumber}</span>}
               {c.dob && (
                 <span className="flex items-center gap-1"><Cake className="size-3" /> {t("{n} th", { n: ageFromDob(c.dob) })}</span>
               )}

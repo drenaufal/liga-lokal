@@ -78,6 +78,13 @@
       "when": 1793887286939,
       "tag": "0010_articles",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1794583650994,
+      "tag": "0011_match_stats_operator_scope",
+      "breakpoints": true
     }
   ]
 }

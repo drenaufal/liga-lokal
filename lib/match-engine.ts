@@ -213,6 +213,7 @@ export async function syncMatchStats(matchId: string, weights: FormulaWeights) {
       yellowCards: r.yellowCards,
       redCards: r.redCards,
       motm: r.motm,
+      cleanSheets: r.cleanSheets,
     }));
     if (!prev.length && (m.resultStatus === "confirmed" || m.resultStatus === "amended")) {
       prev = next.map((l) => ({ ...l }));

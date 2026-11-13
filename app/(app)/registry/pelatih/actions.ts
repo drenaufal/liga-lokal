@@ -36,10 +36,18 @@ const makeCoachSchema = (t: TFunction) => z.object({
     .string()
     .refine((v) => v === "" || COACH_SPECIALTIES.includes(v), t("Peran tidak dikenali"))
     .optional(),
+  /** The coaching license is optional: blank level and number = not (yet) licensed. */
   licenseLevel: z
     .string()
-    .refine((v) => COACH_LICENSE_LEVELS.includes(v), t("Pilih tingkat lisensi")),
-  licenseNumber: z.string().trim().toUpperCase().min(3, t("Nomor lisensi wajib diisi")).max(40),
+    .refine((v) => v === "" || COACH_LICENSE_LEVELS.includes(v), t("Pilih tingkat lisensi"))
+    .optional(),
+  licenseNumber: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .refine((v) => v === "" || v.length >= 3, t("Nomor lisensi minimal 3 karakter"))
+    .refine((v) => v.length <= 40, t("Nomor lisensi maksimal 40 karakter"))
+    .optional(),
   licenseDocUrl: documentUrlField(t),
   ktpUrl: documentUrlField(t),
   photoUrl: imageUrlField(t),
@@ -48,6 +56,9 @@ const makeCoachSchema = (t: TFunction) => z.object({
   /** Registration form only: the coach's login, created together with the profile. */
   accountEmail: z.string().trim().toLowerCase().optional(),
   accountPassword: z.string().optional(),
+}).refine((v) => !v.licenseNumber || !!v.licenseLevel, {
+  path: ["licenseLevel"],
+  message: t("Pilih tingkat lisensi untuk nomor lisensi ini"),
 });
 
 type CoachInput = z.infer<ReturnType<typeof makeCoachSchema>>;
@@ -60,8 +71,8 @@ function toRow(v: CoachInput) {
     clubId: v.clubId || null,
     secondClubId: v.secondClubId || null,
     specialty: v.specialty || null,
-    licenseLevel: v.licenseLevel,
-    licenseNumber: v.licenseNumber,
+    licenseLevel: v.licenseLevel || null,
+    licenseNumber: v.licenseNumber || null,
     licenseDocUrl: v.licenseDocUrl || null,
     ktpUrl: v.ktpUrl || null,
     photoUrl: v.photoUrl || null,
@@ -70,7 +81,8 @@ function toRow(v: CoachInput) {
   };
 }
 
-async function licenseTaken(t: TFunction, licenseNumber: string, exceptId?: string) {
+async function licenseTaken(t: TFunction, licenseNumber: string | null, exceptId?: string) {
+  if (!licenseNumber) return null; // no license, nothing to collide with
   const hit = await db.query.coaches.findFirst({
     where: exceptId
       ? and(eq(coaches.licenseNumber, licenseNumber), ne(coaches.id, exceptId))
@@ -146,7 +158,7 @@ export async function createCoach(_prev: FormState, formData: FormData): Promise
     action: "coach.create",
     entityType: "coach",
     entityId: id,
-    summary: auditText("Registrasi pelatih baru: {name} ({level} · {number})", { name: row.fullName, level: row.licenseLevel, number: row.licenseNumber }),
+    summary: auditText("Registrasi pelatih baru: {name} ({level} · {number})", { name: row.fullName, level: row.licenseLevel ?? "tanpa lisensi", number: row.licenseNumber ?? "—" }),
   });
   if (account) {
     const created = account as Awaited<ReturnType<typeof applyCoachAccount>>;

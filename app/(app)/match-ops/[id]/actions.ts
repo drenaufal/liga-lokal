@@ -16,6 +16,7 @@ import {
   tournamentTeams,
 } from "@/lib/db/schema";
 import { actionUser } from "@/lib/auth/session";
+import { assertMatchAccess } from "@/lib/competition-access";
 import { can } from "@/lib/auth/rbac";
 import { auditText, recordAudit } from "@/lib/audit";
 import { liveMinute, recomputeMatchScore, syncMatchStats } from "@/lib/match-engine";
@@ -23,10 +24,14 @@ import { advanceCupWinner, isCupStage } from "@/lib/cup-advance";
 import { matchWinnerSide } from "@/lib/fixtures";
 import {
   QUICK_TYPES,
+  TEAM_COUNTER_TYPES,
   matchDuration,
   recordQuickEvent,
+  recordTeamEvent,
+  removeLastTeamEvent,
   undoQuickEvent,
   type QuickType,
+  type TeamCounterType,
 } from "@/lib/match-events";
 import {
   DEFAULT_TIEBREAKERS,
@@ -48,6 +53,7 @@ import type { TFunction } from "@/lib/i18n/translate";
 export async function saveMatchSquad(matchId: string, playerIds: string[], starterIds?: string[]) {
   const t = await getT();
   const user = await actionUser("match:squad");
+  await assertMatchAccess(matchId);
   const ids = z.array(z.string().uuid()).min(2).max(200).parse(playerIds);
   const starters = starterIds ? z.array(z.string().uuid()).parse(starterIds) : undefined;
   if (starters?.some((id) => !ids.includes(id))) throw new Error(t("Starter harus termasuk pemain yang dipilih."));
@@ -114,6 +120,7 @@ export async function assignOfficials(formData: FormData) {
   // Accept the former field as well for a console that was opened before an update.
   const values = formData.has("operatorIds") ? formData.getAll("operatorIds") : formData.getAll("operatorId");
   const operatorIds = values.map(String).filter(Boolean);
+  await assertMatchAccess(matchId);
   const result = await saveMatchOfficials({ matchId, refereeId, operatorIds });
   await recordAudit({
     actorId: user.id,
@@ -134,6 +141,7 @@ export async function assignOfficials(formData: FormData) {
 
 export async function startMatch(id: string, durationMinutes: number) {
   const user = await actionUser("match:operate");
+  await assertMatchAccess(id);
   const m = await startAssignedMatch(id, durationMinutes);
 
   await recordAudit({
@@ -150,6 +158,7 @@ export async function startMatch(id: string, durationMinutes: number) {
 
 export async function pauseClock(id: string) {
   const user = await actionUser("match:operate");
+  await assertMatchAccess(id);
   const m = await loadMatch(id);
   const duration = await matchDuration(m);
   const minute = liveMinute(m, clockCap(duration));
@@ -167,6 +176,7 @@ export async function pauseClock(id: string) {
 
 export async function resumeSecondHalf(id: string) {
   const user = await actionUser("match:operate");
+  await assertMatchAccess(id);
   const m = await loadMatch(id);
   const half = (m.homeScoreHt == null);
   const duration = await matchDuration(m);
@@ -191,6 +201,7 @@ export async function resumeSecondHalf(id: string) {
 
 export async function endMatch(id: string) {
   const user = await actionUser("match:operate");
+  await assertMatchAccess(id);
   const m = await loadMatch(id);
   const duration = await matchDuration(m);
   const minute = liveMinute(m, clockCap(duration));
@@ -234,6 +245,7 @@ export async function addEvent(formData: FormData) {
   const parsed = eventSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) throw new Error(t("Data kejadian tidak valid"));
   const v = parsed.data;
+  await assertMatchAccess(v.matchId);
   const m = await recordManualMatchEvent(v, user.id);
 
   await recordAudit({
@@ -253,6 +265,7 @@ export async function quickEvent(input: { matchId: string; clubId: string; playe
   const t = await getT();
   const user = await actionUser("match:events");
   if (!(QUICK_TYPES as readonly string[]).includes(input.type)) throw new Error(t("Jenis kejadian tidak valid"));
+  await assertMatchAccess(input.matchId);
   const r = await recordQuickEvent({
     matchId: input.matchId,
     clubId: input.clubId,
@@ -276,9 +289,54 @@ export async function quickEvent(input: { matchId: string; clubId: string; playe
   };
 }
 
+/**
+ * A tap on a team counter (Pelanggaran / Sudut / Passing) for one club. The event has no player,
+ * so it never reaches player statistics. Passes are tapped constantly, so they leave no audit
+ * entry and only refresh the match page.
+ */
+export async function teamEvent(input: { matchId: string; clubId: string; type: string }) {
+  const t = await getT();
+  const user = await actionUser("match:events");
+  if (!(TEAM_COUNTER_TYPES as readonly string[]).includes(input.type)) throw new Error(t("Jenis kejadian tidak valid"));
+  await assertMatchAccess(input.matchId);
+  const type = input.type as TeamCounterType;
+  const r = await recordTeamEvent({ matchId: input.matchId, clubId: input.clubId, type, userId: user.id });
+  if (type === "pass") revalidatePath(`/match-ops/${input.matchId}`);
+  else {
+    await recordAudit({
+      actorId: user.id, actorName: user.name, actorRole: user.role,
+      action: "match.event.create", entityType: "match", entityId: input.matchId,
+      summary: auditText("{event} (tim), menit {n}", { event: EVENT_LABEL[type] ?? type, n: r.minute }),
+    });
+    rev(input.matchId, r.tournamentId);
+  }
+  return { minute: r.minute, count: r.count };
+}
+
+/** The "−" on a team counter: takes back the club's latest one. */
+export async function undoTeamEvent(input: { matchId: string; clubId: string; type: string }) {
+  const t = await getT();
+  const user = await actionUser("match:events");
+  if (!(TEAM_COUNTER_TYPES as readonly string[]).includes(input.type)) throw new Error(t("Jenis kejadian tidak valid"));
+  await assertMatchAccess(input.matchId);
+  const type = input.type as TeamCounterType;
+  const r = await removeLastTeamEvent({ matchId: input.matchId, clubId: input.clubId, type });
+  if (type === "pass") revalidatePath(`/match-ops/${input.matchId}`);
+  else {
+    await recordAudit({
+      actorId: user.id, actorName: user.name, actorRole: user.role,
+      action: "match.event.undo", entityType: "match", entityId: input.matchId,
+      summary: auditText("Kejadian {event} menit {n} dibatalkan (salah catat)", { event: EVENT_LABEL[type] ?? type, n: r.minute }),
+    });
+    rev(input.matchId, r.tournamentId);
+  }
+  return { count: r.count };
+}
+
 /** "Batalkan" on the toast that follows a quick event. */
 export async function undoEvent(input: { matchId: string; eventId: string }) {
   const user = await actionUser("match:events");
+  await assertMatchAccess(input.matchId);
   const r = await undoQuickEvent({
     matchId: input.matchId,
     eventId: input.eventId,
@@ -299,6 +357,7 @@ export async function voidEvent(formData: FormData) {
   const eventId = String(formData.get("eventId"));
   const matchId = String(formData.get("matchId"));
   const reason = String(formData.get("reason") ?? t("Koreksi operator"));
+  await assertMatchAccess(matchId);
 
   const m = await voidManualMatchEvent(matchId, eventId, reason);
   await recordAudit({
@@ -393,6 +452,7 @@ export async function confirmResult(formData: FormData): Promise<CupOutcome> {
   const t = await getT();
   const user = await actionUser("match:confirm");
   const id = String(formData.get("id"));
+  await assertMatchAccess(id);
   const m = await loadMatch(id);
   if (m.status !== "completed") throw new Error(t("Selesaikan pertandingan terlebih dahulu"));
   if (isCupStage(m.stage) && !matchWinnerSide(m)) {
@@ -431,6 +491,7 @@ export async function setShootout(input: { matchId: string; home: number; away: 
   const t = await getT();
   const user = await actionUser("match:confirm");
   const { matchId, home, away } = input;
+  await assertMatchAccess(matchId);
   const m = await loadMatch(matchId);
   if (!isCupStage(m.stage)) throw new Error(t("Adu penalti hanya untuk pertandingan sistem gugur"));
   if (m.status !== "completed") throw new Error(t("Selesaikan pertandingan terlebih dahulu"));
@@ -465,6 +526,7 @@ export async function amendResult(formData: FormData): Promise<CupOutcome> {
   const id = String(formData.get("id"));
   const reason = String(formData.get("reason") ?? "").trim();
   if (!reason) throw new Error(t("Alasan koreksi wajib diisi"));
+  await assertMatchAccess(id);
   const m = await loadMatch(id);
 
   // Scoreline from the current events, then only the difference in player stats.

@@ -80,7 +80,7 @@ export function AssignmentCard({
       badge: o.role === "admin" ? { label: t("Admin"), tone: "violet" as const } : undefined,
     })),
     ...operators.filter((o) => !options?.operators.some((option) => option.id === o.id))
-      .map((o) => ({ id: o.id, name: o.name, unavailable: t("Tidak tersedia (akun nonaktif)") })),
+      .map((o) => ({ id: o.id, name: o.name, unavailable: t("Tidak tersedia (nonaktif atau belum ditugaskan ke turnamen ini)") })),
   ];
 
   return (
@@ -136,7 +136,7 @@ export function AssignmentCard({
                 noneLabel={t("Operator belum ditugaskan")}
                 placeholder={t("Cari nama operator…")}
                 emptyText={t("Belum ada operator aktif.")}
-                help={t("Pilih satu atau lebih operator pencatat.")}
+                help={t("Pilih satu atau lebih operator pencatat. Hanya operator yang ditugaskan ke turnamen ini (Master Data → Operator) yang muncul.")}
               />
             </div>
             <div className="flex flex-wrap items-center gap-3">

@@ -29,8 +29,11 @@ export async function recordManualMatchEvent(v: {
       if (v.relatedPlayerId === v.playerId) throw new Error(t("Pencetak gol tidak dapat memberi assist untuk dirinya sendiri."));
       assertPlaying(v.relatedPlayerId, lineups, events, v.minute, t);
     }
+    // Cards are recorded here (the ⋯ form): a player's second yellow is a dismissal.
+    let type = v.type;
+    if (type === "yellow_card" && v.playerId && events.some((e) => e.playerId === v.playerId && e.type === "yellow_card")) type = "second_yellow";
     const half = halfOf(await matchDuration(m, tx));
-    const row = { matchId: v.matchId, type: v.type, minute: v.minute, period: v.minute > half ? "second_half" as const : "first_half" as const, clubId: v.clubId,
+    const row = { matchId: v.matchId, type, minute: v.minute, period: v.minute > half ? "second_half" as const : "first_half" as const, clubId: v.clubId,
       playerId: v.playerId || null, relatedPlayerId: v.relatedPlayerId || null, createdAt: new Date(), createdBy: userId, detail: v.note ? { note: v.note } : undefined };
     if (v.type === "substitution") assertParticipationHistory(lineups, [...events, row], t);
     await tx.insert(matchEvents).values(row);

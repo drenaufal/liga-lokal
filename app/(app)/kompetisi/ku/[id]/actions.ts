@@ -16,6 +16,7 @@ import {
   venues,
 } from "@/lib/db/schema";
 import { actionUser } from "@/lib/auth/session";
+import { assertKuAccess, assertMatchAccess } from "@/lib/competition-access";
 import { auditText, recordAudit } from "@/lib/audit";
 import { MAX_CUP_TEAMS, cupBracket, groupStage, roundRobin } from "@/lib/fixtures";
 import {
@@ -77,6 +78,7 @@ export async function setTournamentStatus(formData: FormData) {
   const t = await getT();
   const user = await actionUser("ku:status");
   const id = String(formData.get("id"));
+  await assertKuAccess(id);
   const target = String(formData.get("status")) as Status;
   if (!LIFECYCLE.includes(target)) throw new Error(t("Status tidak valid"));
 
@@ -128,6 +130,7 @@ export async function generateFixtures(formData: FormData) {
   const t = await getT();
   const user = await actionUser("ku:fixtures");
   const id = String(formData.get("id"));
+  await assertKuAccess(id);
 
   const ku = await loadKu(id);
   if (ku.status === "archived") throw new Error(t("KU sudah diarsipkan"));
@@ -284,6 +287,7 @@ async function scheduleContext(kuId: string, replaceScheduled: boolean) {
 export async function previewSchedule(tournamentId: string, csv: string, replaceScheduled = false) {
   const t = await getT();
   await actionUser("ku:schedule");
+  await assertKuAccess(tournamentId);
   const { ku, ctx, scheduledCount } = await scheduleContext(tournamentId, replaceScheduled);
   const parsed = parseSchedule(csv, ctx, t);
   return {
@@ -299,6 +303,7 @@ export async function previewSchedule(tournamentId: string, csv: string, replace
 export async function importSchedule(tournamentId: string, csv: string, replaceScheduled = false) {
   const t = await getT();
   const user = await actionUser("ku:schedule");
+  await assertKuAccess(tournamentId);
   const { ku, ctx, scheduledCount } = await scheduleContext(tournamentId, replaceScheduled);
   if (ku.status === "archived") throw new Error(t("KU sudah diarsipkan"));
 
@@ -379,6 +384,7 @@ export type CreateMatchResult =
 export async function createMatch(kuId: string, input: unknown): Promise<CreateMatchResult> {
   const t = await getT();
   const user = await actionUser("ku:schedule");
+  await assertKuAccess(kuId);
   const parsed = matchInput.safeParse(input);
   if (!parsed.success) return { ok: false, error: t("Isian tidak lengkap."), fieldErrors: {} };
 
@@ -441,6 +447,7 @@ export async function createMatch(kuId: string, input: unknown): Promise<CreateM
 export async function deleteMatch(matchId: string) {
   const t = await getT();
   const user = await actionUser("ku:match-delete");
+  await assertMatchAccess(matchId);
   const m = await db.query.matches.findFirst({ where: eq(matches.id, matchId) });
   if (!m) throw new Error(t("Pertandingan tidak ditemukan"));
   if (m.status !== "scheduled") {
@@ -477,6 +484,7 @@ function assertOpen(t: TFunction, status: string) {
 export async function addTeam(kuId: string, clubId: string) {
   const t = await getT();
   const user = await actionUser("ku:teams");
+  await assertKuAccess(kuId);
   const ku = await loadKu(kuId);
   assertOpen(t, ku.status);
 
@@ -513,6 +521,7 @@ export async function addTeam(kuId: string, clubId: string) {
 export async function removeTeam(kuId: string, clubId: string) {
   const t = await getT();
   const user = await actionUser("ku:teams");
+  await assertKuAccess(kuId);
   const ku = await loadKu(kuId);
   assertOpen(t, ku.status);
 
@@ -555,6 +564,7 @@ export async function deleteTournament(formData: FormData) {
   const t = await getT();
   const user = await actionUser("ku:delete");
   const id = String(formData.get("id"));
+  await assertKuAccess(id);
   const typed = String(formData.get("confirm") ?? "").trim();
 
   const ku = await loadKu(id);
@@ -588,6 +598,7 @@ export async function deleteTournament(formData: FormData) {
 export async function recomputeStandings(formData: FormData) {
   const user = await actionUser("ku:fixtures");
   const id = String(formData.get("id"));
+  await assertKuAccess(id);
   const ku = await loadKu(id);
 
   const teams = await db

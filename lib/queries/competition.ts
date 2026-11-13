@@ -20,14 +20,16 @@ import {
 import { ascNullsLast } from "@/lib/db/order";
 import { competitionStatus, dateSpan, kuLabel } from "@/lib/ku";
 import { getOfficialOptions } from "@/lib/queries/match";
+import { competitionScopeFilter } from "@/lib/competition-scope";
 
 /* ═════════════════════════ Turnamen (competitions) ═════════════════════════ */
 
 /**
  * Every Turnamen with its KUs and match counts. `status` is derived from the
- * KUs (see competitionStatus), the dates span all of them.
+ * KUs (see competitionStatus), the dates span all of them. `scope` (getCompetitionScope)
+ * narrows the list to the Turnamen assigned to an operator.
  */
-export async function listCompetitions() {
+export async function listCompetitions(scope: string[] | null = null) {
   const rows = await db
     .select({
       id: competitions.id,
@@ -44,6 +46,7 @@ export async function listCompetitions() {
       liveMatches: sql<number>`(select count(*) from ${matches} m join ${tournaments} k on k.id = m.tournament_id where k.competition_id = ${competitions}.id and m.status in ('live','halftime'))`,
     })
     .from(competitions)
+    .where(competitionScopeFilter(competitions.id, scope))
     .orderBy(desc(competitions.createdAt));
 
   const kuRows = rows.length

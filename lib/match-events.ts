@@ -3,12 +3,12 @@ import { db } from "@/lib/db";
 import { ageCategories, matchEvents, matchLineups, matches, players, tournaments } from "@/lib/db/schema";
 import { DEFAULT_MATCH_MINUTES, clockCap, halfOf } from "@/lib/match-clock";
 import { liveMinute, recomputeMatchScore } from "@/lib/match-engine";
-import type { QuickType } from "@/lib/quick-events";
+import type { QuickType, TeamCounterType } from "@/lib/quick-events";
 import { assertPlaying } from "@/lib/match-participation";
-import { QUICK_TYPES } from "@/lib/quick-events";
+import { QUICK_TYPES, TEAM_COUNTER_TYPES } from "@/lib/quick-events";
 import { getSafeT } from "@/lib/i18n/server";
 
-export { QUICK_TYPES, type QuickType } from "@/lib/quick-events";
+export { QUICK_TYPES, TEAM_COUNTER_TYPES, type QuickType, type TeamCounterType } from "@/lib/quick-events";
 
 type MatchTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -182,6 +182,73 @@ export async function recordQuickEvent(input: {
       tournamentId: m.tournamentId,
     };
   });
+}
+
+/** A team counter can be changed while the match is in play, and corrected once it has finished. */
+const TEAM_COUNTER_STATUSES = ["live", "halftime", "completed"];
+
+/**
+ * One tap on a team counter (foul, corner, pass): an event for the club with no player,
+ * stamped with the match clock. Returns the club's new total for that counter.
+ */
+export async function recordTeamEvent(input: { matchId: string; clubId: string; type: TeamCounterType; userId: string }) {
+  const t = await getSafeT();
+  if (!(TEAM_COUNTER_TYPES as readonly string[]).includes(input.type)) throw new Error(t("Jenis kejadian tidak valid"));
+  return db.transaction(async (tx) => {
+    const { matchId, clubId, type, userId } = input;
+    const [m] = await tx.select().from(matches).where(eq(matches.id, matchId)).for("update");
+    if (!m) throw new Error(t("Pertandingan tidak ditemukan"));
+    if (!TEAM_COUNTER_STATUSES.includes(m.status)) throw new Error(t("Mulai pertandingan terlebih dahulu."));
+    if (clubId !== m.homeClubId && clubId !== m.awayClubId) throw new Error(t("Klub tidak ikut pertandingan ini"));
+    const duration = await matchDuration(m, tx);
+    const minute = liveMinute(m, clockCap(duration));
+    await tx.insert(matchEvents).values({
+      matchId,
+      type,
+      minute,
+      period: minute > halfOf(duration) ? "second_half" : "first_half",
+      clubId,
+      playerId: null,
+      createdBy: userId,
+    });
+    return { minute, count: await teamCount(tx, matchId, clubId, type), tournamentId: m.tournamentId };
+  });
+}
+
+/** The "−" next to a team counter: removes the club's latest team-level event of that kind. */
+export async function removeLastTeamEvent(input: { matchId: string; clubId: string; type: TeamCounterType }) {
+  const t = await getSafeT();
+  if (!(TEAM_COUNTER_TYPES as readonly string[]).includes(input.type)) throw new Error(t("Jenis kejadian tidak valid"));
+  return db.transaction(async (tx) => {
+    const { matchId, clubId, type } = input;
+    const [m] = await tx.select().from(matches).where(eq(matches.id, matchId)).for("update");
+    if (!m) throw new Error(t("Pertandingan tidak ditemukan"));
+    if (!TEAM_COUNTER_STATUSES.includes(m.status)) throw new Error(t("Mulai pertandingan terlebih dahulu."));
+    const [last] = await tx
+      .select({ id: matchEvents.id, minute: matchEvents.minute })
+      .from(matchEvents)
+      .where(
+        and(
+          eq(matchEvents.matchId, matchId),
+          eq(matchEvents.clubId, clubId),
+          eq(matchEvents.type, type),
+          eq(matchEvents.voided, false),
+          isNull(matchEvents.playerId),
+        ),
+      )
+      .orderBy(desc(matchEvents.createdAt))
+      .limit(1);
+    if (!last) throw new Error(t("Tidak ada catatan tim yang bisa dikurangi."));
+    await tx.delete(matchEvents).where(eq(matchEvents.id, last.id));
+    return { minute: last.minute, count: await teamCount(tx, matchId, clubId, type), tournamentId: m.tournamentId };
+  });
+}
+
+async function teamCount(tx: MatchTx, matchId: string, clubId: string, type: TeamCounterType) {
+  return tx.$count(
+    matchEvents,
+    and(eq(matchEvents.matchId, matchId), eq(matchEvents.clubId, clubId), eq(matchEvents.type, type), eq(matchEvents.voided, false)),
+  );
 }
 
 /**

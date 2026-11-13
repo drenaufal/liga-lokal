@@ -121,7 +121,7 @@ export default async function ComparePage({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line-soft">
-                    {/* the same eight metrics as the radar above */}
+                    {/* the same metrics as the radar above */}
                     {RADAR_AXES.map(({ key, label }) => {
                       const vals = ordered.map((r) => r.stat[key] ?? 0);
                       const max = Math.max(...vals);

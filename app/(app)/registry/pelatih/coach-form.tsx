@@ -119,8 +119,12 @@ export function CoachForm({
       </Section>
 
       <Section title={t("Lisensi kepelatihan")}>
-        <Field label={t("Tingkat lisensi")} error={fe.licenseLevel}>
-          <Select name="licenseLevel" required defaultValue={val("licenseLevel", COACH_LICENSE_LEVELS[0])}>
+        <p className="rounded-lg bg-surface-2/60 px-3 py-2 text-[11px] leading-relaxed text-ink-muted sm:col-span-2">
+          {t("Opsional — kosongkan bila pelatih belum memiliki lisensi kepelatihan.")}
+        </p>
+        <Field label={t("Tingkat lisensi (opsional)")} error={fe.licenseLevel}>
+          <Select name="licenseLevel" defaultValue={val("licenseLevel", "")}>
+            <option value="">{t("Belum berlisensi")}</option>
             {COACH_LICENSE_LEVELS.map((l) => (
               <option key={l} value={l}>
                 {t.dyn(l)}
@@ -128,10 +132,9 @@ export function CoachForm({
             ))}
           </Select>
         </Field>
-        <Field label={t("Nomor lisensi")} error={fe.licenseNumber}>
+        <Field label={t("Nomor lisensi (opsional)")} error={fe.licenseNumber}>
           <Input
             name="licenseNumber"
-            required
             defaultValue={val("licenseNumber")}
             placeholder={t("mis. PLT-2026-0101")}
             className="font-mono uppercase"
