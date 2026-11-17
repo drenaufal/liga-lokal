@@ -5,7 +5,7 @@ import { GUEST_GRANTS, can, canAny, type Capability, type Role } from "./rbac";
 import { getGrantsForRole } from "./permissions";
 import { homeHref } from "@/lib/nav";
 import { db } from "@/lib/db";
-import { coaches, users } from "@/lib/db/schema";
+import { coaches, operatorCompetitions, users } from "@/lib/db/schema";
 import { coachClubIds } from "@/lib/club-scope";
 import { cache } from "react";
 import { getSafeT } from "@/lib/i18n/server";
@@ -73,6 +73,34 @@ export const getClubScope = cache(async (): Promise<string[] | null> => {
   const user = await getCurrentUser();
   if (!user || can(user, "scope:all-clubs")) return null;
   return getOwnClubIds();
+});
+
+let warnedMissingAssignments = false;
+
+/**
+ * Which Turnamen the signed-in account may see: `null` = every Turnamen (it holds
+ * `scope:all-competitions`, or nobody is signed in — public pages stay public), else the
+ * Turnamen assigned to it in Master Data → Operator. An account with no assignment gets `[]`,
+ * which shows nothing. Pages hand it to the queries (`competitionScopeFilter`) and refuse single
+ * records outside it (`inCompetitionScope`); server actions check it through lib/competition-access.ts.
+ */
+export const getCompetitionScope = cache(async (): Promise<string[] | null> => {
+  const user = await getCurrentUser();
+  if (!user || can(user, "scope:all-competitions")) return null;
+  try {
+    const rows = await db
+      .select({ id: operatorCompetitions.competitionId })
+      .from(operatorCompetitions)
+      .where(eq(operatorCompetitions.userId, user.id));
+    return rows.map((r) => r.id);
+  } catch (e) {
+    // Before migration 0011 the table does not exist: keep the old behaviour (no restriction).
+    if (!warnedMissingAssignments) {
+      warnedMissingAssignments = true;
+      console.error("operator_competitions unavailable (run `npm run db:migrate`), Turnamen scope not applied", e);
+    }
+    return null;
+  }
 });
 
 /** True when nobody (or no usable account) is signed in. Used to hide links that need an account. */

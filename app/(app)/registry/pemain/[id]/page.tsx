@@ -96,8 +96,8 @@ export default async function PlayerProfilePage({
     { label: t("Tembakan meleset"), value: totals.shotsOffTarget },
     { label: t("Penyelamatan::jumlah"), value: totals.saves },
     { label: t("Intersep::jumlah"), value: totals.interceptions },
-    { label: t("Tekel::jumlah"), value: totals.tackles },
-    { label: t("Nirbobol::jumlah"), value: totals.cleanSheets },
+    // Clean sheets only mean something for a goalkeeper: +1 for a match he played without conceding.
+    ...(positionLine(player.position) === "GK" ? [{ label: t("Nirbobol::jumlah"), value: totals.cleanSheets }] : []),
     { label: t("Kartu kuning::jumlah"), value: totals.yellowCards },
     { label: t("Kartu merah::jumlah"), value: totals.redCards },
   ];
@@ -216,7 +216,7 @@ export default async function PlayerProfilePage({
             {totals.appearances > 0 ? (
               <>
                 <Radar
-                  axes={RADAR_AXES.map((a) => ({ key: a.key, label: t.dyn(a.label) }))}
+                  axes={RADAR_AXES.map((a) => ({ key: a.key, label: t(a.label) }))}
                   series={[
                     {
                       label: player.fullName,

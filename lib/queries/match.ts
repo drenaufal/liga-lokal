@@ -1,5 +1,6 @@
-import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import { matchScopeFilter } from "@/lib/club-scope";
+import { competitionScopeFilter } from "@/lib/competition-scope";
 import { alias } from "drizzle-orm/mysql-core";
 import { db } from "@/lib/db";
 import { MATCH_DURATION_SQL } from "@/lib/match-clock";
@@ -12,6 +13,7 @@ import {
   matchEvents,
   matchLineups,
   matches,
+  operatorCompetitions,
   players,
   referees,
   tournaments,
@@ -32,12 +34,15 @@ export type MatchListParams = {
   q?: string;
 };
 
-export async function listMatches(params: MatchListParams, scope: string[] | null = null) {
+/** `scope`: SSB scope (getClubScope); `competitionScope`: Turnamen scope of an operator (getCompetitionScope). */
+export async function listMatches(params: MatchListParams, scope: string[] | null = null, competitionScope: string[] | null = null) {
   const H = hc();
   const A = ac();
   const conds = [];
   const scoped = matchScopeFilter(scope);
   if (scoped) conds.push(scoped);
+  const inTurnamen = competitionScopeFilter(competitions.id, competitionScope);
+  if (inTurnamen) conds.push(inTurnamen);
   if (params.status)
     conds.push(
       eq(
@@ -97,6 +102,7 @@ export async function listMatches(params: MatchListParams, scope: string[] | nul
     .from(tournaments)
     .innerJoin(competitions, eq(competitions.id, tournaments.competitionId))
     .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
+    .where(competitionScopeFilter(competitions.id, competitionScope))
     .orderBy(asc(competitions.name), ascNullsLast(ageCategories.sortOrder));
 
   return { rows: await withMatchGoals(rows), tournamentOpts };
@@ -110,6 +116,7 @@ export async function getMatchConsole(id: string) {
       m: matches,
       tournamentName: kuNameSql,
       tournamentId: tournaments.id,
+      competitionId: competitions.id,
       ageDuration: ageCategories.rules,
       homeName: H.name,
       homeShort: H.shortName,
@@ -187,8 +194,11 @@ export async function getMatchConsole(id: string) {
   return { ...row, m, operators, events, lineups, squads, goals: scorers.goals };
 }
 
-/** Referees with a valid license and the people who can run a match console. */
-export async function getOfficialOptions() {
+/**
+ * Referees with a valid license and the people who can run a match console. With `competitionId`
+ * the operators are narrowed to those assigned to that Turnamen (admins are always listed).
+ */
+export async function getOfficialOptions(competitionId?: string) {
   const [refs, ops] = await Promise.all([
     db
       .select({
@@ -204,7 +214,26 @@ export async function getOfficialOptions() {
     db
       .select({ id: users.id, name: users.name, role: users.role })
       .from(users)
-      .where(and(eq(users.active, true), inArray(users.role, ["operator", "admin"])))
+      .where(
+        and(
+          eq(users.active, true),
+          competitionId
+            ? or(
+                eq(users.role, "admin"),
+                and(
+                  eq(users.role, "operator"),
+                  inArray(
+                    users.id,
+                    db
+                      .select({ id: operatorCompetitions.userId })
+                      .from(operatorCompetitions)
+                      .where(eq(operatorCompetitions.competitionId, competitionId)),
+                  ),
+                ),
+              )
+            : inArray(users.role, ["operator", "admin"]),
+        ),
+      )
       .orderBy(asc(users.name)),
   ]);
   return {

@@ -93,11 +93,17 @@ const UNIT_LOGIN: readonly EditableRole[] = ["unit_bisnis"];
  * unless a Super Admin grants it — and, within those, only the SSB they look after (`scope:all-clubs`).
  */
 const NOT_COACH: readonly EditableRole[] = ["operator", "referee", "scout", "viewer"];
+/**
+ * Everyone with competition menus but the operator, who only sees the Turnamen assigned to them
+ * (`scope:all-competitions`). A unit login keeps finance permissions only.
+ */
+const NOT_OPERATOR: readonly EditableRole[] = ["referee", "coach", "scout", "viewer"];
 
 const GROUPS = [
   { id: "dashboard", title: "Command Center", caps: ["dashboard:view", "dashboard:activity"] },
   { id: "dsp", title: msg("Daftar Susunan Pemain (DSP)"), caps: ["dsp:view", "dsp:submit", "dsp:any-club"] },
   { id: "club-scope", title: msg("Cakupan Data SSB"), caps: ["scope:all-clubs"] },
+  { id: "competition-scope", title: msg("Cakupan Turnamen"), caps: ["scope:all-competitions"] },
   {
     id: "registry-player",
     title: msg("Master Data — Pemain"),
@@ -218,6 +224,14 @@ const DEFS: Record<Capability, Def> = {
     description: msg("Tanpa izin ini, akun hanya melihat data SSB yang diasuhnya: Registry, pertandingan, Player Intelligence, dan DSP."),
     kind: "feature",
     defaults: NOT_COACH,
+  },
+
+  /* Turnamen scope */
+  "scope:all-competitions": {
+    label: msg("Melihat semua turnamen"),
+    description: msg("Tanpa izin ini, akun hanya melihat turnamen yang ditugaskan kepadanya (Master Data → Operator): daftar turnamen, KU, jadwal, dan pertandingannya."),
+    kind: "feature",
+    defaults: NOT_OPERATOR,
   },
 
   /* Registry — Pemain */

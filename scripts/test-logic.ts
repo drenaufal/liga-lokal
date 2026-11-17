@@ -32,9 +32,10 @@ import { DEFAULT_WEIGHTS, WEIGHT_KEYS, computeScore, normalizeWeights, weightsFr
 import { coachClubIds, inClubScope } from "@/lib/club-scope";
 import { isOpenApi, isOpenView } from "@/lib/auth/redirect";
 import { FRESH_EVENT_SECONDS, NOTABLE_EVENTS, eventAgeSeconds, isGoalEvent, isNotableEvent, minuteLabel } from "@/lib/live-feed";
-import { QUICK_TYPES } from "@/lib/quick-events";
+import { QUICK_TYPES, TEAM_COUNTER_TYPES, buildTeamCounts, possessionFromPasses } from "@/lib/quick-events";
+import { inCompetitionScope } from "@/lib/competition-scope";
 import { createT } from "@/lib/i18n/translate";
-import { buildMatchStatistics } from "@/lib/match-statistics";
+import { buildMatchStatistics, buildPossession } from "@/lib/match-statistics";
 import { participationAt, assertPlaying, assertSubstitution, assertParticipationHistory, type ParticipationLineup } from "@/lib/match-participation";
 import { buildTallies } from "@/lib/match-tally";
 import { withAutomaticSaves } from "@/lib/automatic-saves";
@@ -51,8 +52,9 @@ const ok = (cond: unknown, label: string) => {
 
 console.log("\n[radar match counters]");
 const radar = radarValues({ goals: 3, assists: 2, shotsOnTarget: 7, saves: 1, interceptions: 4, shotsOffTarget: 5, redCards: 1, yellowCards: 2, minutesPlayed: 60 });
-ok(RADAR_AXES.length === 8 && Object.keys(radar).join() === RADAR_AXES.map((a) => a.key).join(), "all eight requested axes are present in order");
-ok(radar.goals === 3 && radar.shotsOnTarget === 7 && radar.redCards === 1 && radar.yellowCards === 2, "radar shows actual match counts, without per-90 conversion or discipline inversion");
+ok(RADAR_AXES.length === 6 && Object.keys(radar).join() === RADAR_AXES.map((a) => a.key).join(), "all six requested axes are present in order");
+ok(!RADAR_AXES.some((a) => (a.key as string) === "redCards" || (a.key as string) === "yellowCards") && !("redCards" in radar) && !("yellowCards" in radar), "the radar has no yellow / red card axes");
+ok(radar.goals === 3 && radar.shotsOnTarget === 7 && radar.shotsOffTarget === 5, "radar shows actual match counts, without per-90 conversion");
 ok(Object.values(radarValues(null)).every((v) => v === 0), "missing statistics are zero on every axis");
 
 console.log("\n[intelligence filters]");
@@ -288,11 +290,17 @@ ok(resolveMatchSquads([], squadRegistry, explicitSquad).length === 0, "an unreso
 
 console.log("\n[match statistics]");
 const matchStatistics = buildMatchStatistics([
-  ...["goal", "penalty_goal", "assist", "shot_on", "shot_off", "save", "interception", "corner", "foul", "red_card", "second_yellow", "yellow_card"].map((type) => ({ type, clubId: "H" })),
+  ...["goal", "penalty_goal", "assist", "shot_on", "shot_off", "save", "interception", "pass", "corner", "foul", "red_card", "second_yellow", "yellow_card"].map((type) => ({ type, clubId: "H" })),
   { type: "save", clubId: "A" },
   { type: "save", clubId: "H", voided: true },
 ], "H", "A");
-ok(matchStatistics.length === 11 && matchStatistics.every((s) => s.home > 0), "match statistics cover every quick-record action, corners, fouls and total shots");
+ok(matchStatistics.length === 12 && matchStatistics.every((s) => s.home > 0), "match statistics cover every quick-record action, passes, corners, fouls and total shots");
+ok(possessionFromPasses(0, 0) === null && possessionFromPasses(3, 1)?.home === 75 && possessionFromPasses(3, 1)?.away === 25, "possession = a club's passes ÷ both clubs' passes × 100");
+ok([[1, 2], [2, 1], [1, 1], [7, 3], [1, 0]].every(([h, a]) => { const p = possessionFromPasses(h, a); return !!p && p.home + p.away === 100; }), "possession shares always add up to 100%");
+ok(buildPossession([{ type: "pass", clubId: "H" }, { type: "pass", clubId: "H", voided: true }, { type: "pass", clubId: "A" }, { type: "foul", clubId: "A" }], "H", "A")?.home === 50, "voided passes and other events do not count towards possession");
+const counts = buildTeamCounts([{ type: "pass", clubId: "H" }, { type: "pass", clubId: "H" }, { type: "corner", clubId: "A" }, { type: "foul", clubId: "A", voided: true }, { type: "goal", clubId: "H" }, { type: "pass", clubId: "X" }], ["H", "A"]);
+ok(counts.H.pass === 2 && counts.A.corner === 1 && counts.A.foul === 0 && !("X" in counts) && TEAM_COUNTER_TYPES.join() === "foul,corner,pass", "team counters count fouls, corners and passes per club");
+ok(!QUICK_TYPES.some((t: string) => t === "yellow_card" || t === "red_card"), "cards have no one-tap button (they go through the ⋯ form)");
 ok(matchStatistics.find((s) => s.label === "Tembakan total")?.home === 4 && matchStatistics.find((s) => s.type === "shot_on")?.home === 3, "goals and penalties contribute to total shots and shots on target");
 ok(matchStatistics.find((s) => s.type === "save")?.home === 1 && matchStatistics.find((s) => s.type === "save")?.away === 1, "team totals stay separate and voided events do not count");
 ok(matchStatistics.find((s) => s.type === "red_card")?.home === 2 && matchStatistics.find((s) => s.type === "yellow_card")?.home === 1, "card totals use the same second-yellow convention as player counters");
@@ -341,6 +349,11 @@ ok(reEntryLines.keeper.minutesPlayed === 20 + 30 && reEntryLines.keeper.appearan
 const backOn = buildTallies([{ type: "substitution", minute: 20, playerId: "keeper", relatedPlayerId: "benchKeeper" }, { type: "substitution", minute: 30, playerId: "benchKeeper", relatedPlayerId: "keeper" }]);
 ok(backOn.keeper.subOn === 30 && backOn.keeper.subOff === null && backOn.benchKeeper.subOn === 20 && backOn.benchKeeper.subOff === 30, "the match tags show each player's latest stint");
 ok(!QUICK_TYPES.some((t: string) => t === "save"), "manual save is absent from quick actions");
+const csLines = Object.fromEntries(saveLines.map((l) => [l.playerId, l]));
+ok(csLines.keeper.cleanSheets === 1 && csLines.benchKeeper.cleanSheets === 0 && csLines.striker.cleanSheets === 0, "a keeper's clean sheet only counts goals conceded while he was on the pitch; outfield players never get one");
+const csReEntry = Object.fromEntries(buildMatchLines({ length: 60, events: [...reEntry, { type: "own_goal", minute: 50, clubId: "A", playerId: "keeper", relatedPlayerId: null }], lineups: matchRoster }).map((l) => [l.playerId, l]));
+ok(csReEntry.keeper.cleanSheets === 0 && csReEntry.benchKeeper.cleanSheets === 0, "an own goal counts against the club's keeper, across every stint");
+ok(buildMatchLines({ length: 60, events: [], lineups: matchRoster }).find((l) => l.playerId === "keeper")?.cleanSheets === 1 && !buildMatchLines({ length: 60, events: [], lineups: matchRoster }).some((l) => l.playerId === "benchKeeper"), "a keeper who played a goalless match gets a clean sheet; an unused reserve keeper gets nothing");
 ok(withAutomaticSaves(saveEvents.filter((e) => e.minute !== 25), matchRoster).filter((e) => e.type === "save").length === 1, "undoing a shot removes its automatic save");
 ok(withAutomaticSaves([shot(10), { type: "save", minute: 10, clubId: "A", playerId: "keeper", relatedPlayerId: null }], matchRoster).filter((e) => e.type === "save").length === 1, "legacy manually recorded saves are not double counted");
 ok(buildMatchStatistics(saveEvents, "H", "A").find((s) => s.type === "save")?.away === 2, "team save totals follow non-scoring opposing shots");
@@ -417,6 +430,10 @@ console.log("\n[club scope]");
 ok(coachClubIds({ clubId: "a", secondClubId: "b" }).join() === "a,b" && coachClubIds({ clubId: "a", secondClubId: "a" }).join() === "a" && coachClubIds({ clubId: null, secondClubId: "b" }).join() === "b" && coachClubIds({}).length === 0, "a coach has up to two SSB, primary first, without repeats or gaps");
 ok(inClubScope(null, "x") && inClubScope(null, null), "no scope means every SSB");
 ok(inClubScope(["a", "b"], "b") && inClubScope(["a"], "z", "a") && !inClubScope(["a"], "z") && !inClubScope(["a"], null, undefined) && !inClubScope([], "a"), "a record is visible when either of its clubs is in scope; a restricted account with no SSB sees nothing");
+
+console.log("\n[turnamen scope]");
+ok(inCompetitionScope(null, "x") && inCompetitionScope(null, null), "no scope means every Turnamen");
+ok(inCompetitionScope(["a", "b"], "b") && !inCompetitionScope(["a"], "z") && !inCompetitionScope(["a"], null) && !inCompetitionScope([], "a"), "an operator sees only assigned Turnamen; none assigned means none");
 
 console.log("\n[open pages]");
 const compId = "6a056fc0-90ef-4395-83f6-ea77c87c0d73";

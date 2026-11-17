@@ -37,7 +37,8 @@ export default async function CoachesPage({
   ]);
   const canWrite = can(user, "registry.coach:create");
 
-  const complete = rows.filter((r) => Number(r.hasLicenseDoc) && Number(r.hasKtp)).length;
+  // the license scan only counts for a coach who holds a license (it is optional)
+  const complete = rows.filter((r) => (!r.licenseLevel || Number(r.hasLicenseDoc)) && Number(r.hasKtp)).length;
   const summary: [string, number][] = [
     [t("Pelatih"), rows.length],
     [t("Dokumen lengkap"), complete],
@@ -141,12 +142,16 @@ export default async function CoachesPage({
                     )}
                   </TD>
                   <TD>
-                    <Badge tone="violet" className="whitespace-nowrap">{t.dyn(r.licenseLevel)}</Badge>
+                    {r.licenseLevel ? (
+                      <Badge tone="violet" className="whitespace-nowrap">{t.dyn(r.licenseLevel)}</Badge>
+                    ) : (
+                      <span className="whitespace-nowrap text-xs text-ink-muted">{t("Belum berlisensi")}</span>
+                    )}
                   </TD>
-                  <TD className="whitespace-nowrap font-mono text-xs text-ink-muted">{r.licenseNumber}</TD>
+                  <TD className="whitespace-nowrap font-mono text-xs text-ink-muted">{r.licenseNumber ?? "—"}</TD>
                   <TD>
                     <div className="flex items-center gap-1.5">
-                      <DocChip ok={!!Number(r.hasLicenseDoc)} label={t("Lisensi")} />
+                      {r.licenseLevel && <DocChip ok={!!Number(r.hasLicenseDoc)} label={t("Lisensi")} />}
                       <DocChip ok={!!Number(r.hasKtp)} label="KTP" />
                     </div>
                   </TD>

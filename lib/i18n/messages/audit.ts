@@ -134,4 +134,7 @@ export const audit = {
   "Artikel diperbarui: {title}": "Article updated: {title}",
   "Artikel ditarik ke draf: {title}": "Article taken back to draft: {title}",
   "Artikel dihapus: {title}": "Article deleted: {title}",
+  "{event} (tim), menit {n}": "{event} (team), minute {n}",
+  "Akun operator dibuat: {name} ({n} turnamen)": "Operator account created: {name} ({n} {n|tournament|tournaments})",
+  "Akun operator diperbarui: {name} ({n} turnamen)": "Operator account updated: {name} ({n} {n|tournament|tournaments})",
 } as const;

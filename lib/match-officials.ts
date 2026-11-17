@@ -2,7 +2,7 @@ import { and, asc, eq, gte, inArray, lte, ne, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { clubs, matchLineups, matchOperators, matches, referees, users } from "@/lib/db/schema";
+import { clubs, matchLineups, matchOperators, matches, operatorCompetitions, referees, tournaments, users } from "@/lib/db/schema";
 import { licenseStatus } from "@/lib/status";
 import { MAX_MATCH_MINUTES, MIN_MATCH_MINUTES } from "@/lib/match-clock";
 import { getSafeI18n, getSafeT } from "@/lib/i18n/server";
@@ -61,6 +61,19 @@ export async function saveMatchOfficials(input: z.infer<typeof assignmentSchema>
     const previous = await tx.select({ id: matchOperators.userId }).from(matchOperators)
       .where(eq(matchOperators.matchId, matchId));
     const previousIds = [...new Set([...previous.map((o) => o.id), ...(m.operatorId ? [m.operatorId] : [])])].sort();
+
+    // A newly added operator must be assigned to this match's Turnamen (earlier assignments may stay).
+    const added = operators.filter((o) => o.role === "operator" && !previousIds.includes(o.id));
+    if (added.length) {
+      const [ku] = await tx.select({ competitionId: tournaments.competitionId }).from(tournaments).where(eq(tournaments.id, m.tournamentId));
+      const allowed = ku
+        ? new Set((await tx.select({ id: operatorCompetitions.userId }).from(operatorCompetitions)
+            .where(and(eq(operatorCompetitions.competitionId, ku.competitionId), inArray(operatorCompetitions.userId, added.map((o) => o.id))))).map((r) => r.id))
+        : new Set<string>();
+      const outside = added.filter((o) => !allowed.has(o.id));
+      if (outside.length)
+        throw new Error(t("{names} belum ditugaskan ke turnamen ini. Tugaskan di Master Data → Operator.", { names: outside.map((o) => o.name).join(", ") }));
+    }
     await tx.delete(matchOperators).where(eq(matchOperators.matchId, matchId));
     if (operatorIds.length) await tx.insert(matchOperators).values(operatorIds.map((userId) => ({ matchId, userId })));
     await tx.update(matches).set({ refereeId, operatorId: operatorIds[0] ?? null, updatedAt: new Date() })

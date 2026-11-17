@@ -31,7 +31,9 @@ async function main() {
     const { db } = await import("@/lib/db");
     const s = await import("@/lib/db/schema");
     const { getAssignedOperators, saveMatchOfficials, startAssignedMatch, officialAssignmentConflicts } = await import("@/lib/match-officials");
-    const { recordQuickEvent, undoQuickEvent } = await import("@/lib/match-events");
+    const { recordQuickEvent, undoQuickEvent, recordTeamEvent, removeLastTeamEvent } = await import("@/lib/match-events");
+    const { recordManualMatchEvent } = await import("@/lib/manual-match-events");
+    const { buildPossession } = await import("@/lib/match-statistics");
     const { recomputeMatchScore } = await import("@/lib/match-engine");
     const { getMatchConsole } = await import("@/lib/queries/match");
     const { withMatchGoals } = await import("@/lib/queries/match-goals");
@@ -76,6 +78,13 @@ async function main() {
     console.log("✓ Migration preserves the legacy operator without duplicates");
 
     const save = (operatorIds: string[], refereeId: string | null = ids.ref) => saveMatchOfficials({ matchId: ids.match, refereeId, operatorIds });
+    // An operator must be assigned to the match's Turnamen first (the legacy one may stay).
+    await assert.rejects(save([ids.op1, ids.op2]), /belum ditugaskan/);
+    await db.insert(s.operatorCompetitions).values([
+      { userId: ids.op1, competitionId: ids.competition },
+      { userId: ids.op2, competitionId: ids.competition },
+    ]);
+    console.log("✓ Only operators assigned to the Turnamen can be added to its matches");
     await save([ids.op2, ids.op1, ids.op2, ids.admin]);
     assert.equal((await getAssignedOperators(ids.match, null)).length, 3);
     assert.deepEqual((await save([ids.op1, ids.op2])).before.operatorIds, [ids.op1, ids.op2, ids.admin].sort());
@@ -119,7 +128,7 @@ async function main() {
     await assert.rejects(save([ids.op1]), /sebelum pertandingan/);
     console.log("✓ Kick-off requires referee and at least one operator; live assignments stay locked");
 
-    const event = (userId: string, clubId: string, playerId: string, type: "goal" | "assist" | "yellow_card") => recordQuickEvent({ matchId: ids.match, clubId, playerId, type, userId });
+    const event = (userId: string, clubId: string, playerId: string, type: "goal" | "assist") => recordQuickEvent({ matchId: ids.match, clubId, playerId, type, userId });
     // Both operators record BOTH teams, including simultaneous goals.
     const recorded = await Promise.all([
       event(ids.op1, ids.home, ids.homePlayer, "goal"),
@@ -151,13 +160,25 @@ async function main() {
     assert.equal(linked[0].createdBy, ids.op2);
     console.log("✓ An operator can attach an assist to a goal recorded by their colleague");
 
-    await Promise.all([
-      event(ids.op1, ids.home, ids.homePlayer, "yellow_card"),
-      event(ids.op2, ids.home, ids.homePlayer, "yellow_card"),
-    ]);
+    // Cards are recorded through the ⋯ form (no one-tap button any more).
+    const card = (userId: string) => recordManualMatchEvent({ matchId: ids.match, type: "yellow_card", clubId: ids.home, playerId: ids.homePlayer, minute: 12 }, userId);
+    await Promise.all([card(ids.op1), card(ids.op2)]);
     const cards = (await db.select().from(s.matchEvents)).filter((e) => e.type === "yellow_card" || e.type === "second_yellow");
     assert.deepEqual(cards.map((e) => e.type).sort(), ["second_yellow", "yellow_card"]);
     console.log("✓ Concurrent cards correctly become first and second yellows");
+
+    // Team counters: no player, counted per club; passes give ball possession.
+    for (let i = 0; i < 3; i++) await recordTeamEvent({ matchId: ids.match, clubId: ids.home, type: "pass", userId: ids.op1 });
+    await recordTeamEvent({ matchId: ids.match, clubId: ids.away, type: "pass", userId: ids.op2 });
+    const corner = await recordTeamEvent({ matchId: ids.match, clubId: ids.away, type: "corner", userId: ids.op2 });
+    assert.equal(corner.count, 1);
+    assert.equal((await removeLastTeamEvent({ matchId: ids.match, clubId: ids.home, type: "pass" })).count, 2);
+    await assert.rejects(removeLastTeamEvent({ matchId: ids.match, clubId: ids.home, type: "foul" }), /Tidak ada catatan tim/);
+    const teamRows = (await db.select().from(s.matchEvents)).filter((e) => e.type === "pass" || e.type === "corner");
+    assert(teamRows.every((e) => e.playerId === null));
+    const possession = buildPossession(teamRows, ids.home, ids.away);
+    assert.deepEqual(possession, { home: 67, away: 33 });
+    console.log("✓ Team counters (pass / corner / foul) stay off players; possession = passes ÷ both clubs' passes");
 
     await assert.rejects(undoQuickEvent({ matchId: ids.match, eventId: recorded[0].eventId, userId: ids.op2, isAdmin: false }), /pencatat/);
     await undoQuickEvent({ matchId: ids.match, eventId: recorded[0].eventId, userId: ids.op1, isAdmin: false });

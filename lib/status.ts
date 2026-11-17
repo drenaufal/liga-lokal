@@ -163,4 +163,5 @@ export const EVENT_LABEL: Record<string, string> = {
   var_check: msg("Tinjauan"),
   period: msg("Babak"),
   interception: msg("Intersep"),
+  pass: msg("Passing"),
 };

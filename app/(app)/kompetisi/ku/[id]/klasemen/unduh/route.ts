@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import writeXlsxFile from "write-excel-file/node";
 import type { SheetData } from "write-excel-file/node";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCompetitionScope, getCurrentUser } from "@/lib/auth/session";
+import { inCompetitionScope } from "@/lib/competition-scope";
 import { can } from "@/lib/auth/rbac";
 import { isUuid } from "@/lib/media";
 import { getTournamentBase, getTournamentStandings } from "@/lib/queries/competition";
@@ -21,7 +22,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   if (!isUuid(id)) return NextResponse.json({ error: "not found" }, { status: 404 });
   const [tour, rows] = await Promise.all([getTournamentBase(id), getTournamentStandings(id)]);
-  if (!tour) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (!tour || !inCompetitionScope(await getCompetitionScope(), tour.competition.id)) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   // Group labels only matter when the KU has groups ("-" means a single table).
   const grouped = rows.some((r) => r.group !== "-");

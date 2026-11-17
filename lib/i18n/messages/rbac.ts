@@ -184,4 +184,7 @@ export const rbac = {
   "Log audit menyeluruh: pelaku, aksi, dan waktu.": "A complete audit log: who, what and when.",
   "Mengatur hak akses peran": "Manage role access rights",
   "Mengubah matriks izin pada layar Hak Akses Peran. Khusus Super Admin.": "Edit the permission matrix on the Role Access Rights screen. Super Admin only.",
+  "Cakupan Turnamen": "Tournament Scope",
+  "Melihat semua turnamen": "See every tournament",
+  "Tanpa izin ini, akun hanya melihat turnamen yang ditugaskan kepadanya (Master Data → Operator): daftar turnamen, KU, jadwal, dan pertandingannya.": "Without this permission the account only sees the tournaments assigned to it (Master Data → Operator): the tournament list, age groups, schedules and matches.",
 } as const;

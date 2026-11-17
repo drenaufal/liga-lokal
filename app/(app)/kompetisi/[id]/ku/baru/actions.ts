@@ -7,6 +7,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { ageCategories, clubs, scoringFormulas, tournamentTeams, tournaments } from "@/lib/db/schema";
 import { actionUser } from "@/lib/auth/session";
+import { assertCompetitionAccess } from "@/lib/competition-access";
 import { auditText, recordAudit } from "@/lib/audit";
 import { formError, type FormState } from "@/lib/form";
 import { MAX_CUP_TEAMS } from "@/lib/fixtures";
@@ -43,6 +44,7 @@ export async function createKu(
 ): Promise<FormState> {
   const t = await getT();
   const user = await actionUser("ku:create");
+  await assertCompetitionAccess(competitionId);
   const competition = await getCompetition(competitionId);
   if (!competition) return { error: t("Turnamen tidak ditemukan.") };
 

@@ -5,8 +5,10 @@ import { redirect } from "next/navigation";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { competitions, tournaments } from "@/lib/db/schema";
+import { competitions, operatorCompetitions, tournaments } from "@/lib/db/schema";
 import { actionUser } from "@/lib/auth/session";
+import { can } from "@/lib/auth/rbac";
+import { assertCompetitionAccess } from "@/lib/competition-access";
 import { auditText, changedSuffix, recordAudit } from "@/lib/audit";
 import { formError, type FormState } from "@/lib/form";
 import { activeFormulaWeights, purgeKu } from "@/lib/ku-delete";
@@ -70,6 +72,10 @@ export async function createCompetition(_prev: FormState, formData: FormData): P
     slug: `${slugify(row.name)}-${Date.now().toString(36)}`,
     createdBy: user.id,
   });
+  // An operator only sees assigned Turnamen, so the one they create is assigned to them.
+  if (!can(user, "scope:all-competitions")) {
+    await db.insert(operatorCompetitions).values({ userId: user.id, competitionId: created.id });
+  }
 
   await recordAudit({
     actorId: user.id,
@@ -93,6 +99,7 @@ export async function updateCompetition(
 ): Promise<FormState> {
   const t = await getT();
   const user = await actionUser("competition:edit");
+  await assertCompetitionAccess(id);
   const before = await getCompetition(id);
   if (!before) return { error: t("Turnamen tidak ditemukan.") };
 
@@ -139,6 +146,7 @@ export async function deleteCompetition(formData: FormData) {
   const t = await getT();
   const user = await actionUser("competition:delete");
   const id = String(formData.get("id"));
+  await assertCompetitionAccess(id);
   const typed = String(formData.get("confirm") ?? "").trim();
 
   const c = await getCompetition(id);

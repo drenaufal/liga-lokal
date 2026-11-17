@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Ellipsis,
   Flag,
+  Minus,
   Users,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -21,10 +22,10 @@ import { EVENT_LABEL } from "@/lib/status";
 import { positionText } from "@/lib/positions";
 import { useT } from "@/lib/i18n/client";
 import { msg, type MessageId } from "@/lib/i18n/translate";
-import type { QuickType } from "@/lib/quick-events";
+import { emptyTeamCounts, type QuickType, type TeamCounterType, type TeamCounts } from "@/lib/quick-events";
 import { emptyTally, type PlayerTally } from "@/lib/match-tally";
 import { EventForm, type ClubMini, type MatchClock, type RosterPlayer } from "./event-entry";
-import { quickEvent, undoEvent } from "./actions";
+import { quickEvent, teamEvent, undoEvent, undoTeamEvent } from "./actions";
 
 export type TeamSheet = {
   club: ClubMini;
@@ -55,16 +56,15 @@ function applyQuick(cur: Record<string, PlayerTally>, a: { playerId: string; typ
     case "interception":
       tally.interceptions++;
       break;
-    case "red_card":
-      tally.red++;
-      break;
-    case "yellow_card":
-      // a second yellow is a dismissal
-      if (tally.yellow > 0) tally.red++;
-      else tally.yellow++;
-      break;
   }
   return { ...cur, [a.playerId]: tally };
+}
+
+/** Same idea for the team counters: +1 / −1 shows at once, the server's count follows. */
+function applyTeam(cur: Record<string, TeamCounts>, a: { clubId: string; type: TeamCounterType; delta: 1 | -1 }) {
+  const counts = { ...(cur[a.clubId] ?? emptyTeamCounts()) };
+  counts[a.type] = Math.max(0, counts[a.type] + a.delta);
+  return { ...cur, [a.clubId]: counts };
 }
 
 type QuickButtonDef = {
@@ -76,15 +76,23 @@ type QuickButtonDef = {
   count: (tally: PlayerTally) => number;
 };
 
-/** Saves are derived from opposing shots and have no recording button. Labels are message ids. */
+/**
+ * Saves are derived from opposing shots and have no recording button. Cards are recorded through
+ * the ⋯ button only, so a card is never given by a stray tap. Labels are message ids.
+ */
 const QUICK: QuickButtonDef[] = [
   { type: "goal", label: msg("Gol"), full: msg("Gol"), ...MATCH_EVENT_STYLE.goal, count: (x) => x.goals },
   { type: "assist", label: msg("Assist"), full: msg("Assist"), ...MATCH_EVENT_STYLE.assist, count: (x) => x.assists },
   { type: "shot_on", label: msg("Tepat"), full: msg("Tembakan tepat sasaran"), ...MATCH_EVENT_STYLE.shot_on, count: (x) => x.shotsOn },
   { type: "interception", label: msg("Intersep::tombol"), full: msg("Intersep"), ...MATCH_EVENT_STYLE.interception, count: (x) => x.interceptions },
   { type: "shot_off", label: msg("Meleset"), full: msg("Tembakan meleset"), ...MATCH_EVENT_STYLE.shot_off, count: (x) => x.shotsOff },
-  { type: "red_card", label: msg("Merah"), full: msg("Kartu merah"), ...MATCH_EVENT_STYLE.red_card, count: (x) => x.red },
-  { type: "yellow_card", label: msg("Kuning"), full: msg("Kartu kuning"), ...MATCH_EVENT_STYLE.yellow_card, count: (x) => x.yellow },
+];
+
+/** Team counters: they count for the match only, never for a player. */
+const TEAM_COUNTERS: { type: TeamCounterType; label: MessageId; icon: React.ComponentType<{ className?: string }>; tile: string }[] = [
+  { type: "foul", label: msg("Pelanggaran"), ...MATCH_EVENT_STYLE.foul },
+  { type: "corner", label: msg("Sudut"), ...MATCH_EVENT_STYLE.corner },
+  { type: "pass", label: msg("Passing"), ...MATCH_EVENT_STYLE.pass },
 ];
 
 export function PlayerList({
@@ -93,6 +101,7 @@ export function PlayerList({
   home,
   away,
   tallies,
+  teamCounts,
   canRecord,
   canQuick,
   hint,
@@ -102,6 +111,8 @@ export function PlayerList({
   home: TeamSheet;
   away: TeamSheet;
   tallies: Record<string, PlayerTally>;
+  /** Fouls, corners and passes per club (team counters). */
+  teamCounts: Record<string, TeamCounts>;
   /** May open the full "Catat Kejadian" form (role allows it and the match has kicked off). */
   canRecord: boolean;
   /** May use the one-tap buttons: the match is in play. */
@@ -118,6 +129,7 @@ export function PlayerList({
   const [, start] = React.useTransition();
   const [inFlight, setInFlight] = React.useState<ReadonlySet<string>>(new Set());
   const [shown, addOptimistic] = React.useOptimistic(tallies, applyQuick);
+  const [teamShown, addTeamOptimistic] = React.useOptimistic(teamCounts, applyTeam);
 
   const rosters = React.useMemo(
     () => ({ [home.club.id]: home.players, [away.club.id]: away.players }),
@@ -161,9 +173,57 @@ export function PlayerList({
     });
   };
 
+  /** +1 on a team counter. Rapid taps are fine (passes): each one is sent, in order. */
+  const fireTeam = (sheet: TeamSheet, type: TeamCounterType, label: string) =>
+    start(async () => {
+      addTeamOptimistic({ clubId: sheet.club.id, type, delta: 1 });
+      try {
+        const r = await teamEvent({ matchId, clubId: sheet.club.id, type });
+        // passes are tapped constantly — the number on the button is the feedback
+        if (type !== "pass") toast.success(t("{label} · menit {minute}'", { label, minute: r.minute }), sheet.club.name);
+      } catch (e) {
+        toast.error(t("Gagal mencatat"), e instanceof Error ? e.message : undefined);
+      }
+    });
+
+  /** −1 on a team counter: removes that club's latest one. */
+  const undoTeam = (sheet: TeamSheet, type: TeamCounterType, label: string) => {
+    const key = `${sheet.club.id}:${type}:undo`;
+    if (inFlight.has(key)) return;
+    setInFlight((s) => new Set(s).add(key));
+    start(async () => {
+      addTeamOptimistic({ clubId: sheet.club.id, type, delta: -1 });
+      try {
+        await undoTeamEvent({ matchId, clubId: sheet.club.id, type });
+        toast.success(t("{label} dikurangi satu", { label }), sheet.club.name);
+      } catch (e) {
+        toast.error(t("Gagal membatalkan"), e instanceof Error ? e.message : undefined);
+      } finally {
+        setInFlight((s) => {
+          const n = new Set(s);
+          n.delete(key);
+          return n;
+        });
+      }
+    });
+  };
+
   const groups = (["playing", "bench", "subbed", "off"] as const)
     .map((role) => ({ role, players: team.players.filter((p) => p.state === role) }))
     .filter((g) => g.players.length);
+  // The team counters sit between the players on the pitch and the substitutes.
+  const showTeam = canRecord && groups.length > 0;
+  const teamPanel = showTeam ? (
+    <TeamCounterPanel
+      key="team"
+      club={team.club}
+      counts={teamShown[team.club.id] ?? emptyTeamCounts()}
+      inFlight={inFlight}
+      onAdd={(type, label) => fireTeam(team, type, label)}
+      onUndo={(type, label) => undoTeam(team, type, label)}
+    />
+  ) : null;
+  const pitchFirst = groups[0]?.role === "playing";
 
   return (
     <Card>
@@ -174,7 +234,7 @@ export function PlayerList({
           </CardTitle>
           <CardDescription className="mt-1">
             {canQuick
-              ? t("Pilih klub, lalu ketuk tombol di samping nama pemain — kejadian langsung masuk lini masa pada menit berjalan.")
+              ? t("Pilih klub, lalu ketuk tombol di samping nomor punggung — kejadian langsung masuk lini masa pada menit berjalan. Kartu dicatat lewat tombol ⋯.")
               : canRecord
                 ? t("Pertandingan tidak sedang berjalan. Gunakan “Catat kejadian” untuk menambah atau mengoreksi.")
                 : hint}
@@ -223,12 +283,14 @@ export function PlayerList({
           </div>
         )}
 
+        {!pitchFirst && teamPanel}
         {groups.map((g) => {
           const collapsible = g.role === "bench";
           const open = !collapsible || benchOpen;
           const heading = `${t.dyn(GROUP_LABEL[g.role])} · ${g.players.length}`;
           return (
-          <section key={g.role}>
+          <React.Fragment key={g.role}>
+          <section>
             {collapsible ? (
               <button
                 type="button"
@@ -259,6 +321,8 @@ export function PlayerList({
               ))}
             </ul>}
           </section>
+          {g.role === "playing" && teamPanel}
+          </React.Fragment>
           );
         })}
       </CardContent>
@@ -274,7 +338,7 @@ export function PlayerList({
           description={
             target === null
               ? t("Kejadian tim seperti tendangan sudut atau offside — atau pilih pemain secara manual.")
-              : t("Untuk kejadian lain: pergantian, penalti, gol bunuh diri, pelanggaran — atau mengatur menit sendiri.")
+              : t("Untuk kartu kuning / merah dan kejadian lain: pergantian, penalti, gol bunuh diri, pelanggaran.")
           }
           className="max-w-md"
         >
@@ -320,34 +384,46 @@ function PlayerCard({
   const sentOff = tl.red > 0;
   const inactive = sentOff || p.state !== "playing";
 
+  // Name and position are not shown on the card (the shirt number identifies the player); they stay
+  // in the tooltip and for screen readers.
+  const who = `${p.number ? `#${p.number} ` : ""}${p.name} · ${positionText(p.position, t)}`;
+  const sideButtons = canQuick && (
+    <>
+      <button type="button" disabled={inactive} onClick={onSubstitute} title={t("Pergantian")} aria-label={t("Ganti {name}", { name: p.name })} className="grid size-10 shrink-0 place-items-center rounded-full bg-block-pink text-ink disabled:opacity-40"><ArrowLeftRight className="size-4" /></button>
+      <MoreButton name={p.name} onClick={onMore} disabled={inactive} />
+    </>
+  );
+
   return (
     <div className={cn("rounded-2xl bg-surface-2/70 p-3", sentOff && "bg-brand/5 ring-1 ring-brand/20")}>
-      <div className="flex flex-col gap-3 @4xl:flex-row @4xl:items-center">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <span className="relative grid size-12 shrink-0 place-items-center rounded-full bg-night font-display text-xl leading-none text-white">
-            {p.number ?? "–"}
+      <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-center">
+        <div className="flex min-w-0 items-center gap-3 @2xl:flex-none">
+          <span
+            title={who}
+            className={cn(
+              "relative grid size-12 shrink-0 place-items-center rounded-full font-display text-xl leading-none",
+              p.state === "bench" ? "bg-elevated text-ink-secondary" : "bg-night text-white",
+            )}
+          >
+            <span aria-hidden="true">{p.number ?? "–"}</span>
+            <span className="sr-only">{who}</span>
             {p.captain && (
               <span className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-brand text-[8px] font-bold text-white">
                 C
               </span>
             )}
           </span>
-          <span className="min-w-0 flex-1">
-            <span className={cn("block truncate text-base font-semibold", p.state === "bench" ? "text-ink-muted" : "text-ink")}>
-              {p.name}
-            </span>
-            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-muted">
-              <span>{positionText(p.position, t)}</span>
-              {p.state === "bench" && <span>· {t("Cadangan")}</span>}
-              {tl.saves > 0 && <span className="font-semibold text-success">· {t("{n} save", { n: tl.saves })}</span>}
-              <Tags tally={tl} full={!canQuick} />
-            </span>
+          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-muted @2xl:w-28 @2xl:flex-none">
+            {tl.saves > 0 && <span className="font-semibold text-success">{t("{n} save", { n: tl.saves })}</span>}
+            <Tags tally={tl} full={!canQuick} />
           </span>
+          {/* phones: substitution and ⋯ stay next to the number, the event buttons get their own row */}
+          {sideButtons && <span className="flex shrink-0 gap-1.5 @2xl:hidden">{sideButtons}</span>}
         </div>
 
         {canQuick ? (
-          <div className="flex items-center gap-1.5">
-            <div className="grid flex-1 grid-cols-4 gap-1.5 @md:flex @4xl:flex-none @4xl:gap-1">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <div className="grid flex-1 grid-cols-5 gap-1.5 @2xl:gap-1">
               {QUICK.map((def) => (
                 <QuickButton
                   key={def.type}
@@ -359,8 +435,7 @@ function PlayerCard({
                 />
               ))}
             </div>
-            <button type="button" disabled={inactive} onClick={onSubstitute} title={t("Pergantian")} aria-label={t("Ganti {name}", { name: p.name })} className="grid size-10 shrink-0 place-items-center rounded-full bg-block-pink text-ink disabled:opacity-40"><ArrowLeftRight className="size-4" /></button>
-            <MoreButton name={p.name} onClick={onMore} disabled={inactive} />
+            <span className="hidden shrink-0 gap-1.5 @2xl:flex">{sideButtons}</span>
           </div>
         ) : (
           canRecord && (
@@ -400,7 +475,7 @@ function QuickButton({
       title={t(def.full)}
       aria-label={`${t(def.full)} — ${name}${count ? ` (${count})` : ""}`}
       className={cn(
-        "relative flex h-14 w-full select-none flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-semibold leading-none outline-none transition-all focus-visible:ring-2 focus-visible:ring-brand/50 active:scale-95 disabled:pointer-events-none disabled:opacity-40 @md:flex-1 @4xl:w-[3.5rem] @4xl:flex-none",
+        "relative flex h-14 w-full min-w-0 select-none flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-semibold leading-none outline-none transition-all focus-visible:ring-2 focus-visible:ring-brand/50 active:scale-95 disabled:pointer-events-none disabled:opacity-40",
         def.tile,
       )}
     >
@@ -415,6 +490,70 @@ function QuickButton({
   );
 }
 
+/**
+ * Fouls, corners and passes of the selected club. A tap adds one at the current minute; the small
+ * "−" takes the latest one back. They count for the match only (statistics and ball possession).
+ */
+function TeamCounterPanel({
+  club,
+  counts,
+  inFlight,
+  onAdd,
+  onUndo,
+}: {
+  club: ClubMini;
+  counts: TeamCounts;
+  inFlight: ReadonlySet<string>;
+  onAdd: (type: TeamCounterType, label: string) => void;
+  onUndo: (type: TeamCounterType, label: string) => void;
+}) {
+  const t = useT();
+  return (
+    <section aria-label={t("Catatan tim {club}", { club: club.name })} className="rounded-2xl border border-dashed border-line p-3">
+      <p className="px-1 pb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+        {t("Catatan tim · {club}", { club: club.short })}
+        <span className="ml-1 font-normal normal-case tracking-normal">{t("— tidak masuk ke statistik pemain")}</span>
+      </p>
+      <div className="grid grid-cols-3 gap-2">
+        {TEAM_COUNTERS.map((c) => {
+          const label = t(c.label);
+          const n = counts[c.type];
+          const Icon = c.icon;
+          return (
+            <div key={c.type} className="relative">
+              <button
+                type="button"
+                onClick={() => onAdd(c.type, label)}
+                aria-label={t("Tambah {label} untuk {club} (sekarang {n})", { label, club: club.name, n })}
+                className={cn(
+                  "flex h-16 w-full select-none flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-semibold leading-none outline-none transition-all focus-visible:ring-2 focus-visible:ring-brand/50 active:scale-95",
+                  c.tile,
+                )}
+              >
+                <span className="flex items-center gap-1.5">
+                  <Icon className="size-4" />
+                  <span className="font-display text-xl tabular-nums leading-none">{n}</span>
+                </span>
+                {label}
+              </button>
+              <button
+                type="button"
+                onClick={() => onUndo(c.type, label)}
+                disabled={n === 0 || inFlight.has(`${club.id}:${c.type}:undo`)}
+                title={t("Kurangi satu")}
+                aria-label={t("Kurangi {label} {club} satu", { label, club: club.name })}
+                className="absolute -right-1.5 -top-1.5 grid size-6 place-items-center rounded-full bg-surface text-ink-secondary shadow-sm ring-1 ring-line transition-colors hover:text-ink disabled:opacity-0"
+              >
+                <Minus className="size-3.5" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function MoreButton({ name, onClick, disabled }: { name: string; onClick: () => void; disabled: boolean }) {
   const t = useT();
   return (
@@ -422,7 +561,7 @@ function MoreButton({ name, onClick, disabled }: { name: string; onClick: () => 
       type="button"
       onClick={onClick}
       disabled={disabled}
-      title={t("Kejadian lain (pergantian, penalti, gol bunuh diri, pelanggaran…)")}
+      title={t("Kartu kuning / merah dan kejadian lain (pergantian, penalti, gol bunuh diri, pelanggaran…)")}
       aria-label={t("Kejadian lain untuk {name}", { name })}
       className="grid size-10 shrink-0 place-items-center rounded-full bg-surface text-ink-secondary ring-1 ring-line transition-colors hover:bg-elevated hover:text-ink disabled:opacity-40"
     >
@@ -431,7 +570,10 @@ function MoreButton({ name, onClick, disabled }: { name: string; onClick: () => 
   );
 }
 
-/** Small status tags. While the one-tap buttons are shown they carry the counts, so only substitutions appear. */
+/**
+ * Small status tags. While the one-tap buttons are shown they carry the goal / assist counts, so
+ * then only cards, own goals and substitutions appear. Cards have no button, so they always show.
+ */
 function Tags({ tally, full }: { tally: PlayerTally; full: boolean }) {
   const t = useT();
   const items: React.ReactNode[] = [];
@@ -454,14 +596,6 @@ function Tags({ tally, full }: { tally: PlayerTally; full: boolean }) {
           {tally.assists > 1 ? `${tally.assists} ` : ""}A
         </Tag>,
       );
-    for (let i = 0; i < tally.yellow; i++)
-      items.push(
-        <span key={`y${i}`} title={t("Kartu kuning")} className="h-3.5 w-2.5 rounded-[2px] bg-block-yellow ring-1 ring-black/10" />,
-      );
-    for (let i = 0; i < tally.red; i++)
-      items.push(
-        <span key={`r${i}`} title={t("Kartu merah")} className="h-3.5 w-2.5 rounded-[2px] bg-brand ring-1 ring-black/10" />,
-      );
   } else if (tally.ownGoals) {
     items.push(
       <Tag key="og" className="bg-night text-white" title={t("{n} gol bunuh diri", { n: tally.ownGoals })}>
@@ -469,6 +603,14 @@ function Tags({ tally, full }: { tally: PlayerTally; full: boolean }) {
       </Tag>,
     );
   }
+  for (let i = 0; i < tally.yellow; i++)
+    items.push(
+      <span key={`y${i}`} role="img" title={t("Kartu kuning")} aria-label={t("Kartu kuning")} className="h-3.5 w-2.5 rounded-[2px] bg-block-yellow ring-1 ring-black/10" />,
+    );
+  for (let i = 0; i < tally.red; i++)
+    items.push(
+      <span key={`r${i}`} role="img" title={t("Kartu merah")} aria-label={t("Kartu merah")} className="h-3.5 w-2.5 rounded-[2px] bg-brand ring-1 ring-black/10" />,
+    );
   if (tally.subOn != null)
     items.push(
       <Tag key="in" className="bg-success/12 text-success" title={t("Masuk menit {n}", { n: tally.subOn })}>

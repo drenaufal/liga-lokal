@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus, Radio, CalendarDays, Users2, Layers, Trophy, X } from "lucide-react";
 import { listCompetitions } from "@/lib/queries/competition";
-import { requireViewerCapability } from "@/lib/auth/session";
+import { getCompetitionScope, requireViewerCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -57,7 +57,7 @@ export default async function CompetitionsPage({
   const { t, fmt } = await getI18n();
   const user = await requireViewerCapability("competition:view");
   const f = parseCompetitionFilters(await searchParams);
-  const all = await listCompetitions();
+  const all = await listCompetitions(await getCompetitionScope());
   const canWrite = can(user, "competition:create");
 
   // The search and every value filter narrow first, so each status chip counts what it would show now.

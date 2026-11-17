@@ -1,5 +1,6 @@
 import { and, count, desc, eq, gte, sql } from "drizzle-orm";
 import { playerScopeFilter } from "@/lib/club-scope";
+import { competitionScopeFilter } from "@/lib/competition-scope";
 import { alias } from "drizzle-orm/mysql-core";
 import { db } from "@/lib/db";
 import { MATCH_DURATION_SQL } from "@/lib/match-clock";
@@ -19,8 +20,13 @@ import { kuNameSql } from "@/lib/queries/ku";
 import { maskHiddenActor } from "@/lib/queries/settings";
 import type { Role } from "@/lib/auth/rbac";
 
-/** `scope`: the SSB the viewer may see (`getClubScope`); it narrows the player leaderboards. */
-export async function getCommandCenterData(viewer?: Role | null, scope: string[] | null = null) {
+/**
+ * `scope`: the SSB the viewer may see (`getClubScope`); it narrows the player leaderboards.
+ * `competitionScope`: the Turnamen an operator is assigned to (`getCompetitionScope`); it narrows
+ * the match and KU numbers and the live list.
+ */
+export async function getCommandCenterData(viewer?: Role | null, scope: string[] | null = null, competitionScope: string[] | null = null) {
+  const inTurnamen = competitionScopeFilter(tournaments.competitionId, competitionScope);
   const weekAgo = new Date(Date.now() - 7 * 86400000);
   const hc = alias(clubs, "hc");
   const ac = alias(clubs, "ac");
@@ -61,7 +67,9 @@ export async function getCommandCenterData(viewer?: Role | null, scope: string[]
         upcoming: sql<number>`count(case when ${matches.status} = 'scheduled' and ${matches.scheduledAt} >= now() then 1 end)`,
         thisWeek: sql<number>`count(case when ${matches.scheduledAt} >= ${weekAgo} then 1 end)`,
       })
-      .from(matches),
+      .from(matches)
+      .innerJoin(tournaments, eq(tournaments.id, matches.tournamentId))
+      .where(inTurnamen),
     db
       .select({
         id: matches.id,
@@ -88,7 +96,7 @@ export async function getCommandCenterData(viewer?: Role | null, scope: string[]
       .leftJoin(hc, eq(hc.id, matches.homeClubId))
       .leftJoin(ac, eq(ac.id, matches.awayClubId))
       .leftJoin(venues, eq(venues.id, matches.venueId))
-      .where(eq(matches.status, "live")),
+      .where(and(eq(matches.status, "live"), inTurnamen)),
     db
       .select({
         status: players.verificationStatus,
@@ -99,6 +107,7 @@ export async function getCommandCenterData(viewer?: Role | null, scope: string[]
     db
       .select({ status: tournaments.status, n: count() })
       .from(tournaments)
+      .where(inTurnamen)
       .groupBy(tournaments.status),
     db
       .select({

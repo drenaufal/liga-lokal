@@ -3,14 +3,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, MapPin, Flag as FlagIcon, CalendarClock, UserCog } from "lucide-react";
 import { getMatchConsole, getOfficialOptions } from "@/lib/queries/match";
-import { requireCapability, getClubScope } from "@/lib/auth/session";
+import { requireCapability, getClubScope, getCompetitionScope } from "@/lib/auth/session";
+import { inCompetitionScope } from "@/lib/competition-scope";
 import { can } from "@/lib/auth/rbac";
 import { DEFAULT_MATCH_MINUTES, clockCap } from "@/lib/match-clock";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/app/status-badge";
 import { AutoRefresh } from "@/components/app/auto-refresh";
 import { MatchStatistics } from "@/components/app/match-statistics";
-import { buildMatchStatistics } from "@/lib/match-statistics";
+import { buildMatchStatistics, buildPossession } from "@/lib/match-statistics";
+import { buildTeamCounts } from "@/lib/quick-events";
 import { GoalScorers } from "@/components/app/goal-scorers";
 import { MatchTimeline } from "@/components/app/match-timeline";
 import { ConsoleControls } from "./console-controls";
@@ -51,7 +53,7 @@ export default async function MatchConsolePage({
   const user = await requireCapability("match:view");
   const { id } = await params;
   const d = await getMatchConsole(id);
-  if (!d || !inClubScope(await getClubScope(), d.m.homeClubId, d.m.awayClubId)) notFound();
+  if (!d || !inClubScope(await getClubScope(), d.m.homeClubId, d.m.awayClubId) || !inCompetitionScope(await getCompetitionScope(), d.competitionId)) notFound();
   const { m } = d;
   const canOperate = can(user, "match:operate");
   const canEvents = can(user, "match:events");
@@ -62,7 +64,7 @@ export default async function MatchConsolePage({
   const canSquad = can(user, "match:squad");
   const squadReady = [m.homeClubId, m.awayClubId].every((id) => id && d.lineups.some((l) => l.clubId === id));
   const assigned = !!m.refereeId && d.operators.length > 0 && squadReady;
-  const officialOptions = canAssign && m.status === "scheduled" ? await getOfficialOptions() : null;
+  const officialOptions = canAssign && m.status === "scheduled" ? await getOfficialOptions(d.competitionId) : null;
 
   const duration = m.durationMinutes ?? d.ageDuration?.matchDuration ?? DEFAULT_MATCH_MINUTES;
   const clock = {
@@ -108,6 +110,11 @@ export default async function MatchConsolePage({
   const canQuick = canEvents && (m.status === "live" || m.status === "halftime");
 
   const stats = buildMatchStatistics(evs, m.homeClubId, m.awayClubId);
+  const possession = buildPossession(evs, m.homeClubId, m.awayClubId);
+  const teamCounts = buildTeamCounts(evs, [m.homeClubId, m.awayClubId]);
+  // Passes are only counted (possession, statistics); the timeline would drown in them.
+  const timeline = d.events.filter((e) => e.type !== "pass");
+  const timelineCount = timeline.filter((e) => !e.voided).length;
   const showStats = m.status === "live" || m.status === "halftime" || m.status === "completed";
 
   return (
@@ -203,6 +210,7 @@ export default async function MatchConsolePage({
                 players: rosterFor(m.awayClubId),
               }}
               tallies={tallies}
+              teamCounts={teamCounts}
               canRecord={canRecord}
               canQuick={canQuick}
               hint={
@@ -237,11 +245,11 @@ export default async function MatchConsolePage({
           <Card className={showStats ? undefined : "lg:col-span-2"}>
             <CardHeader>
               <CardTitle>{t("Lini Masa Kejadian")}</CardTitle>
-              <span className="text-[11px] text-ink-muted">{t("{n} kejadian", { n: evs.length })}</span>
+              <span className="text-[11px] text-ink-muted">{t("{n} kejadian", { n: timelineCount })}</span>
             </CardHeader>
             <CardContent className="max-h-[60dvh] overflow-y-auto">
               <MatchTimeline
-                events={d.events}
+                events={timeline}
                 matchId={id}
                 homeClubId={m.homeClubId}
                 canEdit={canVoid}
@@ -249,7 +257,7 @@ export default async function MatchConsolePage({
               />
             </CardContent>
           </Card>
-          {showStats && <MatchStatistics stats={stats} homeShort={d.homeShort} awayShort={d.awayShort} />}
+          {showStats && <MatchStatistics stats={stats} possession={possession} homeShort={d.homeShort} awayShort={d.awayShort} />}
         </div>
       </div>
     </div>
