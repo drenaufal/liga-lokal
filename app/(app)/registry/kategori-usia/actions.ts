@@ -7,50 +7,46 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { ageCategories, players, tournaments } from "@/lib/db/schema";
 import { actionUser } from "@/lib/auth/session";
-import { recordAudit } from "@/lib/audit";
+import { auditText, recordAudit } from "@/lib/audit";
 import { formError, requiredInt, type FormState } from "@/lib/form";
 import { MAX_CATEGORY_AGE, MIN_CATEGORY_AGE } from "./shared";
 import { insertReturning } from "@/lib/db/returning";
+import { getT } from "@/lib/i18n/server";
+import type { TFunction } from "@/lib/i18n/translate";
 
-const categorySchema = z
+const makeCategorySchema = (t: TFunction) => z
   .object({
     code: z
       .string()
       .trim()
       .toUpperCase()
-      .regex(/^[A-Z0-9][A-Z0-9-]{1,11}$/, "Kode 2–12 karakter, mis. KU-18"),
-    label: z.string().trim().min(3, "Nama kategori wajib diisi"),
-    minAge: requiredInt(MIN_CATEGORY_AGE, MAX_CATEGORY_AGE, `Usia ${MIN_CATEGORY_AGE}–${MAX_CATEGORY_AGE} tahun`),
-    maxAge: requiredInt(MIN_CATEGORY_AGE, MAX_CATEGORY_AGE, `Usia ${MIN_CATEGORY_AGE}–${MAX_CATEGORY_AGE} tahun`),
-    halfDuration: requiredInt(5, 60, "Durasi babak 5–60 menit"),
-    playersOnField: requiredInt(4, 11, "Pemain di lapangan 4–11"),
-    maxSquad: requiredInt(5, 40, "Skuad maksimal 5–40"),
-    ballSize: requiredInt(3, 5, "Ukuran bola 3–5"),
-    substitutions: z.string().trim().min(2, "Aturan pergantian wajib diisi"),
-    fieldType: z.string().trim().min(2, "Jenis lapangan wajib diisi"),
+      .regex(/^[A-Z0-9][A-Z0-9-]{1,11}$/, t("Kode 2–12 karakter, mis. KU-18")),
+    label: z.string().trim().min(3, t("Nama kategori wajib diisi")),
+    maxAge: requiredInt(MIN_CATEGORY_AGE, MAX_CATEGORY_AGE, t("Usia {min}–{max} tahun", { min: MIN_CATEGORY_AGE, max: MAX_CATEGORY_AGE })),
+    halfDuration: requiredInt(5, 60, t("Durasi babak 5–60 menit")),
+    playersOnField: requiredInt(4, 11, t("Pemain di lapangan 4–11")),
+    maxSquad: requiredInt(5, 40, t("Skuad maksimal 5–40")),
+    ballSize: requiredInt(3, 5, t("Ukuran bola 3–5")),
+    substitutions: z.string().trim().min(2, t("Aturan pergantian wajib diisi")),
+    fieldType: z.string().trim().min(2, t("Jenis lapangan wajib diisi")),
     notes: z.string().optional(),
-  })
-  .refine((v) => v.maxAge >= v.minAge, {
-    path: ["maxAge"],
-    message: "Usia maksimal harus ≥ usia minimal",
   })
   .refine((v) => v.maxSquad >= v.playersOnField, {
     path: ["maxSquad"],
-    message: "Skuad tidak boleh lebih kecil dari jumlah pemain di lapangan",
+    message: t("Skuad tidak boleh lebih kecil dari jumlah pemain di lapangan"),
   });
 
-type CategoryInput = z.infer<typeof categorySchema>;
+type CategoryInput = z.infer<ReturnType<typeof makeCategorySchema>>;
 
 function toRow(v: CategoryInput) {
-  // Eligibility is by birth year, relative to the current season year.
+  // Eligibility is by birth year, relative to the current season year: a player
+  // born in `birthYearFrom` or later (age ≤ maxAge) may play in the category.
   const year = new Date().getFullYear();
   return {
     code: v.code,
     label: v.label,
-    minAge: v.minAge,
     maxAge: v.maxAge,
     birthYearFrom: year - v.maxAge,
-    birthYearTo: year - v.minAge,
     rules: {
       matchDuration: v.halfDuration * 2,
       halfDuration: v.halfDuration,
@@ -67,14 +63,14 @@ function toRow(v: CategoryInput) {
   };
 }
 
-async function codeTaken(code: string, exceptId?: string) {
+async function codeTaken(t: TFunction, code: string, exceptId?: string) {
   const hit = await db.query.ageCategories.findFirst({
     where: exceptId
       ? and(eq(ageCategories.code, code), ne(ageCategories.id, exceptId))
       : eq(ageCategories.code, code),
     columns: { id: true },
   });
-  return hit ? `Kode ${code} sudah dipakai` : null;
+  return hit ? t("Kode {code} sudah dipakai", { code }) : null;
 }
 
 /** Keep categories ordered youngest → oldest everywhere they are listed. */
@@ -82,7 +78,7 @@ async function resequence() {
   const rows = await db
     .select({ id: ageCategories.id, sortOrder: ageCategories.sortOrder })
     .from(ageCategories)
-    .orderBy(asc(ageCategories.minAge), asc(ageCategories.maxAge), asc(ageCategories.code));
+    .orderBy(asc(ageCategories.maxAge), asc(ageCategories.code));
   await Promise.all(
     rows.map((r, i) =>
       r.sortOrder === i
@@ -99,13 +95,14 @@ function revalidateAll() {
 }
 
 export async function createCategory(_prev: FormState, formData: FormData): Promise<FormState> {
-  const user = await actionUser("registry:write");
-  const parsed = categorySchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return formError(parsed.error, formData);
+  const t = await getT();
+  const user = await actionUser("registry.category:create");
+  const parsed = makeCategorySchema(t).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return formError(t, parsed.error, formData);
 
   const row = toRow(parsed.data);
-  const taken = await codeTaken(row.code);
-  if (taken) return formError({ code: taken }, formData);
+  const taken = await codeTaken(t, row.code);
+  if (taken) return formError(t, { code: taken }, formData);
 
   const [created] = await insertReturning(db, ageCategories, { ...row, sortOrder: 999 });
   await resequence();
@@ -117,7 +114,7 @@ export async function createCategory(_prev: FormState, formData: FormData): Prom
     action: "age_category.create",
     entityType: "age_category",
     entityId: created.id,
-    summary: `Kategori usia baru: ${row.code} (usia ${row.minAge}–${row.maxAge})`,
+    summary: auditText("Kategori usia baru: {code} (usia maksimal {n})", { code: row.code, n: row.maxAge }),
     after: { ...row },
   });
 
@@ -130,16 +127,17 @@ export async function updateCategory(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const user = await actionUser("registry:write");
+  const t = await getT();
+  const user = await actionUser("registry.category:edit");
   const before = await db.query.ageCategories.findFirst({ where: eq(ageCategories.id, id) });
-  if (!before) return { error: "Kategori tidak ditemukan." };
+  if (!before) return { error: t("Kategori tidak ditemukan.") };
 
-  const parsed = categorySchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return formError(parsed.error, formData);
+  const parsed = makeCategorySchema(t).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return formError(t, parsed.error, formData);
 
   const row = toRow(parsed.data);
-  const taken = await codeTaken(row.code, id);
-  if (taken) return formError({ code: taken }, formData);
+  const taken = await codeTaken(t, row.code, id);
+  if (taken) return formError(t, { code: taken }, formData);
 
   await db.update(ageCategories).set(row).where(eq(ageCategories.id, id));
   await resequence();
@@ -151,9 +149,9 @@ export async function updateCategory(
     action: "age_category.update",
     entityType: "age_category",
     entityId: id,
-    summary: `Aturan kategori ${row.code} diperbarui`,
-    before: { code: before.code, minAge: before.minAge, maxAge: before.maxAge, rules: before.rules },
-    after: { code: row.code, minAge: row.minAge, maxAge: row.maxAge, rules: row.rules },
+    summary: auditText("Aturan kategori {code} diperbarui", { code: row.code }),
+    before: { code: before.code, maxAge: before.maxAge, rules: before.rules },
+    after: { code: row.code, maxAge: row.maxAge, rules: row.rules },
   });
 
   revalidateAll();
@@ -161,9 +159,10 @@ export async function updateCategory(
 }
 
 export async function deleteCategory(id: string): Promise<{ error?: string }> {
-  const user = await actionUser("registry:write");
+  const t = await getT();
+  const user = await actionUser("registry.category:delete");
   const cat = await db.query.ageCategories.findFirst({ where: eq(ageCategories.id, id) });
-  if (!cat) return { error: "Kategori tidak ditemukan." };
+  if (!cat) return { error: t("Kategori tidak ditemukan.") };
 
   const [playerCount, tournamentCount] = await Promise.all([
     db.$count(players, eq(players.ageCategoryId, id)),
@@ -171,12 +170,15 @@ export async function deleteCategory(id: string): Promise<{ error?: string }> {
   ]);
   if (playerCount || tournamentCount) {
     return {
-      error: `${cat.code} masih dipakai ${[
-        playerCount && `${playerCount} pemain`,
-        tournamentCount && `${tournamentCount} kompetisi`,
-      ]
-        .filter(Boolean)
-        .join(" dan ")}. Pindahkan dulu sebelum menghapus.`,
+      error: t("{code} masih dipakai {list}. Pindahkan dulu sebelum menghapus.", {
+        code: cat.code,
+        list: [
+          playerCount && t("{n} pemain", { n: playerCount }),
+          tournamentCount && t("{n} KU turnamen", { n: tournamentCount }),
+        ]
+          .filter(Boolean)
+          .join(` ${t("dan")} `),
+      }),
     };
   }
 
@@ -190,8 +192,8 @@ export async function deleteCategory(id: string): Promise<{ error?: string }> {
     action: "age_category.delete",
     entityType: "age_category",
     entityId: id,
-    summary: `Kategori usia ${cat.code} dihapus`,
-    before: { code: cat.code, minAge: cat.minAge, maxAge: cat.maxAge },
+    summary: auditText("Kategori usia {code} dihapus", { code: cat.code }),
+    before: { code: cat.code, maxAge: cat.maxAge },
   });
 
   revalidateAll();

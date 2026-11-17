@@ -1,11 +1,16 @@
-import { and, desc, eq, gte, inArray, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, sql, type SQL } from "drizzle-orm";
+import { playerScopeFilter } from "@/lib/club-scope";
 import { alias } from "drizzle-orm/mysql-core";
 import { db } from "@/lib/db";
 import { positionLine, rolesOfLine } from "@/lib/positions";
+import { ascNullsLast } from "@/lib/db/order";
+import { kuNameSql } from "@/lib/queries/ku";
+import { getTournamentBase } from "@/lib/queries/competition";
 import {
   aiReports,
   ageCategories,
   clubs,
+  competitions,
   matchEvents,
   matches,
   players,
@@ -15,10 +20,13 @@ import {
   tournaments,
 } from "@/lib/db/schema";
 import type { ScoutFilters } from "@/lib/ai/parse";
-import { computeScore, DEFAULT_WEIGHTS } from "@/lib/scoring";
+import { computeScore, DEFAULT_WEIGHTS, scorableOf } from "@/lib/scoring";
+import { getSafeT } from "@/lib/i18n/server";
 
-export async function runTalentSearch(filters: ScoutFilters, weights = DEFAULT_WEIGHTS) {
+export async function runTalentSearch(filters: ScoutFilters, weights = DEFAULT_WEIGHTS, scope: string[] | null = null) {
   const conds: SQL[] = [eq(playerStats.season, "career"), sql`${playerStats.appearances} > 0`];
+  const scoped = playerScopeFilter(scope);
+  if (scoped) conds.push(scoped);
   if (filters.position) conds.push(inArray(players.position, [...rolesOfLine(filters.position)]));
   if (filters.ageCode) conds.push(eq(ageCategories.code, filters.ageCode));
   if (filters.minGoals) conds.push(gte(playerStats.goals, filters.minGoals));
@@ -32,13 +40,14 @@ export async function runTalentSearch(filters: ScoutFilters, weights = DEFAULT_W
       position: players.position,
       ageCode: ageCategories.code,
       club: clubs.shortName,
-      clubColor: clubs.primaryColor,
       photoUrl: players.photoUrl,
       appearances: playerStats.appearances,
       minutesPlayed: playerStats.minutesPlayed,
       goals: playerStats.goals,
       assists: playerStats.assists,
       saves: playerStats.saves,
+      shotsOnTarget: playerStats.shotsOnTarget,
+      shotsOffTarget: playerStats.shotsOffTarget,
       tackles: playerStats.tackles,
       interceptions: playerStats.interceptions,
       keyPasses: playerStats.keyPasses,
@@ -60,15 +69,7 @@ export async function runTalentSearch(filters: ScoutFilters, weights = DEFAULT_W
   // rank by an emphasis-weighted composite
   const scored = rows.map((r) => {
     const per90 = (n: number) => (r.minutesPlayed ? (n / r.minutesPlayed) * 90 : 0);
-    let fit = computeScore(
-      {
-        goals: r.goals, assists: r.assists, saves: r.saves, tackles: r.tackles,
-        interceptions: r.interceptions, keyPasses: r.keyPasses, duelsWon: r.duelsWon,
-        cleanSheets: r.cleanSheets, yellowCards: r.yellowCards, redCards: r.redCards,
-        minutesPlayed: r.minutesPlayed, motm: r.motm,
-      },
-      weights,
-    );
+    let fit = computeScore(scorableOf(r), weights);
     for (const e of filters.emphasis) {
       if (e === "attack") fit += per90(r.goals) * 20;
       if (e === "creation") fit += (per90(r.assists) + per90(r.keyPasses) * 0.5) * 18;
@@ -84,7 +85,7 @@ export async function runTalentSearch(filters: ScoutFilters, weights = DEFAULT_W
   return scored.slice(0, 12);
 }
 
-export async function getPlayerReportContext(playerId: string) {
+export async function getPlayerReportContext(playerId: string, scope: string[] | null = null) {
   const p = await db
     .select({
       name: players.fullName,
@@ -101,7 +102,7 @@ export async function getPlayerReportContext(playerId: string) {
       playerStats,
       and(eq(playerStats.playerId, players.id), eq(playerStats.season, "career")),
     )
-    .where(eq(players.id, playerId))
+    .where(and(eq(players.id, playerId), playerScopeFilter(scope)))
     .then((r) => r[0]);
   if (!p) return null;
 
@@ -127,6 +128,7 @@ export async function getPlayerReportContext(playerId: string) {
 }
 
 export async function getMatchReportContext(matchId: string) {
+  const t = await getSafeT();
   const m = await db.query.matches.findFirst({ where: eq(matches.id, matchId) });
   if (!m || !m.homeClubId || !m.awayClubId) return null;
   const [home, away] = await Promise.all([
@@ -145,8 +147,8 @@ export async function getMatchReportContext(matchId: string) {
     .where(and(eq(matchEvents.matchId, matchId), eq(matchEvents.voided, false)));
 
   return {
-    home: home?.name ?? "Tuan rumah",
-    away: away?.name ?? "Tamu",
+    home: home?.name ?? t("Tuan rumah"),
+    away: away?.name ?? t("Tamu"),
     homeScore: m.homeScore,
     awayScore: m.awayScore,
     homeFormation: m.homeFormation ?? "4-3-3",
@@ -162,7 +164,7 @@ export async function getMatchReportContext(matchId: string) {
 }
 
 export async function getCompetitionReportContext(tournamentId: string) {
-  const t = await db.query.tournaments.findFirst({ where: eq(tournaments.id, tournamentId) });
+  const t = await getTournamentBase(tournamentId);
   if (!t) return null;
   const agg = await db
     .select({
@@ -218,7 +220,7 @@ export async function listShortlists(ownerId?: string) {
     .limit(10);
 }
 
-export async function getReportSubjectOptions() {
+export async function getReportSubjectOptions(scope: string[] | null = null) {
   const hc = alias(clubs, "hc");
   const ac = alias(clubs, "ac");
   const [pl, mt, tn] = await Promise.all([
@@ -226,7 +228,7 @@ export async function getReportSubjectOptions() {
       .select({ id: players.id, name: players.fullName })
       .from(players)
       .innerJoin(playerStats, and(eq(playerStats.playerId, players.id), eq(playerStats.season, "career")))
-      .where(gte(playerStats.appearances, 3))
+      .where(and(gte(playerStats.appearances, 3), playerScopeFilter(scope)))
       .orderBy(desc(playerStats.score))
       .limit(40),
     db
@@ -243,7 +245,12 @@ export async function getReportSubjectOptions() {
       .where(eq(matches.status, "completed"))
       .orderBy(desc(matches.scheduledAt))
       .limit(30),
-    db.select({ id: tournaments.id, name: tournaments.name }).from(tournaments),
+    db
+      .select({ id: tournaments.id, name: kuNameSql })
+      .from(tournaments)
+      .innerJoin(competitions, eq(competitions.id, tournaments.competitionId))
+      .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
+      .orderBy(asc(competitions.name), ascNullsLast(ageCategories.sortOrder)),
   ]);
   return {
     players: pl,

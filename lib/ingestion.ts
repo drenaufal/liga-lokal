@@ -1,5 +1,7 @@
 import type { ImportIssue, ImportStage } from "@/lib/db/schema";
 import { PLAYER_POSITIONS, parsePosition } from "@/lib/positions";
+import type { TFunction } from "@/lib/i18n/translate";
+import { msg } from "@/lib/i18n/translate";
 
 /* ── CSV parsing (RFC-4180-ish, handles quoted fields) ─────────────── */
 export function parseCsv(text: string, delimiter = ","): { headers: string[]; rows: Record<string, string>[] } {
@@ -67,27 +69,27 @@ export const ENTITY_SCHEMAS: Record<string, EntitySchema> = {
     validate: (r) => {
       const issues: ImportIssue[] = [];
       if (!r.full_name || r.full_name.length < 3)
-        issues.push({ field: "full_name", code: "required", message: "Nama lengkap wajib (min 3 karakter)", severity: "error" });
+        issues.push({ field: "full_name", code: "required", message: msg("Nama lengkap wajib (min 3 karakter)"), severity: "error" });
       if (!isDate(r.dob))
-        issues.push({ field: "dob", code: "format", message: "Tanggal lahir harus format YYYY-MM-DD", severity: "error" });
+        issues.push({ field: "dob", code: "format", message: msg("Tanggal lahir harus format YYYY-MM-DD"), severity: "error" });
       const pos = parsePosition(r.position);
       if (!pos)
-        issues.push({ field: "position", code: "enum", message: `Posisi harus salah satu dari ${PLAYER_POSITIONS.join("/")}`, severity: "error" });
+        issues.push({ field: "position", code: "enum", message: msg("Posisi harus salah satu dari {positions}"), params: { positions: PLAYER_POSITIONS.join("/") }, severity: "error" });
       else if (pos.legacy)
-        issues.push({ field: "position", code: "legacy", message: `Kode umum "${r.position}" dibaca sebagai ${pos.role} - tulis peran spesifik agar akurat`, severity: "warning" });
+        issues.push({ field: "position", code: "legacy", message: msg("Kode umum \"{code}\" dibaca sebagai {role} - tulis peran spesifik agar akurat"), params: { code: r.position, role: pos.role }, severity: "warning" });
       if (r.jersey_number && (isNaN(+r.jersey_number) || +r.jersey_number < 1 || +r.jersey_number > 99))
-        issues.push({ field: "jersey_number", code: "range", message: "Nomor punggung 1–99", severity: "warning" });
+        issues.push({ field: "jersey_number", code: "range", message: msg("Nomor punggung 1–99"), severity: "warning" });
       if (r.dob && isDate(r.dob)) {
         const age = new Date().getFullYear() - new Date(r.dob).getFullYear();
         if (age < 5 || age > 20)
-          issues.push({ field: "dob", code: "business", message: `Usia ${age} tahun di luar rentang wajar akar rumput`, severity: "warning" });
+          issues.push({ field: "dob", code: "business", message: msg("Usia {age} tahun di luar rentang wajar akar rumput"), params: { age }, severity: "warning" });
       }
       if (!r.nisn)
-        issues.push({ field: "nisn", code: "required", message: "NISN wajib diisi (10 digit angka)", severity: "error" });
+        issues.push({ field: "nisn", code: "required", message: msg("NISN wajib diisi (10 digit angka)"), severity: "error" });
       else if (!/^\d{10}$/.test(r.nisn))
-        issues.push({ field: "nisn", code: "format", message: "NISN harus 10 digit angka", severity: "error" });
+        issues.push({ field: "nisn", code: "format", message: msg("NISN harus 10 digit angka"), severity: "error" });
       if (r.foot && !["left", "right", "both", "kiri", "kanan", "keduanya"].includes(r.foot.toLowerCase()))
-        issues.push({ field: "foot", code: "enum", message: "Kaki dominan tidak dikenali", severity: "warning" });
+        issues.push({ field: "foot", code: "enum", message: msg("Kaki dominan tidak dikenali"), severity: "warning" });
       return issues;
     },
     normalize: (r) => ({
@@ -110,17 +112,17 @@ export const ENTITY_SCHEMAS: Record<string, EntitySchema> = {
   },
   clubs: {
     required: ["name", "short_name", "city"],
-    optional: ["type", "province", "founded_year", "contact_email"],
+    optional: ["type", "province", "address", "askot", "asprov", "founded_year", "contact_email"],
     validate: (r) => {
       const issues: ImportIssue[] = [];
       if (!r.name || r.name.length < 3)
-        issues.push({ field: "name", code: "required", message: "Nama klub wajib", severity: "error" });
+        issues.push({ field: "name", code: "required", message: msg("Nama SSB wajib"), severity: "error" });
       if (!r.short_name || r.short_name.length > 8)
-        issues.push({ field: "short_name", code: "format", message: "Singkatan wajib (maks 8 karakter)", severity: "error" });
+        issues.push({ field: "short_name", code: "format", message: msg("Singkatan wajib (maks 8 karakter)"), severity: "error" });
       if (!r.city)
-        issues.push({ field: "city", code: "required", message: "Kota wajib diisi", severity: "error" });
+        issues.push({ field: "city", code: "required", message: msg("Kota wajib diisi"), severity: "error" });
       if (r.type && !["club", "academy", "klub", "akademi"].includes(r.type.toLowerCase()))
-        issues.push({ field: "type", code: "enum", message: "Jenis harus club/academy", severity: "warning" });
+        issues.push({ field: "type", code: "enum", message: msg("Jenis harus club/academy"), severity: "warning" });
       return issues;
     },
     normalize: (r) => ({
@@ -128,6 +130,9 @@ export const ENTITY_SCHEMAS: Record<string, EntitySchema> = {
       shortName: r.short_name.toUpperCase(),
       city: r.city,
       province: r.province || null,
+      address: r.address || null,
+      askot: r.askot || null,
+      asprov: r.asprov || null,
       type: ({ klub: "club", akademi: "academy" }[r.type?.toLowerCase()] ?? r.type?.toLowerCase()) || "club",
       foundedYear: r.founded_year ? Number(r.founded_year) : null,
       contactEmail: r.contact_email || null,
@@ -136,12 +141,12 @@ export const ENTITY_SCHEMAS: Record<string, EntitySchema> = {
   },
   referees: {
     required: ["full_name", "license_level", "license_number", "license_expiry"],
-    optional: ["city", "phone", "email"],
+    optional: ["city", "askot", "phone", "email"],
     validate: (r) => {
       const issues: ImportIssue[] = [];
-      if (!r.full_name) issues.push({ field: "full_name", code: "required", message: "Nama wajib", severity: "error" });
-      if (!r.license_number) issues.push({ field: "license_number", code: "required", message: "Nomor lisensi wajib", severity: "error" });
-      if (!isDate(r.license_expiry)) issues.push({ field: "license_expiry", code: "format", message: "Tanggal kedaluwarsa harus YYYY-MM-DD", severity: "error" });
+      if (!r.full_name) issues.push({ field: "full_name", code: "required", message: msg("Nama wajib"), severity: "error" });
+      if (!r.license_number) issues.push({ field: "license_number", code: "required", message: msg("Nomor lisensi wajib"), severity: "error" });
+      if (!isDate(r.license_expiry)) issues.push({ field: "license_expiry", code: "format", message: msg("Tanggal kedaluwarsa harus YYYY-MM-DD"), severity: "error" });
       return issues;
     },
     normalize: (r) => ({
@@ -150,6 +155,7 @@ export const ENTITY_SCHEMAS: Record<string, EntitySchema> = {
       licenseNumber: r.license_number,
       licenseExpiry: r.license_expiry,
       city: r.city || null,
+      askot: r.askot || null,
       phone: r.phone || null,
       email: r.email || null,
     }),
@@ -160,10 +166,10 @@ export const ENTITY_SCHEMAS: Record<string, EntitySchema> = {
     optional: ["province", "capacity", "field_count", "surface"],
     validate: (r) => {
       const issues: ImportIssue[] = [];
-      if (!r.name) issues.push({ field: "name", code: "required", message: "Nama venue wajib", severity: "error" });
-      if (!r.city) issues.push({ field: "city", code: "required", message: "Kota wajib", severity: "error" });
+      if (!r.name) issues.push({ field: "name", code: "required", message: msg("Nama venue wajib"), severity: "error" });
+      if (!r.city) issues.push({ field: "city", code: "required", message: msg("Kota wajib"), severity: "error" });
       if (r.surface && !["natural", "artificial", "hybrid", "futsal"].includes(r.surface.toLowerCase()))
-        issues.push({ field: "surface", code: "enum", message: "Permukaan tidak dikenali", severity: "warning" });
+        issues.push({ field: "surface", code: "enum", message: msg("Permukaan tidak dikenali"), severity: "warning" });
       return issues;
     },
     normalize: (r) => ({
@@ -177,6 +183,12 @@ export const ENTITY_SCHEMAS: Record<string, EntitySchema> = {
     matchKey: (r) => (r.name ?? "").toLowerCase().replace(/\s+/g, ""),
   },
 };
+
+/** The stored name of a duplicate candidate, translated when it points at a row of the same file. */
+export function candidateLabel(t: TFunction, name: string) {
+  const m = /^Baris (\d+) dalam berkas ini$/.exec(name);
+  return m ? t("Baris {n} dalam berkas ini", { n: m[1] }) : name;
+}
 
 /* ── Fuzzy string similarity (Dice coefficient on bigrams) ─────────── */
 export function similarity(a: string, b: string): number {
@@ -202,14 +214,14 @@ export function similarity(a: string, b: string): number {
 
 /* ── 8-stage pipeline definition ──────────────────────────────────── */
 export const STAGE_DEFS: { key: string; label: string }[] = [
-  { key: "upload", label: "1 · Unggah & Baca Berkas" },
-  { key: "schema", label: "2 · Validasi Skema Kolom" },
-  { key: "normalize", label: "3 · Normalisasi Tipe & Format" },
-  { key: "rules", label: "4 · Validasi Aturan Bisnis" },
-  { key: "dedupe", label: "5 · Deteksi Duplikasi (Fuzzy Matching)" },
-  { key: "crossref", label: "6 · Pencocokan Referensi (Klub/Venue)" },
-  { key: "review", label: "7 · Antrian Tinjauan Manual" },
-  { key: "commit", label: "8 · Commit ke Sistem & Jejak Audit" },
+  { key: "upload", label: msg("1 · Unggah & Baca Berkas") },
+  { key: "schema", label: msg("2 · Validasi Skema Kolom") },
+  { key: "normalize", label: msg("3 · Normalisasi Tipe & Format") },
+  { key: "rules", label: msg("4 · Validasi Aturan Bisnis") },
+  { key: "dedupe", label: msg("5 · Deteksi Duplikasi (Fuzzy Matching)") },
+  { key: "crossref", label: msg("6 · Pencocokan Referensi (Klub/Venue)") },
+  { key: "review", label: msg("7 · Antrian Tinjauan Manual") },
+  { key: "commit", label: msg("8 · Commit ke Sistem & Jejak Audit") },
 ];
 
 export function freshStages(): ImportStage[] {

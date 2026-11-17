@@ -3,20 +3,22 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { PanelLeftClose, PanelLeft } from "lucide-react";
-import { NAV, SETTINGS_NAV } from "@/lib/nav";
-import { can, type Role } from "@/lib/auth/rbac";
+import { LogIn, PanelLeftClose, PanelLeft } from "lucide-react";
+import { navFor } from "@/lib/nav";
+import type { Capability, Role } from "@/lib/auth/rbac";
 import { Logo } from "@/components/brand/logo";
+import { BRAND } from "@/lib/brand";
 import { Icon } from "./icon";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/client";
 
-export function Sidebar({ role }: { role: Role }) {
+/** `guest`: a visitor without an account — the logo leads to the landing page and a login button is shown. */
+export function Sidebar({ role, grants, guest = false }: { role: Role; grants: readonly Capability[]; guest?: boolean }) {
+  const t = useT();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = React.useState(false);
 
-  const items = [...NAV, SETTINGS_NAV].filter(
-    (n) => !n.capability || can(role, n.capability),
-  );
+  const items = navFor({ role, grants });
 
   return (
     <aside
@@ -25,13 +27,9 @@ export function Sidebar({ role }: { role: Role }) {
         collapsed ? "w-[76px]" : "w-[248px]",
       )}
     >
-      <div className={cn("flex h-20 items-center", collapsed ? "justify-center px-3" : "px-5")}>
-        <Link href="/command-center" className="flex items-center text-white">
-          {collapsed ? (
-            <Logo variant="mark" className="h-10" />
-          ) : (
-            <Logo variant="wordmark" className="h-12" />
-          )}
+      <div className={cn("flex h-24 items-center", collapsed ? "justify-center px-3" : "px-5")}>
+        <Link href={guest ? "/" : "/command-center"} aria-label={BRAND.name} className="flex items-center">
+          <Logo className={collapsed ? "h-9" : "h-[72px]"} />
         </Link>
       </div>
 
@@ -45,7 +43,7 @@ export function Sidebar({ role }: { role: Role }) {
             <div key={item.key}>
               <Link
                 href={item.href}
-                title={collapsed ? item.label : undefined}
+                title={collapsed ? t.dyn(item.label) : undefined}
                 className={cn(
                   "group flex items-center gap-3 rounded-2xl px-3 py-2.5 text-[13px] font-medium transition-colors",
                   collapsed && "justify-center px-0",
@@ -55,7 +53,7 @@ export function Sidebar({ role }: { role: Role }) {
                 )}
               >
                 <Icon name={item.icon} className="size-[18px] shrink-0" />
-                {!collapsed && <span className="truncate">{item.label}</span>}
+                {!collapsed && <span className="truncate">{t.dyn(item.label)}</span>}
               </Link>
               {!collapsed && active && item.children && (
                 <div className="my-1.5 ml-[22px] space-y-0.5 border-l border-night-line pl-3">
@@ -70,7 +68,7 @@ export function Sidebar({ role }: { role: Role }) {
                           : "text-night-muted hover:text-white",
                       )}
                     >
-                      {child.label}
+                      {t.dyn(child.label)}
                     </Link>
                   ))}
                 </div>
@@ -79,6 +77,20 @@ export function Sidebar({ role }: { role: Role }) {
           );
         })}
       </nav>
+
+      {guest && (
+        <Link
+          href={`/login?next=${encodeURIComponent(pathname)}`}
+          title={collapsed ? t("Masuk") : undefined}
+          className={cn(
+            "mx-3 mt-1 flex items-center gap-2.5 rounded-2xl bg-brand px-3 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-dark",
+            collapsed && "justify-center px-0",
+          )}
+        >
+          <LogIn className="size-[18px] shrink-0" />
+          {!collapsed && t("Masuk")}
+        </Link>
+      )}
 
       <button
         onClick={() => setCollapsed((c) => !c)}
@@ -92,7 +104,7 @@ export function Sidebar({ role }: { role: Role }) {
         ) : (
           <>
             <PanelLeftClose className="size-4" />
-            Ciutkan panel
+            {t("Ciutkan panel")}
           </>
         )}
       </button>

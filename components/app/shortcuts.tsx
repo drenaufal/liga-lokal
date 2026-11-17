@@ -4,11 +4,13 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { HelpCircle, X } from "lucide-react";
+import { useT } from "@/lib/i18n/client";
+import { msg } from "@/lib/i18n/translate";
 
 const JUMPS: [string, string, string][] = [
   ["g c", "Command Center", "/command-center"],
-  ["g r", "Registry — Pemain", "/registry/pemain"],
-  ["g k", "Kompetisi", "/kompetisi"],
+  ["g r", msg("Registry — Pemain"), "/registry/pemain"],
+  ["g k", msg("Kompetisi"), "/kompetisi"],
   ["g m", "Match Operations", "/match-ops"],
   ["g p", "Player Intelligence", "/player-intelligence"],
   ["g a", "AI Scout", "/ai-scout"],
@@ -16,6 +18,7 @@ const JUMPS: [string, string, string][] = [
 ];
 
 export function ShortcutsButton() {
+  const t = useT();
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
@@ -51,7 +54,7 @@ export function ShortcutsButton() {
     <>
       <button
         onClick={() => setOpen(true)}
-        title="Pintasan keyboard (?)"
+        title={t("Pintasan keyboard (?)")}
         className="grid size-9 place-items-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink"
       >
         <HelpCircle className="size-4" />
@@ -67,21 +70,21 @@ export function ShortcutsButton() {
             <div className="relative z-10 w-full max-w-md rounded-3xl bg-surface p-6 shadow-[0_30px_80px_-20px_rgba(20,20,20,0.45)] animate-pop-in">
               <button
                 onClick={() => setOpen(false)}
-                aria-label="Tutup"
+                aria-label={t("Tutup")}
                 className="absolute right-4 top-4 grid size-8 place-items-center rounded-full bg-surface-2 text-ink-muted hover:bg-elevated hover:text-ink"
               >
                 <X className="size-4" />
               </button>
-              <h2 className="font-display text-2xl uppercase leading-none text-ink">Pintasan keyboard</h2>
+              <h2 className="font-display text-2xl uppercase leading-none text-ink">{t("Pintasan keyboard")}</h2>
               <p className="mt-1.5 text-xs text-ink-muted">
-                Navigasi cepat untuk pengguna operasional.
+                {t("Navigasi cepat untuk pengguna operasional.")}
               </p>
               <div className="mt-4 space-y-1.5">
-                <Row keys={["⌘", "K"]} label="Palet perintah / pencarian global" />
+                <Row keys={["⌘", "K"]} label={t("Palet perintah / pencarian global")} />
                 {JUMPS.map(([k, label]) => (
-                  <Row key={k} keys={k.split(" ")} label={label} />
+                  <Row key={k} keys={k.split(" ")} label={t.dyn(label)} />
                 ))}
-                <Row keys={["?"]} label="Buka panel pintasan ini" />
+                <Row keys={["?"]} label={t("Buka panel pintasan ini")} />
               </div>
             </div>
           </div>,

@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   ageCategories,
+  competitions,
   matchEvents,
   matchLineups,
   matches,
@@ -41,18 +42,18 @@ export function liveMinute(
 
 const GOAL_TYPES = ["goal", "penalty_goal"];
 
-/** Recompute a match's scoreline from its non-voided events. */
-export async function recomputeMatchScore(matchId: string) {
-  const evs = await db
+/** Serialize score refreshes so concurrent recorders cannot overwrite a newer total. */
+export async function recomputeMatchScore(matchId: string, tx?: Tx): Promise<void> {
+  if (!tx) return db.transaction((transaction) => recomputeMatchScore(matchId, transaction));
+  const [m] = await tx.select().from(matches).where(eq(matches.id, matchId)).for("update");
+  if (!m) return;
+  const evs = await tx
     .select({
       type: matchEvents.type,
       clubId: matchEvents.clubId,
     })
     .from(matchEvents)
     .where(and(eq(matchEvents.matchId, matchId), eq(matchEvents.voided, false)));
-
-  const m = await db.query.matches.findFirst({ where: eq(matches.id, matchId) });
-  if (!m) return;
 
   let home = 0;
   let away = 0;
@@ -67,7 +68,7 @@ export async function recomputeMatchScore(matchId: string) {
     }
   }
 
-  await db
+  await tx
     .update(matches)
     .set({ homeScore: home, awayScore: away, updatedAt: new Date() })
     .where(eq(matches.id, matchId));
@@ -109,16 +110,13 @@ async function bumpStatRow(
   const scorable = {
     goals: next.goals,
     assists: next.assists,
-    saves: next.saves,
-    tackles: row?.tackles ?? 0,
+    shotsOnTarget: next.shotsOnTarget,
+    shotsOffTarget: next.shotsOffTarget,
     interceptions: next.interceptions,
-    keyPasses: row?.keyPasses ?? 0,
-    duelsWon: row?.duelsWon ?? 0,
-    cleanSheets: row?.cleanSheets ?? 0,
+    saves: next.saves,
     yellowCards: next.yellowCards,
     redCards: next.redCards,
     minutesPlayed: next.minutesPlayed,
-    motm: next.motm,
   };
   const values = {
     ...next,
@@ -154,8 +152,9 @@ export async function syncMatchStats(matchId: string, weights: FormulaWeights) {
     if (!m) return { players: 0 };
 
     const [tour] = await tx
-      .select({ season: tournaments.season, rules: ageCategories.rules })
+      .select({ season: competitions.season, rules: ageCategories.rules })
       .from(tournaments)
+      .innerJoin(competitions, eq(competitions.id, tournaments.competitionId))
       .leftJoin(ageCategories, eq(ageCategories.id, tournaments.ageCategoryId))
       .where(eq(tournaments.id, m.tournamentId));
     const duration = m.durationMinutes ?? tour?.rules?.matchDuration ?? DEFAULT_MATCH_MINUTES;
@@ -167,7 +166,9 @@ export async function syncMatchStats(matchId: string, weights: FormulaWeights) {
         .select()
         .from(matchEvents)
         .where(and(eq(matchEvents.matchId, matchId), eq(matchEvents.voided, false))),
-      tx.select().from(matchLineups).where(eq(matchLineups.matchId, matchId)),
+      tx.select({ playerId: matchLineups.playerId, clubId: matchLineups.clubId, role: matchLineups.role, slot: matchLineups.slot, position: players.position,
+        subInMinute: matchLineups.subInMinute, subOutMinute: matchLineups.subOutMinute })
+        .from(matchLineups).innerJoin(players, eq(players.id, matchLineups.playerId)).where(eq(matchLineups.matchId, matchId)),
       tx.select().from(playerMatchStats).where(eq(playerMatchStats.matchId, matchId)),
     ]);
 
@@ -212,6 +213,7 @@ export async function syncMatchStats(matchId: string, weights: FormulaWeights) {
       yellowCards: r.yellowCards,
       redCards: r.redCards,
       motm: r.motm,
+      cleanSheets: r.cleanSheets,
     }));
     if (!prev.length && (m.resultStatus === "confirmed" || m.resultStatus === "amended")) {
       prev = next.map((l) => ({ ...l }));

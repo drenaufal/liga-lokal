@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { TFunction } from "@/lib/i18n/translate";
 
 /* Shared (client + server) helpers for uploaded media. */
 
@@ -28,21 +29,23 @@ export function mediaIdFromUrl(url: string | null | undefined): string | null {
 }
 
 /** Form field for a photo / logo: empty, an uploaded media URL, or an external http(s) URL. */
-export const imageUrlField = z
-  .string()
-  .trim()
-  .refine(
-    (v) => v === "" || mediaIdFromUrl(v) !== null || /^https?:\/\/\S+$/i.test(v),
-    "URL gambar tidak valid",
-  )
-  .optional();
+export const imageUrlField = (t: TFunction) =>
+  z
+    .string()
+    .trim()
+    .refine(
+      (v) => v === "" || mediaIdFromUrl(v) !== null || /^https?:\/\/\S+$/i.test(v),
+      t("URL gambar tidak valid"),
+    )
+    .optional();
 
 /** Form field for a private document: empty or an uploaded media URL only. */
-export const documentUrlField = z
-  .string()
-  .trim()
-  .refine((v) => v === "" || mediaIdFromUrl(v) !== null, "Dokumen tidak valid — unggah ulang")
-  .optional();
+export const documentUrlField = (t: TFunction) =>
+  z
+    .string()
+    .trim()
+    .refine((v) => v === "" || mediaIdFromUrl(v) !== null, t("Dokumen tidak valid — unggah ulang"))
+    .optional();
 
 export function formatBytes(n: number) {
   if (n < 1024) return `${n} B`;

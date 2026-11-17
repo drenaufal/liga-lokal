@@ -5,9 +5,11 @@
  * (GK / DF / MF / FW) are derived from it and used wherever the app compares
  * "the same kind of player": peer percentiles, AI talent filters, roster order.
  *
- * Pure module (no imports) so the schema, server code and client components
- * can all share it.
+ * Pure module (only the tiny i18n helpers) so the schema, server code and client
+ * components can all share it.
  */
+
+import { msg, type TFunction } from "@/lib/i18n/translate";
 
 export const PLAYER_POSITIONS = [
   "GK",
@@ -33,33 +35,33 @@ export const POSITION_LINES: {
   label: string;
   roles: readonly PlayerPosition[];
 }[] = [
-  { line: "GK", label: "Kiper", roles: ["GK"] },
-  { line: "DF", label: "Bertahan", roles: ["CB", "RB", "LB", "WB"] },
-  { line: "MF", label: "Tengah", roles: ["DMF", "CMF", "AMF", "WF"] },
-  { line: "FW", label: "Depan", roles: ["ST", "CF", "LW", "RW"] },
+  { line: "GK", label: msg("Kiper"), roles: ["GK"] },
+  { line: "DF", label: msg("Bertahan"), roles: ["CB", "RB", "LB", "WB"] },
+  { line: "MF", label: msg("Tengah"), roles: ["DMF", "CMF", "AMF", "WF"] },
+  { line: "FW", label: msg("Depan"), roles: ["ST", "CF", "LW", "RW"] },
 ];
 
 export const POSITION_NAME: Record<PlayerPosition, string> = {
-  GK: "Kiper",
-  CB: "Bek Tengah",
-  RB: "Bek Kanan",
-  LB: "Bek Kiri",
-  WB: "Bek Sayap",
-  DMF: "Gelandang Bertahan",
-  CMF: "Gelandang Tengah",
-  AMF: "Gelandang Serang",
-  WF: "Gelandang Sayap",
+  GK: msg("Kiper"),
+  CB: msg("Bek Tengah"),
+  RB: msg("Bek Kanan"),
+  LB: msg("Bek Kiri"),
+  WB: msg("Bek Sayap"),
+  DMF: msg("Gelandang Bertahan"),
+  CMF: msg("Gelandang Tengah"),
+  AMF: msg("Gelandang Serang"),
+  WF: msg("Gelandang Sayap"),
   ST: "Striker",
-  CF: "Penyerang Tengah",
-  LW: "Sayap Kiri",
-  RW: "Sayap Kanan",
+  CF: msg("Penyerang Tengah"),
+  LW: msg("Sayap Kiri"),
+  RW: msg("Sayap Kanan"),
 };
 
 export const LINE_LABEL: Record<PositionLine, string> = {
-  GK: "Kiper",
-  DF: "Bertahan",
-  MF: "Tengah",
-  FW: "Depan",
+  GK: msg("Kiper"),
+  DF: msg("Bertahan"),
+  MF: msg("Tengah"),
+  FW: msg("Depan"),
 };
 
 /** Display order of the lines on a team sheet. */
@@ -129,10 +131,11 @@ export function parsePosition(raw: string | null | undefined): { role: PlayerPos
   return null;
 }
 
-/** "CB · Bek Tengah". */
-export function positionText(pos: string | null | undefined) {
+/** "CB · Center Back" — the role code plus its name in the language of `t`. */
+export function positionText(pos: string | null | undefined, t?: TFunction) {
   if (!pos) return "—";
-  if (isPlayerPosition(pos)) return `${pos} · ${POSITION_NAME[pos]}`;
-  if (isPositionLine(pos)) return LINE_LABEL[pos];
+  const name = (text: string) => (t ? t.dyn(text) : text);
+  if (isPlayerPosition(pos)) return `${pos} · ${name(POSITION_NAME[pos])}`;
+  if (isPositionLine(pos)) return name(LINE_LABEL[pos]);
   return pos;
 }

@@ -8,8 +8,11 @@ import { getMediaMeta } from "@/lib/media-store";
 import { PLAYER_DOCUMENTS } from "@/lib/player-documents";
 import { Card, CardContent } from "@/components/ui/card";
 import { PlayerForm } from "../../player-form";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Ubah Data Pemain" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getT())("Ubah Data Pemain") };
+}
 export const dynamic = "force-dynamic";
 
 export default async function EditPlayerPage({
@@ -17,7 +20,8 @@ export default async function EditPlayerPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireCapability("registry:write");
+  const t = await getT();
+  await requireCapability("registry.player:edit");
   const { id } = await params;
   const player = await getPlayer(id);
   if (!player) notFound();
@@ -33,12 +37,11 @@ export default async function EditPlayerPage({
         href={`/registry/pemain/${id}`}
         className="mb-4 inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink"
       >
-        <ArrowLeft className="size-3.5" /> Kembali ke profil
+        <ArrowLeft className="size-3.5" /> {t("Kembali ke profil")}
       </Link>
-      <h1 className="text-lg font-semibold tracking-tight text-ink">Ubah Data Pemain</h1>
+      <h1 className="text-lg font-semibold tracking-tight text-ink">{t("Ubah Data Pemain")}</h1>
       <p className="mt-1 text-sm text-ink-muted">
-        <span className="font-mono">{player.registrationNo}</span> · {player.fullName}. Perubahan
-        tercatat pada jejak audit.
+        <span className="font-mono">{player.registrationNo}</span> · {player.fullName}. {t("Perubahan tercatat pada jejak audit.")}
       </p>
       <Card className="mt-5">
         <CardContent>

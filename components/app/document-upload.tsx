@@ -5,6 +5,7 @@ import { ExternalLink, FileText, Loader2, Upload, X, IdCard } from "lucide-react
 import { DOCUMENT_TYPES, MAX_UPLOAD_BYTES, formatBytes } from "@/lib/media";
 import { shrinkImage, uploadMedia } from "@/lib/upload-client";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/client";
 
 export type DocumentMeta = { fileName: string | null; mimeType: string; size: number };
 
@@ -31,6 +32,7 @@ export function DocumentUpload({
   /** Glyph shown in the empty state (defaults to an ID card). */
   icon?: React.ComponentType<{ className?: string }>;
 }) {
+  const t = useT();
   const [url, setUrl] = React.useState(defaultValue ?? "");
   const [meta, setMeta] = React.useState<DocumentMeta | null>(defaultMeta ?? null);
   const [busy, setBusy] = React.useState(false);
@@ -42,19 +44,19 @@ export function DocumentUpload({
     if (!picked) return;
     setError(null);
     if (!DOCUMENT_TYPES.includes(picked.type)) {
-      setError("Format harus JPG, PNG, WEBP, atau PDF.");
+      setError(t("Format harus JPG, PNG, WEBP, atau PDF."));
       return;
     }
     setBusy(true);
     try {
       // Keep scans legible: larger max side than profile photos.
       const file = await shrinkImage(picked, { maxSide: 2000, quality: 0.88 });
-      if (file.size > MAX_UPLOAD_BYTES) throw new Error(`Ukuran maksimal ${formatBytes(MAX_UPLOAD_BYTES)}.`);
-      const res = await uploadMedia(file, "document");
+      if (file.size > MAX_UPLOAD_BYTES) throw new Error(t("Ukuran maksimal {size}.", { size: formatBytes(MAX_UPLOAD_BYTES) }));
+      const res = await uploadMedia(file, "document", t("Gagal mengunggah berkas."));
       setUrl(res.url);
       setMeta({ fileName: res.fileName, mimeType: res.mimeType, size: res.size });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Gagal mengunggah dokumen.");
+      setError(e instanceof Error ? e.message : t("Gagal mengunggah dokumen."));
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -83,9 +85,9 @@ export function DocumentUpload({
             )}
           </a>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-medium text-ink">{meta?.fileName ?? "Dokumen terunggah"}</p>
+            <p className="truncate text-xs font-medium text-ink">{meta?.fileName ?? t("Dokumen terunggah")}</p>
             <p className="text-[11px] text-ink-muted">
-              {meta ? `${isPdf ? "PDF" : "Gambar"} · ${formatBytes(meta.size)}` : "Tersimpan"}
+              {meta ? `${isPdf ? "PDF" : t("Gambar")} · ${formatBytes(meta.size)}` : t("Tersimpan")}
             </p>
             <div className="mt-1 flex flex-wrap gap-3 text-[11px]">
               <a
@@ -94,7 +96,7 @@ export function DocumentUpload({
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 text-ink-secondary hover:text-ink"
               >
-                <ExternalLink className="size-3" /> Lihat
+                <ExternalLink className="size-3" /> {t("Lihat")}
               </a>
               <button
                 type="button"
@@ -102,7 +104,7 @@ export function DocumentUpload({
                 onClick={() => inputRef.current?.click()}
                 className="inline-flex items-center gap-1 text-ink-secondary hover:text-ink"
               >
-                {busy ? <Loader2 className="size-3 animate-spin" /> : <Upload className="size-3" />} Ganti
+                {busy ? <Loader2 className="size-3 animate-spin" /> : <Upload className="size-3" />} {t("Ganti::berkas")}
               </button>
               <button
                 type="button"
@@ -112,7 +114,7 @@ export function DocumentUpload({
                 }}
                 className="inline-flex items-center gap-1 text-ink-secondary hover:text-danger"
               >
-                <X className="size-3" /> Hapus
+                <X className="size-3" /> {t("Hapus")}
               </button>
             </div>
           </div>
@@ -142,10 +144,10 @@ export function DocumentUpload({
           </span>
           <span className="min-w-0">
             <span className="block text-xs font-medium text-ink">
-              {busy ? "Mengunggah…" : "Unggah scan / foto dokumen"}
+              {busy ? t("Mengunggah…") : t("Unggah scan / foto dokumen")}
             </span>
             <span className="block text-[11px] text-ink-muted">
-              {hint ?? `JPG, PNG, WEBP, atau PDF · maks ${formatBytes(MAX_UPLOAD_BYTES)}`}
+              {hint ?? t("JPG, PNG, WEBP, atau PDF · maks {size}", { size: formatBytes(MAX_UPLOAD_BYTES) })}
             </span>
           </span>
         </button>

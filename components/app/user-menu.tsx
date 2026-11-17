@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { LogOut, User as UserIcon, ChevronDown } from "lucide-react";
 import {
   Dropdown,
@@ -13,6 +14,7 @@ import {
 import { Avatar } from "@/components/ui/avatar";
 import { ROLE_LABEL, type Role } from "@/lib/auth/rbac";
 import { logoutAction } from "@/app/(app)/actions";
+import { useT } from "@/lib/i18n/client";
 
 export function UserMenu({
   name,
@@ -27,6 +29,8 @@ export function UserMenu({
   role: Role;
   title?: string | null;
 }) {
+  const t = useT();
+  const router = useRouter();
   return (
     <Dropdown>
       <DropdownTrigger>
@@ -37,7 +41,7 @@ export function UserMenu({
               {name}
             </span>
             <span className="block text-[10px] leading-tight text-ink-muted">
-              {ROLE_LABEL[role]}
+              {t(ROLE_LABEL[role])}
             </span>
           </span>
           <ChevronDown className="hidden size-3.5 text-ink-muted sm:block" />
@@ -49,9 +53,9 @@ export function UserMenu({
           <p className="px-2.5 pb-1 text-[11px] text-ink-secondary">{title}</p>
         )}
         <DropdownSeparator />
-        <DropdownItem>
+        <DropdownItem onSelect={() => router.push("/akun")}>
           <UserIcon />
-          Profil saya
+          {t("Profil saya")}
         </DropdownItem>
         <DropdownSeparator />
         <form action={logoutAction}>
@@ -60,7 +64,7 @@ export function UserMenu({
             className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-danger transition-colors hover:bg-danger/10 [&_svg]:size-3.5"
           >
             <LogOut />
-            Keluar
+            {t("Keluar")}
           </button>
         </form>
       </DropdownContent>

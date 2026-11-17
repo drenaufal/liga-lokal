@@ -5,4 +5,9 @@ export const BRAND = {
   url: "https://www.liga-lokal.id",
   tagline: "Unified Football Intelligence Platform",
   owner: "PT DVONES Indonesia",
+  /** Website logo (white lettering — use on dark surfaces, see components/brand/logo.tsx). */
+  logo: "/logo-font-putih.png",
+  logoSize: { width: 842, height: 595 },
+  /** Browser / install colours, mirroring the tokens in app/globals.css. */
+  colors: { base: "#f2f0ec", night: "#151515", brand: "#e4222d" },
 } as const;

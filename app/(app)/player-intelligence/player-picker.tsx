@@ -1,12 +1,11 @@
 "use client";
 
-import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Search } from "lucide-react";
+import { Crown } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { POSITION } from "@/lib/status";
-import { LINE_LABEL, type PositionLine } from "@/lib/positions";
+import { positionText } from "@/lib/positions";
+import { useT } from "@/lib/i18n/client";
 
 type P = {
   id: string;
@@ -20,99 +19,82 @@ type P = {
   score: number;
 };
 
+/** Gold, silver and bronze for ranks 1–3. */
+const CROWNS = [
+  { fill: "#ffc93c", stroke: "#a06a00" },
+  { fill: "#d6dae1", stroke: "#646b78" },
+  { fill: "#f0a46a", stroke: "#94491a" },
+] as const;
+
 export function PlayerPicker({
   players,
   selectedId,
   paramName = "player",
+  rankOffset,
 }: {
   players: P[];
   selectedId?: string;
   paramName?: string;
+  /**
+   * Set when the list is ranked by score: the number of players ranked before the first one shown
+   * (the page offset). The top three get a crown.
+   */
+  rankOffset?: number;
 }) {
+  const t = useT();
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const [q, setQ] = React.useState(params.get("q") ?? "");
-
-  React.useEffect(() => {
-    const t = setTimeout(() => {
-      const next = new URLSearchParams(params.toString());
-      if (q) next.set("q", q);
-      else next.delete("q");
-      if ((params.get("q") ?? "") !== q) router.push(`${pathname}?${next.toString()}`);
-    }, 300);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
-
   const pick = (id: string) => {
     const next = new URLSearchParams(params.toString());
     next.set(paramName, id);
     router.push(`${pathname}?${next.toString()}`);
   };
 
-  const filters: PositionLine[] = ["GK", "DF", "MF", "FW"];
-  const activePos = params.get("position");
-
   return (
     <div>
-      <div className="border-b border-line-soft p-3">
-        <div className="relative mb-2">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-muted" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Cari nama pemain…"
-            className="h-8 w-full rounded-lg border border-line bg-base/60 pl-8 pr-2 text-xs text-ink outline-none focus:border-brand/50"
-          />
-        </div>
-        <div className="flex gap-1">
-          {filters.map((f) => (
-            <button
-              key={f}
-              onClick={() => {
-                const next = new URLSearchParams(params.toString());
-                activePos === f ? next.delete("position") : next.set("position", f);
-                router.push(`${pathname}?${next.toString()}`);
-              }}
-              className={cn(
-                "flex-1 rounded-md border px-1 py-1 text-[10px] font-medium transition-colors",
-                activePos === f
-                  ? "border-brand/50 bg-brand/10 text-ink"
-                  : "border-line text-ink-muted",
-              )}
-            >
-              {LINE_LABEL[f]}
-            </button>
-          ))}
-        </div>
-      </div>
       <ul className="max-h-[260px] overflow-y-auto p-1.5 lg:max-h-[480px]">
-        {players.map((p) => (
-          <li key={p.id}>
-            <button
-              onClick={() => pick(p.id)}
-              className={cn(
-                "flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors",
-                p.id === selectedId ? "bg-brand/10" : "hover:bg-surface-2",
-              )}
-            >
-              <Avatar src={p.photoUrl} name={p.name} size={28} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-xs font-medium text-ink">{p.name}</span>
-                <span className="block truncate text-[10px] text-ink-muted">
-                  {p.club} · {POSITION[p.position].label} · {p.ageCode}
+        {players.map((p, i) => {
+          const rank = rankOffset === undefined ? null : rankOffset + i + 1;
+          const crown = rank !== null && rank <= CROWNS.length ? CROWNS[rank - 1] : null;
+          return (
+            <li key={p.id}>
+              <button
+                onClick={() => pick(p.id)}
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors",
+                  p.id === selectedId ? "bg-brand/10" : "hover:bg-surface-2",
+                )}
+              >
+                <span className="relative shrink-0 pt-1">
+                  <Avatar src={p.photoUrl} name={p.name} size={28} />
+                  {crown && (
+                    <span
+                      role="img"
+                      title={t("Peringkat {n}", { n: rank! })}
+                      aria-label={t("Peringkat {n}", { n: rank! })}
+                      className="absolute -left-1.5 -top-1 grid -rotate-[18deg] place-items-center drop-shadow-sm"
+                    >
+                      <Crown className="size-4" fill={crown.fill} stroke={crown.stroke} strokeWidth={1.75} aria-hidden />
+                    </span>
+                  )}
                 </span>
-              </span>
-              <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">
-                {Math.round(p.score)}
-              </span>
-            </button>
-          </li>
-        ))}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-medium text-ink">{p.name}</span>
+                  <span className="block truncate text-[10px] text-ink-muted">
+                    {p.club} · {positionText(p.position, t)} · {p.ageCode}
+                  </span>
+                </span>
+                <span className={cn("shrink-0 text-[10px] tabular-nums", crown ? "font-semibold text-ink" : "text-ink-muted")}>
+                  {Math.round(p.score)}
+                </span>
+              </button>
+            </li>
+          );
+        })}
         {players.length === 0 && (
           <li className="px-3 py-6 text-center text-xs text-ink-muted">
-            Tidak ada pemain yang cocok.
+            {t("Tidak ada pemain yang cocok.")}
           </li>
         )}
       </ul>

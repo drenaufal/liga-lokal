@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { IMAGE_TYPES, MAX_UPLOAD_BYTES, formatBytes } from "@/lib/media";
 import { shrinkImage, uploadMedia } from "@/lib/upload-client";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * Image field: uploads to `/api/media` (stored in the database, no external
@@ -17,7 +18,7 @@ import { cn } from "@/lib/utils";
 export function ImageUpload({
   name,
   defaultValue,
-  label = "Foto",
+  label,
   displayName,
   shape = "circle",
   fit = "cover",
@@ -32,6 +33,7 @@ export function ImageUpload({
   fit?: "cover" | "contain";
   hint?: string;
 }) {
+  const t = useT();
   const [url, setUrl] = React.useState(defaultValue ?? "");
   const [mode, setMode] = React.useState<"upload" | "url">("upload");
   const [busy, setBusy] = React.useState(false);
@@ -43,18 +45,18 @@ export function ImageUpload({
     if (!picked) return;
     setError(null);
     if (!IMAGE_TYPES.includes(picked.type)) {
-      setError("Format harus JPG, PNG, WEBP, atau GIF.");
+      setError(t("Format harus JPG, PNG, WEBP, atau GIF."));
       return;
     }
     setBusy(true);
     try {
       const file = await shrinkImage(picked, { maxSide: fit === "contain" ? 512 : 1024 });
-      if (file.size > MAX_UPLOAD_BYTES) throw new Error(`Ukuran maksimal ${formatBytes(MAX_UPLOAD_BYTES)}.`);
-      const res = await uploadMedia(file, "image");
+      if (file.size > MAX_UPLOAD_BYTES) throw new Error(t("Ukuran maksimal {size}.", { size: formatBytes(MAX_UPLOAD_BYTES) }));
+      const res = await uploadMedia(file, "image", t("Gagal mengunggah berkas."));
       setUrl(res.url);
       setMode("upload");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Gagal mengunggah gambar.");
+      setError(e instanceof Error ? e.message : t("Gagal mengunggah gambar."));
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -63,7 +65,7 @@ export function ImageUpload({
 
   return (
     <div>
-      <span className="mb-1.5 block text-xs font-medium text-ink-secondary">{label}</span>
+      <span className="mb-1.5 block text-xs font-medium text-ink-secondary">{label ?? t("Foto")}</span>
       <div
         className={cn(
           "flex items-center gap-3 rounded-xl border border-dashed p-3 transition-colors",
@@ -117,26 +119,26 @@ export function ImageUpload({
                 onClick={() => inputRef.current?.click()}
               >
                 {url ? <Upload className="size-3.5" /> : <ImagePlus className="size-3.5" />}
-                {url ? "Ganti gambar" : "Unggah gambar"}
+                {url ? t("Ganti gambar") : t("Unggah gambar")}
               </Button>
-              <span className="text-[11px] text-ink-muted">atau seret berkas ke sini</span>
+              <span className="text-[11px] text-ink-muted">{t("atau seret berkas ke sini")}</span>
             </div>
           ) : (
             <Input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://… (URL gambar)"
+              placeholder={t("https://… (URL gambar)")}
             />
           )}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-muted">
-            <span>{hint ?? `JPG, PNG, WEBP · maks ${formatBytes(MAX_UPLOAD_BYTES)} · diperkecil otomatis`}</span>
+            <span>{hint ?? t("JPG, PNG, WEBP · maks {size} · diperkecil otomatis", { size: formatBytes(MAX_UPLOAD_BYTES) })}</span>
             <button
               type="button"
               onClick={() => setMode((m) => (m === "upload" ? "url" : "upload"))}
               className="inline-flex items-center gap-1 hover:text-ink"
             >
               <Link2 className="size-3" />
-              {mode === "upload" ? "Pakai URL" : "Unggah berkas"}
+              {mode === "upload" ? t("Pakai URL") : t("Unggah berkas")}
             </button>
             {url && (
               <button
@@ -144,7 +146,7 @@ export function ImageUpload({
                 onClick={() => setUrl("")}
                 className="inline-flex items-center gap-1 hover:text-danger"
               >
-                <X className="size-3" /> Hapus
+                <X className="size-3" /> {t("Hapus")}
               </button>
             )}
           </div>

@@ -48,12 +48,12 @@ export async function shrinkImage(
   return new File([blob], `${base}.${ext}`, { type: blob.type });
 }
 
-export async function uploadMedia(file: File, kind: MediaKind): Promise<UploadedMedia> {
+export async function uploadMedia(file: File, kind: MediaKind, fallbackError: string): Promise<UploadedMedia> {
   const body = new FormData();
   body.set("file", file);
   body.set("kind", kind);
   const res = await fetch("/api/media", { method: "POST", body });
   const data = (await res.json().catch(() => ({}))) as Partial<UploadedMedia> & { error?: string };
-  if (!res.ok || !data.url) throw new Error(data.error ?? "Gagal mengunggah berkas.");
+  if (!res.ok || !data.url) throw new Error(data.error ?? fallbackError);
   return data as UploadedMedia;
 }

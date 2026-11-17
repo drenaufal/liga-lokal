@@ -7,16 +7,12 @@ import { createClub, updateClub } from "./actions";
 import type { FormState } from "@/lib/form";
 import type { Club } from "@/lib/db/schema";
 import { Button } from "@/components/ui/button";
-import { Input, Select, Field } from "@/components/ui/input";
+import { Input, Select, Field, Textarea } from "@/components/ui/input";
 import { ImageUpload } from "@/components/app/image-upload";
+import { useT } from "@/lib/i18n/client";
 
-export function ClubForm({
-  venues,
-  club,
-}: {
-  venues: { id: string; name: string; city: string }[];
-  club?: Club;
-}) {
+export function ClubForm({ club }: { club?: Club }) {
+  const t = useT();
   const action = club ? updateClub.bind(null, club.id) : createClub;
   const [state, formAction, pending] = useActionState<FormState, FormData>(action, undefined);
   const fe = state?.fieldErrors ?? {};
@@ -29,23 +25,23 @@ export function ClubForm({
 
   return (
     <form action={formAction} className="space-y-6">
-      <Section title="Identitas">
+      <Section title={t("Identitas")}>
         <div className="sm:col-span-2">
           <ImageUpload
             name="logoUrl"
-            label="Logo tim"
-            displayName={club?.shortName ?? "Klub"}
+            label={t("Logo SSB")}
+            displayName={club?.shortName ?? "SSB"}
             shape="square"
             fit="contain"
             defaultValue={club?.logoUrl}
-            hint="PNG transparan paling rapi · JPG/WEBP juga bisa · maks 5 MB"
+            hint={t("PNG transparan paling rapi · JPG/WEBP juga bisa · maks 5 MB")}
           />
           {fe.logoUrl && <p className="mt-1 text-[11px] text-danger">{fe.logoUrl}</p>}
         </div>
-        <Field label="Nama klub / akademi" error={fe.name} className="sm:col-span-2">
-          <Input name="name" required defaultValue={val("name")} placeholder="mis. Garuda Muda Football Academy" />
+        <Field label={t("Nama SSB")} error={fe.name} className="sm:col-span-2">
+          <Input name="name" required defaultValue={val("name")} placeholder={t("mis. SSB Garuda Muda")} />
         </Field>
-        <Field label="Singkatan" error={fe.shortName} hint="2–8 karakter, tampil di papan skor">
+        <Field label={t("Singkatan")} error={fe.shortName} hint={t("2–8 karakter, tampil di papan skor")}>
           <Input
             name="shortName"
             required
@@ -55,53 +51,53 @@ export function ClubForm({
             className="font-mono uppercase"
           />
         </Field>
-        <Field label="Jenis" error={fe.type}>
+        <Field label={t("Jenis")} error={fe.type}>
           <Select name="type" defaultValue={val("type", "club")}>
-            <option value="club">Klub</option>
-            <option value="academy">Akademi / SSB</option>
+            <option value="club">{t("Klub")}</option>
+            <option value="academy">{t("Akademi / SSB")}</option>
           </Select>
         </Field>
-        <Field label="Tahun berdiri" error={fe.foundedYear}>
+        <Field label={t("Tahun berdiri")} error={fe.foundedYear}>
           <Input name="foundedYear" type="number" min={1900} max={new Date().getFullYear()} defaultValue={val("foundedYear")} />
         </Field>
-        <Field label="Akreditasi" error={fe.accreditation}>
-          <Input name="accreditation" defaultValue={val("accreditation")} placeholder="mis. Terakreditasi A" />
+      </Section>
+
+      <Section title={t("Afiliasi PSSI")}>
+        <Field label="Askot" error={fe.askot} hint={t("Asosiasi Kota tempat SSB bernaung — isian bebas")}>
+          <Input name="askot" defaultValue={val("askot")} placeholder={t("mis. Askot PSSI Depok")} />
+        </Field>
+        <Field label="Asprov" error={fe.asprov} hint={t("Asosiasi Provinsi — isian bebas")}>
+          <Input name="asprov" defaultValue={val("asprov")} placeholder={t("mis. Asprov PSSI Jawa Barat")} />
         </Field>
       </Section>
 
-      <Section title="Warna tim">
-        <ColorField label="Warna utama" name="primaryColor" defaultValue={val("primaryColor", "#e4222d")} error={fe.primaryColor} />
-        <ColorField label="Warna kedua" name="secondaryColor" defaultValue={val("secondaryColor", "#151515")} error={fe.secondaryColor} />
-      </Section>
-
-      <Section title="Lokasi">
-        <Field label="Kota" error={fe.city}>
-          <Input name="city" required defaultValue={val("city")} placeholder="mis. Depok" />
+      <Section title={t("Lokasi")}>
+        <Field label={t("Alamat SSB")} error={fe.address} className="sm:col-span-2">
+          <Textarea
+            name="address"
+            rows={3}
+            maxLength={500}
+            defaultValue={val("address")}
+            placeholder={t("Jalan, nomor, kelurahan, kecamatan, kode pos")}
+          />
         </Field>
-        <Field label="Provinsi" error={fe.province}>
-          <Input name="province" defaultValue={val("province")} placeholder="mis. Jawa Barat" />
+        <Field label={t("Kota")} error={fe.city}>
+          <Input name="city" required defaultValue={val("city")} placeholder={t("mis. Depok")} />
         </Field>
-        <Field label="Venue kandang" error={fe.homeVenueId} className="sm:col-span-2">
-          <Select name="homeVenueId" defaultValue={val("homeVenueId")}>
-            <option value="">Belum ditentukan</option>
-            {venues.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name} — {v.city}
-              </option>
-            ))}
-          </Select>
+        <Field label={t("Provinsi")} error={fe.province}>
+          <Input name="province" defaultValue={val("province")} placeholder={t("mis. Jawa Barat")} />
         </Field>
       </Section>
 
-      <Section title="Kontak sekretariat">
-        <Field label="Nama kontak" error={fe.contactName}>
+      <Section title={t("Kontak sekretariat")}>
+        <Field label={t("Nama kontak")} error={fe.contactName}>
           <Input name="contactName" defaultValue={val("contactName")} />
         </Field>
-        <Field label="Telepon" error={fe.contactPhone}>
+        <Field label={t("Telepon")} error={fe.contactPhone}>
           <Input name="contactPhone" defaultValue={val("contactPhone")} placeholder="08xx" />
         </Field>
         <Field label="Email" error={fe.contactEmail} className="sm:col-span-2">
-          <Input name="contactEmail" type="email" defaultValue={val("contactEmail")} placeholder="sekretariat@klub.or.id" />
+          <Input name="contactEmail" type="email" defaultValue={val("contactEmail")} placeholder="sekretariat@ssb.or.id" />
         </Field>
       </Section>
 
@@ -114,49 +110,15 @@ export function ClubForm({
       <div className="flex gap-2">
         <Button type="submit" disabled={pending}>
           {pending ? <Loader2 className="animate-spin" /> : club ? <Save /> : <Plus />}
-          {club ? "Simpan perubahan" : "Daftarkan klub"}
+          {club ? t("Simpan perubahan") : t("Daftarkan SSB")}
         </Button>
         {club && (
           <Button variant="ghost" href={`/registry/klub/${club.id}`}>
-            Batal
+            {t("Batal")}
           </Button>
         )}
       </div>
     </form>
-  );
-}
-
-function ColorField({
-  label,
-  name,
-  defaultValue,
-  error,
-}: {
-  label: string;
-  name: string;
-  defaultValue: string;
-  error?: string;
-}) {
-  const [color, setColor] = React.useState(defaultValue);
-  return (
-    <Field label={label} error={error}>
-      <div className="flex items-center gap-2">
-        <input
-          type="color"
-          value={color}
-          onChange={(e) => setColor(e.target.value)}
-          className="h-9 w-12 cursor-pointer rounded-lg border border-line bg-base/60 p-1"
-          aria-label={label}
-        />
-        <Input
-          name={name}
-          value={color}
-          onChange={(e) => setColor(e.target.value)}
-          maxLength={7}
-          className="font-mono uppercase"
-        />
-      </div>
-    </Field>
   );
 }
 

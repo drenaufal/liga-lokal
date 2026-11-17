@@ -3,6 +3,7 @@
 import * as React from "react";
 import { CheckCircle2, AlertTriangle, Info, XCircle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/client";
 
 type ToastTone = "success" | "error" | "warn" | "info";
 type ToastAction = { label: string; onClick: () => void | Promise<void> };
@@ -50,6 +51,7 @@ const icons = {
 };
 
 export function Toaster() {
+  const tr = useT();
   const [toasts, setToasts] = React.useState<Toast[]>([]);
 
   React.useEffect(() => {
@@ -96,7 +98,7 @@ export function Toaster() {
           )}
           <button
             onClick={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}
-            aria-label="Tutup notifikasi"
+            aria-label={tr("Tutup notifikasi")}
             className="text-night-muted transition-colors hover:text-white"
           >
             <X className="size-3.5" />

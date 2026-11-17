@@ -4,24 +4,27 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Radar, GitCompareArrows, Gauge, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/client";
+import { msg } from "@/lib/i18n/translate";
 
 const TABS = [
-  { href: "/player-intelligence", label: "Radar Performa", icon: Radar },
-  { href: "/player-intelligence/banding", label: "Perbandingan Pemain", icon: GitCompareArrows },
-  { href: "/player-intelligence/formula", label: "Formula Penilaian", icon: Gauge },
-  { href: "/player-intelligence/badge", label: "Galeri Lencana", icon: Award },
+  { href: "/player-intelligence", label: msg("Radar Performa"), icon: Radar },
+  { href: "/player-intelligence/banding", label: msg("Perbandingan Pemain"), icon: GitCompareArrows },
+  { href: "/player-intelligence/formula", label: msg("Formula Penilaian"), icon: Gauge },
+  { href: "/player-intelligence/badge", label: msg("Galeri Lencana"), icon: Award },
 ];
 
-export function PiTabs() {
+export function PiTabs({ allowed }: { allowed: string[] }) {
+  const t = useT();
   const pathname = usePathname();
   return (
     <div className="flex items-center gap-1 overflow-x-auto border-b border-line">
-      {TABS.map((t) => {
-        const active = pathname === t.href;
+      {TABS.filter((tab) => allowed.includes(tab.href)).map((tab) => {
+        const active = pathname === tab.href;
         return (
           <Link
-            key={t.href}
-            href={t.href}
+            key={tab.href}
+            href={tab.href}
             className={cn(
               "flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-[13px] font-medium transition-colors",
               active
@@ -29,8 +32,8 @@ export function PiTabs() {
                 : "border-transparent text-ink-muted hover:text-ink-secondary",
             )}
           >
-            <t.icon className="size-3.5" />
-            {t.label}
+            <tab.icon className="size-3.5" />
+            {t(tab.label)}
           </Link>
         );
       })}

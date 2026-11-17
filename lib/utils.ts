@@ -5,53 +5,8 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/* ── Formatting helpers (id-ID locale) ─────────────────────────────── */
-
-/**
- * Every date is shown in WIB regardless of where the code runs. Without this a
- * server in UTC (Hostinger) would render kick-off times 7 hours early, and the
- * browser could disagree with the server on hydration.
- */
-export const APP_TIME_ZONE = "Asia/Jakarta";
-
-export function formatDate(
-  date: Date | string | number,
-  opts: Intl.DateTimeFormatOptions = { dateStyle: "medium" },
-) {
-  return new Intl.DateTimeFormat("id-ID", { timeZone: APP_TIME_ZONE, ...opts }).format(new Date(date));
-}
-
-export function formatDateTime(date: Date | string | number) {
-  return new Intl.DateTimeFormat("id-ID", {
-    timeZone: APP_TIME_ZONE,
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(date));
-}
-
-export function formatTime(date: Date | string | number) {
-  return new Intl.DateTimeFormat("id-ID", {
-    timeZone: APP_TIME_ZONE,
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(date));
-}
-
-export function formatNumber(n: number, opts?: Intl.NumberFormatOptions) {
-  return new Intl.NumberFormat("id-ID", opts).format(n);
-}
-
-export function formatRupiah(n: number) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(n);
-}
-
-export function formatPercent(n: number, digits = 0) {
-  return `${(n * 100).toFixed(digits)}%`;
-}
+/* Dates, numbers and relative times are formatted per language by `fmt` (lib/i18n/format.ts). */
+export { APP_TIME_ZONE } from "@/lib/i18n/format";
 
 export function initials(name: string) {
   return name
@@ -60,27 +15,6 @@ export function initials(name: string) {
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase() ?? "")
     .join("");
-}
-
-export function relativeTime(date: Date | string | number) {
-  const d = new Date(date).getTime();
-  const diff = d - Date.now();
-  const abs = Math.abs(diff);
-  const rtf = new Intl.RelativeTimeFormat("id-ID", { numeric: "auto" });
-  const units: [Intl.RelativeTimeFormatUnit, number][] = [
-    ["year", 31536000000],
-    ["month", 2592000000],
-    ["day", 86400000],
-    ["hour", 3600000],
-    ["minute", 60000],
-    ["second", 1000],
-  ];
-  for (const [unit, ms] of units) {
-    if (abs >= ms || unit === "second") {
-      return rtf.format(Math.round(diff / ms), unit);
-    }
-  }
-  return "";
 }
 
 export function slugify(text: string) {

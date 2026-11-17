@@ -1,3 +1,5 @@
+import { msg } from "@/lib/i18n/translate";
+
 export type ScoutFilters = {
   position?: "GK" | "DF" | "MF" | "FW";
   ageCode?: string;
@@ -33,30 +35,30 @@ export function parseScoutQuery(q: string): ScoutFilters {
     f.ageCode = `KU-${n}`;
   }
 
-  if (/gol|mencetak|tajam|haus gol|klinis|finishing/i.test(text)) {
+  if (/gol|goal(?!keeper|ie)|scor|mencetak|tajam|haus gol|klinis|clinical|finishing/i.test(text)) {
     f.emphasis.push("attack");
     f.minGoals = 1;
   }
-  if (/assist|umpan|kreat|visi|playmak|kreator|distribusi/i.test(text)) {
+  if (/assist|umpan|pass|kreat|creat|visi|vision|playmak|kreator|distribusi/i.test(text)) {
     f.emphasis.push("creation");
     f.minAssists = 1;
   }
-  if (/bertahan|tekel|intersep|duel|solid|antisipasi|disiplin posisi/i.test(text)) {
+  if (/bertahan|defend|tekel|tackle|intersep|intercept|duel|solid|antisipasi|disiplin posisi|positioning/i.test(text)) {
     f.emphasis.push("defending");
   }
-  if (/penyelamatan|refleks|clean sheet|nirbobol|sapuan/i.test(text)) {
+  if (/penyelamatan|save|refleks|reflex|clean sheet|nirbobol|sapuan/i.test(text)) {
     f.emphasis.push("keeping");
     f.minSaves = 3;
   }
-  if (/energi|stamina|kerja keras|pressing|work.?rate|agresif|ngotot/i.test(text)) {
+  if (/energi|energy|stamina|kerja keras|hard.?work|pressing|work.?rate|agresif|aggressive|ngotot|relentless/i.test(text)) {
     f.emphasis.push("workrate");
   }
-  if (/fair play|tanpa kartu|disiplin|tenang/i.test(text)) {
+  if (/fair play|tanpa kartu|no cards|disiplin|disciplin|tenang|calm/i.test(text)) {
     f.emphasis.push("discipline");
   }
 
   // extract adjective keywords
-  const kws = text.match(/\b(cepat|lincah|kuat|tinggi|tenang|agresif|klinis|visioner|pekerja keras|konsisten)\b/gi);
+  const kws = text.match(/\b(cepat|fast|lincah|agile|kuat|strong|tinggi|tall|tenang|calm|agresif|aggressive|klinis|clinical|visioner|visionary|pekerja keras|hard.?working|konsisten|consistent)\b/gi);
   if (kws) f.keywords = [...new Set(kws.map((k) => k.toLowerCase()))];
 
   if (f.emphasis.length === 0 && f.position === "FW") f.emphasis.push("attack");
@@ -66,11 +68,12 @@ export function parseScoutQuery(q: string): ScoutFilters {
   return f;
 }
 
+/** Message ids; render with `t.dyn(EMPHASIS_LABEL[e])`. */
 export const EMPHASIS_LABEL: Record<string, string> = {
-  attack: "Produktivitas gol",
-  creation: "Kreativitas & assist",
-  defending: "Kontribusi bertahan",
-  keeping: "Penjagaan gawang",
-  discipline: "Disiplin",
-  workrate: "Intensitas kerja",
+  attack: msg("Produktivitas gol"),
+  creation: msg("Kreativitas & assist"),
+  defending: msg("Kontribusi bertahan"),
+  keeping: msg("Penjagaan gawang"),
+  discipline: msg("Disiplin"),
+  workrate: msg("Intensitas kerja"),
 };

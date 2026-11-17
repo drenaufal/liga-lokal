@@ -16,7 +16,7 @@ import {
   type ImportStage,
 } from "@/lib/db/schema";
 import { actionUser } from "@/lib/auth/session";
-import { recordAudit } from "@/lib/audit";
+import { auditText, recordAudit } from "@/lib/audit";
 import {
   ENTITY_SCHEMAS,
   STAGE_DEFS,
@@ -27,6 +27,8 @@ import {
 import { insertReturning } from "@/lib/db/returning";
 import type { PlayerPosition } from "@/lib/positions";
 import { nextRegistrationNumbers } from "@/lib/registration";
+import { getT } from "@/lib/i18n/server";
+import { msg } from "@/lib/i18n/translate";
 
 function rev(id?: string) {
   revalidatePath("/ingestion");
@@ -34,15 +36,16 @@ function rev(id?: string) {
 }
 
 export async function uploadCsv(formData: FormData) {
-  const user = await actionUser("ingestion:write");
+  const t = await getT();
+  const user = await actionUser("ingestion:upload");
   const entity = String(formData.get("entity"));
   const file = formData.get("file") as File | null;
-  if (!file || !ENTITY_SCHEMAS[entity]) throw new Error("Berkas atau jenis entitas tidak valid");
+  if (!file || !ENTITY_SCHEMAS[entity]) throw new Error(t("Berkas atau jenis entitas tidak valid"));
 
   const text = await file.text();
   const { headers, rows } = parseCsv(text);
-  if (rows.length === 0) throw new Error("Berkas CSV kosong atau tidak terbaca");
-  if (rows.length > 2000) throw new Error("Maksimal 2000 baris per unggahan");
+  if (rows.length === 0) throw new Error(t("Berkas CSV kosong atau tidak terbaca"));
+  if (rows.length > 2000) throw new Error(t("Maksimal 2000 baris per unggahan"));
 
   const schema = ENTITY_SCHEMAS[entity];
   const stages = freshStages();
@@ -74,7 +77,7 @@ export async function uploadCsv(formData: FormData) {
     action: "import.upload",
     entityType: "import_batch",
     entityId: batch.id,
-    summary: `Unggah CSV "${file.name}" — ${rows.length} baris (${entity})`,
+    summary: auditText('Unggah CSV "{file}" — {n} baris ({entity})', { file: file.name, n: rows.length, entity }),
   });
 
   void missingCols;
@@ -83,12 +86,13 @@ export async function uploadCsv(formData: FormData) {
 }
 
 export async function runPipeline(formData: FormData) {
-  const user = await actionUser("ingestion:write");
+  const t = await getT();
+  const user = await actionUser("ingestion:review");
   const batchId = String(formData.get("batchId"));
   const batch = await db.query.importBatches.findFirst({
     where: eq(importBatches.id, batchId),
   });
-  if (!batch) throw new Error("Batch tidak ditemukan");
+  if (!batch) throw new Error(t("Batch tidak ditemukan"));
 
   const schema = ENTITY_SCHEMAS[batch.entity];
   const rows = await db.select().from(importRows).where(eq(importRows.batchId, batchId));
@@ -132,15 +136,15 @@ export async function runPipeline(formData: FormData) {
     // cross-reference checks
     if (batch.entity === "players") {
       if (raw.club_short && !existingClubs.some((c) => c.short.toLowerCase() === raw.club_short.toLowerCase()))
-        issues.push({ field: "club_short", code: "crossref", message: `Klub "${raw.club_short}" tidak ditemukan di registry`, severity: "warning" });
+        issues.push({ field: "club_short", code: "crossref", message: msg("Klub \"{club}\" tidak ditemukan di registry"), params: { club: raw.club_short }, severity: "warning" });
       if (raw.age_category && !existingAges.some((a) => a.code.toLowerCase() === raw.age_category.toLowerCase()))
-        issues.push({ field: "age_category", code: "crossref", message: `Kategori usia "${raw.age_category}" tidak dikenali`, severity: "warning" });
+        issues.push({ field: "age_category", code: "crossref", message: msg("Kategori usia \"{age}\" tidak dikenali"), params: { age: raw.age_category }, severity: "warning" });
       if (raw.nisn) {
         const owner = nisnOwner.get(raw.nisn);
         if (owner)
-          issues.push({ field: "nisn", code: "unique", message: `NISN sudah terdaftar atas nama ${owner}`, severity: "error" });
+          issues.push({ field: "nisn", code: "unique", message: msg("NISN sudah terdaftar atas nama {owner}"), params: { owner }, severity: "error" });
         else if (nisnInBatch.has(raw.nisn))
-          issues.push({ field: "nisn", code: "unique", message: `NISN sama dengan baris ${nisnInBatch.get(raw.nisn)}`, severity: "error" });
+          issues.push({ field: "nisn", code: "unique", message: msg("NISN sama dengan baris {row}"), params: { row: nisnInBatch.get(raw.nisn) ?? 0 }, severity: "error" });
         nisnInBatch.set(raw.nisn, row.rowNumber);
       }
     }
@@ -181,7 +185,7 @@ export async function runPipeline(formData: FormData) {
       status = "duplicate";
       dupes++;
       candId = exactExisting?.id ?? null;
-      candName = exactExisting?.name ?? `Baris ${seenInBatch.get(key)} dalam berkas ini`;
+      candName = exactExisting?.name ?? `Baris ${seenInBatch.get(key)} dalam berkas ini`; // shown through candidateLabel()
       candScore = 1;
     } else if (fuzzy) {
       status = "needs_review";
@@ -227,7 +231,8 @@ export async function runPipeline(formData: FormData) {
         label: s.label,
         status: review > 0 ? "running" : "passed",
         count: review,
-        detail: review > 0 ? `${review} baris menunggu keputusan` : "Tidak ada baris yang perlu ditinjau",
+        detail: review > 0 ? msg("{n} baris menunggu keputusan") : msg("Tidak ada baris yang perlu ditinjau"),
+        params: review > 0 ? { n: review } : undefined,
       };
     return {
       key: s.key,
@@ -256,7 +261,7 @@ export async function runPipeline(formData: FormData) {
     action: "import.validate",
     entityType: "import_batch",
     entityId: batchId,
-    summary: `Pipeline QA dijalankan — ${valid} valid, ${review} perlu tinjauan, ${dupes} duplikat, ${errors} galat`,
+    summary: auditText("Pipeline QA dijalankan — {valid} valid, {review} perlu tinjauan, {dupes} duplikat, {errors} galat", { valid, review, dupes, errors }),
   });
 
   rev(batchId);
@@ -264,7 +269,7 @@ export async function runPipeline(formData: FormData) {
 }
 
 export async function resolveRow(formData: FormData) {
-  const user = await actionUser("ingestion:write");
+  const user = await actionUser("ingestion:review");
   const rowId = String(formData.get("rowId"));
   const batchId = String(formData.get("batchId"));
   const resolution = String(formData.get("resolution")); // approve | reject | merge
@@ -299,7 +304,7 @@ export async function resolveRow(formData: FormData) {
 }
 
 export async function bulkResolve(formData: FormData) {
-  const user = await actionUser("ingestion:write");
+  const user = await actionUser("ingestion:review");
   const batchId = String(formData.get("batchId"));
   const resolution = String(formData.get("resolution"));
 
@@ -323,12 +328,13 @@ export async function bulkResolve(formData: FormData) {
 }
 
 export async function commitBatch(formData: FormData) {
-  const user = await actionUser("ingestion:write");
+  const t = await getT();
+  const user = await actionUser("ingestion:commit");
   const batchId = String(formData.get("batchId"));
   const batch = await db.query.importBatches.findFirst({
     where: eq(importBatches.id, batchId),
   });
-  if (!batch) throw new Error("Batch tidak ditemukan");
+  if (!batch) throw new Error(t("Batch tidak ditemukan"));
 
   const toImport = await db
     .select()
@@ -382,6 +388,9 @@ export async function commitBatch(formData: FormData) {
             slug: String(n.name).toLowerCase().replace(/[^\w]+/g, "-") + "-" + Date.now().toString(36),
             city: String(n.city),
             province: (n.province as string) || null,
+            address: (n.address as string) || null,
+            askot: (n.askot as string) || null,
+            asprov: (n.asprov as string) || null,
             type: (n.type as "club" | "academy") || "club",
             foundedYear: (n.foundedYear as number) ?? null,
             contactEmail: (n.contactEmail as string) || null,
@@ -394,6 +403,7 @@ export async function commitBatch(formData: FormData) {
             licenseNumber: String(n.licenseNumber),
             licenseExpiry: String(n.licenseExpiry),
             city: (n.city as string) || null,
+            askot: (n.askot as string) || null,
             phone: (n.phone as string) || null,
             email: (n.email as string) || null,
           });
@@ -415,7 +425,7 @@ export async function commitBatch(formData: FormData) {
         .update(importRows)
         .set({
           status: "error",
-          issues: [{ field: "_commit", code: "db", message: e instanceof Error ? e.message : "Gagal menyimpan", severity: "error" }],
+          issues: [{ field: "_commit", code: "db", message: e instanceof Error ? e.message : t("Gagal menyimpan"), severity: "error" }],
         })
         .where(eq(importRows.id, row.id));
     }
@@ -423,7 +433,7 @@ export async function commitBatch(formData: FormData) {
 
   const stages = (batch.stages as ImportStage[]).map((s) =>
     s.key === "commit"
-      ? { ...s, status: "passed" as const, count: imported, detail: `${imported} entitas dibuat` }
+      ? { ...s, status: "passed" as const, count: imported, detail: msg("{n} entitas dibuat"), params: { n: imported } }
       : s.key === "review"
         ? { ...s, status: "passed" as const }
         : s,
@@ -446,7 +456,7 @@ export async function commitBatch(formData: FormData) {
     action: "import.commit",
     entityType: "import_batch",
     entityId: batchId,
-    summary: `Impor "${batch.fileName}" diselesaikan — ${imported} ${batch.entity} masuk ke sistem`,
+    summary: auditText('Impor "{file}" diselesaikan — {n} {entity} masuk ke sistem', { file: batch.fileName, n: imported, entity: batch.entity }),
   });
 
   rev(batchId);

@@ -8,6 +8,8 @@ import { MAX_CATEGORY_AGE, MIN_CATEGORY_AGE, type CategoryDefaults } from "./sha
 import type { FormState } from "@/lib/form";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Field, Textarea } from "@/components/ui/input";
+import { rich } from "@/lib/i18n/rich";
+import { useT } from "@/lib/i18n/client";
 
 export function CategoryForm({
   categoryId,
@@ -17,39 +19,32 @@ export function CategoryForm({
   categoryId?: string;
   defaults: CategoryDefaults;
 }) {
+  const t = useT();
   const action = categoryId ? updateCategory.bind(null, categoryId) : createCategory;
   const [state, formAction, pending] = useActionState<FormState, FormData>(action, undefined);
   const fe = state?.fieldErrors ?? {};
   const sv = state?.values ?? {};
   const val = (key: keyof CategoryDefaults) => (key in sv ? sv[key] : String(defaults[key]));
 
-  const [minAge, setMinAge] = React.useState(Number(val("minAge")));
   const [maxAge, setMaxAge] = React.useState(Number(val("maxAge")));
   const [half, setHalf] = React.useState(Number(val("halfDuration")));
   const year = new Date().getFullYear();
-  const ageOk = minAge >= MIN_CATEGORY_AGE && maxAge <= MAX_CATEGORY_AGE && maxAge >= minAge;
+  const ageOk = maxAge >= MIN_CATEGORY_AGE && maxAge <= MAX_CATEGORY_AGE;
 
   return (
     <form action={formAction} className="space-y-6">
-      <Section title="Kelompok umur">
-        <Field label="Kode" error={fe.code} hint="Tampil di daftar pemain & kompetisi">
+      <Section title={t("Kelompok umur")}>
+        <Field label={t("Kode")} error={fe.code} hint={t("Tampil di daftar pemain & kompetisi")}>
           <Input name="code" required maxLength={12} defaultValue={val("code")} placeholder="KU-18" className="font-mono uppercase" />
         </Field>
-        <Field label="Nama kategori" error={fe.label}>
+        <Field label={t("Nama kategori")} error={fe.label}>
           <Input name="label" required defaultValue={val("label")} placeholder="Kelompok Umur 18" />
         </Field>
-        <Field label="Usia minimal" error={fe.minAge}>
-          <Input
-            name="minAge"
-            type="number"
-            required
-            min={MIN_CATEGORY_AGE}
-            max={MAX_CATEGORY_AGE}
-            defaultValue={val("minAge")}
-            onChange={(e) => setMinAge(Number(e.target.value))}
-          />
-        </Field>
-        <Field label="Usia maksimal" error={fe.maxAge} hint={`Maksimal ${MAX_CATEGORY_AGE} tahun`}>
+        <Field
+          label={t("Usia maksimal")}
+          error={fe.maxAge}
+          hint={t("{min}–{max} tahun", { min: MIN_CATEGORY_AGE, max: MAX_CATEGORY_AGE })}
+        >
           <Input
             name="maxAge"
             type="number"
@@ -63,17 +58,18 @@ export function CategoryForm({
         <p className="rounded-lg border border-line-soft bg-surface-2/40 px-3 py-2 text-[11px] text-ink-muted sm:col-span-2">
           {ageOk ? (
             <>
-              Pemain kelahiran <strong className="text-ink">{year - maxAge}–{year - minAge}</strong> masuk kategori ini
-              (acuan musim {year}).
+              {rich(t("Pemain kelahiran <b>{year}</b> atau setelahnya (usia ≤ {age} tahun) boleh bermain di kategori ini (acuan musim {season}).", { year: year - maxAge, age: maxAge, season: year }), {
+                b: (c) => <strong className="text-ink">{c}</strong>,
+              })}
             </>
           ) : (
-            <>Rentang usia harus antara {MIN_CATEGORY_AGE} dan {MAX_CATEGORY_AGE} tahun.</>
+            <>{t("Usia maksimal harus antara {min} dan {max} tahun.", { min: MIN_CATEGORY_AGE, max: MAX_CATEGORY_AGE })}</>
           )}
         </p>
       </Section>
 
-      <Section title="Aturan pertandingan">
-        <Field label="Durasi per babak (menit)" error={fe.halfDuration} hint={half > 0 ? `Total ${half * 2} menit (2 babak)` : undefined}>
+      <Section title={t("Aturan pertandingan")}>
+        <Field label={t("Durasi per babak (menit)")} error={fe.halfDuration} hint={half > 0 ? t("Total {n} menit (2 babak)", { n: half * 2 }) : undefined}>
           <Input
             name="halfDuration"
             type="number"
@@ -84,27 +80,27 @@ export function CategoryForm({
             onChange={(e) => setHalf(Number(e.target.value))}
           />
         </Field>
-        <Field label="Pemain di lapangan (per tim)" error={fe.playersOnField}>
+        <Field label={t("Pemain di lapangan (per tim)")} error={fe.playersOnField}>
           <Input name="playersOnField" type="number" required min={4} max={11} defaultValue={val("playersOnField")} />
         </Field>
-        <Field label="Skuad maksimal" error={fe.maxSquad}>
+        <Field label={t("Skuad maksimal")} error={fe.maxSquad}>
           <Input name="maxSquad" type="number" required min={5} max={40} defaultValue={val("maxSquad")} />
         </Field>
-        <Field label="Ukuran bola" error={fe.ballSize}>
+        <Field label={t("Ukuran bola")} error={fe.ballSize}>
           <Select name="ballSize" defaultValue={val("ballSize")}>
             <option value="3">No. 3</option>
             <option value="4">No. 4</option>
             <option value="5">No. 5</option>
           </Select>
         </Field>
-        <Field label="Pergantian pemain" error={fe.substitutions} className="sm:col-span-2">
-          <Input name="substitutions" required defaultValue={val("substitutions")} placeholder="mis. Maksimal 5 pemain (3 kesempatan)" />
+        <Field label={t("Pergantian pemain")} error={fe.substitutions} className="sm:col-span-2">
+          <Input name="substitutions" required defaultValue={val("substitutions")} placeholder={t("mis. Maksimal 5 pemain (3 kesempatan)")} />
         </Field>
-        <Field label="Lapangan" error={fe.fieldType} className="sm:col-span-2">
-          <Input name="fieldType" required defaultValue={val("fieldType")} placeholder="mis. Lapangan penuh" />
+        <Field label={t("Lapangan::jenis")} error={fe.fieldType} className="sm:col-span-2">
+          <Input name="fieldType" required defaultValue={val("fieldType")} placeholder={t("mis. Lapangan penuh")} />
         </Field>
-        <Field label="Catatan aturan khusus" error={fe.notes} hint="Satu aturan per baris" className="sm:col-span-2">
-          <Textarea name="notes" defaultValue={val("notes")} placeholder={"Aturan pertandingan mengikuti Laws of the Game\nKartu akumulatif berlaku"} />
+        <Field label={t("Catatan aturan khusus")} error={fe.notes} hint={t("Satu aturan per baris")} className="sm:col-span-2">
+          <Textarea name="notes" defaultValue={val("notes")} placeholder={t("Aturan pertandingan mengikuti Laws of the Game\nKartu akumulatif berlaku")} />
         </Field>
       </Section>
 
@@ -117,10 +113,10 @@ export function CategoryForm({
       <div className="flex gap-2">
         <Button type="submit" disabled={pending}>
           {pending ? <Loader2 className="animate-spin" /> : categoryId ? <Save /> : <Plus />}
-          {categoryId ? "Simpan perubahan" : "Tambah kategori"}
+          {categoryId ? t("Simpan perubahan") : t("Tambah kategori")}
         </Button>
         <Button variant="ghost" href="/registry/kategori-usia">
-          Batal
+          {t("Batal")}
         </Button>
       </div>
     </form>

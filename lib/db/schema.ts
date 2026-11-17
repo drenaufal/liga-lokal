@@ -1,5 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   char,
   customType,
@@ -51,12 +52,14 @@ const json = customType<{ data: unknown; driverData: string }>({
 /* ═══════════════════════════ Enums ═══════════════════════════════════ */
 
 export const userRole = [
+  "super_admin",
   "admin",
   "operator",
   "referee",
   "coach",
   "scout",
   "viewer",
+  "unit_bisnis",
 ] as const;
 
 export const verificationStatus = [
@@ -67,13 +70,6 @@ export const verificationStatus = [
 ] as const;
 
 export const refereeStatus = [
-  "active",
-  "expiring",
-  "expired",
-  "revoked",
-] as const;
-
-export const coachStatus = [
   "active",
   "expiring",
   "expired",
@@ -94,12 +90,8 @@ export const venueSurface = [
 export const playerPosition = PLAYER_POSITIONS;
 export const preferredFoot = ["left", "right", "both"] as const;
 
-export const tournamentFormat = [
-  "cup",
-  "league",
-  "hybrid",
-  "knockout",
-] as const;
+/** league = round-robin table; cup = single-elimination knockout. */
+export const tournamentFormat = ["league", "cup"] as const;
 export const tournamentStatus = [
   "draft",
   "registration",
@@ -171,6 +163,8 @@ export const matchEventType = [
   "var_check",
   "period",
   "interception",
+  /** A team pass. Never tied to a player; only feeds ball possession and stays off the timeline. */
+  "pass",
 ] as const;
 export const lineupRole = ["starter", "substitute"] as const;
 
@@ -214,12 +208,6 @@ export const aiReportStatus = [
   "cached",
   "failed",
 ] as const;
-export const badgeTier = [
-  "bronze",
-  "silver",
-  "gold",
-  "platinum",
-] as const;
 
 /* ═══════════════════════════ Auth ═══════════════════════════════════ */
 
@@ -236,6 +224,24 @@ export const users = mysqlTable("users", {
   lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").default(NOW).notNull(),
 });
+
+/**
+ * Administrator-edited deviations from the factory role → capability table in
+ * `lib/auth/rbac.ts`. One row per (role, capability) that differs from the
+ * default; `granted` says which way. Absent rows mean "use the default".
+ */
+export const rolePermissions = mysqlTable(
+  "role_permissions",
+  {
+    id: id(),
+    role: mysqlEnum("role", userRole).notNull(),
+    capability: varchar("capability", { length: 48 }).notNull(),
+    granted: boolean("granted").notNull(),
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at").default(NOW).notNull(),
+  },
+  (t) => [uniqueIndex("role_permissions_role_cap_idx").on(t.role, t.capability)],
+);
 
 /* ═══════════════════════ Config / Rules ═════════════════════════════ */
 
@@ -254,28 +260,30 @@ export const ageCategories = mysqlTable("age_categories", {
   id: id(),
   code: varchar("code", { length: 12 }).notNull().unique(), // KU-8 … KU-16
   label: text("label").notNull(),
-  minAge: int("min_age").notNull(),
+  /** A category is defined by its upper age limit; younger players may always play up. */
   maxAge: int("max_age").notNull(),
+  /** Oldest eligible birth year (season year − maxAge): born in or after it = eligible. */
   birthYearFrom: int("birth_year_from"),
-  birthYearTo: int("birth_year_to"),
   rules: json("rules").$type<AgeCategoryRules>().notNull(),
   sortOrder: int("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").default(NOW).notNull(),
 });
 
+/**
+ * One weight per one-tap button on the match page (goal, assist, shot on / off target,
+ * interception, yellow / red card), the keeper's saves, plus playing time. Formulas saved before this shape existed
+ * carry other keys; `normalizeWeights` (lib/scoring.ts) reads them safely.
+ */
 export type FormulaWeights = {
   goal: number;
   assist: number;
-  save: number;
-  tackle: number;
+  shotOn: number;
+  shotOff: number;
   interception: number;
-  cleanSheet: number;
-  keyPass: number;
-  duelWon: number;
+  save: number;
   yellowCard: number;
   redCard: number;
   minutesPer90: number;
-  motm: number;
 };
 
 export const scoringFormulas = mysqlTable("scoring_formulas", {
@@ -309,6 +317,7 @@ export const venues = mysqlTable("venues", {
   createdAt: timestamp("created_at").default(NOW).notNull(),
 });
 
+/** An SSB (sekolah sepak bola) — the "club" of the app. `name` is shown as "Nama SSB". */
 export const clubs = mysqlTable("clubs", {
   id: id(),
   name: text("name").notNull(),
@@ -317,17 +326,17 @@ export const clubs = mysqlTable("clubs", {
   type: mysqlEnum("type", clubType).notNull().default("club"),
   city: text("city").notNull(),
   province: text("province"),
+  /** Street address of the SSB (free text). */
+  address: text("address"),
+  /** Asosiasi Kota PSSI the SSB belongs to (free text). */
+  askot: text("askot"),
+  /** Asosiasi Provinsi PSSI the SSB belongs to (free text). */
+  asprov: text("asprov"),
   foundedYear: int("founded_year"),
   logoUrl: text("logo_url"),
-  primaryColor: varchar("primary_color", { length: 9 }).default("#00e28a"),
-  secondaryColor: varchar("secondary_color", { length: 9 }).default("#0f1620"),
-  homeVenueId: uuid("home_venue_id").references(() => venues.id, {
-    onDelete: "set null",
-  }),
   contactName: text("contact_name"),
   contactEmail: text("contact_email"),
   contactPhone: text("contact_phone"),
-  accreditation: text("accreditation"),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at").default(NOW).notNull(),
 });
@@ -337,6 +346,8 @@ export const referees = mysqlTable("referees", {
   fullName: text("full_name").notNull(),
   dob: date("dob"),
   city: text("city"),
+  /** Asosiasi Kota PSSI the referee comes from (free text). */
+  askot: text("askot"),
   licenseLevel: varchar("license_level", { length: 24 }).notNull(), // C-3, C-2, C-1, Nasional
   licenseNumber: varchar("license_number", { length: 40 }).notNull().unique(),
   licenseIssuedAt: date("license_issued_at"),
@@ -354,23 +365,26 @@ export const coaches = mysqlTable(
   "coaches",
   {
     id: id(),
+    userId: uuid("user_id").unique().references(() => users.id, { onDelete: "set null" }),
     fullName: text("full_name").notNull(),
     dob: date("dob"),
     city: text("city"),
     clubId: uuid("club_id").references(() => clubs.id, { onDelete: "set null" }),
-    licenseLevel: varchar("license_level", { length: 24 }).notNull(), // D Nasional … Pro AFC
-    licenseNumber: varchar("license_number", { length: 40 }).notNull().unique(),
-    licenseIssuedAt: date("license_issued_at"),
-    licenseExpiry: date("license_expiry").notNull(),
-    status: mysqlEnum("status", coachStatus).notNull().default("active"),
+    /** A coach may look after a second SSB — two at most. `clubId` stays the primary one. */
+    secondClubId: uuid("second_club_id").references(() => clubs.id, { onDelete: "set null" }),
+    /** Optional: a coach may be registered without a coaching license. */
+    licenseLevel: varchar("license_level", { length: 24 }), // D Nasional … Pro AFC
+    licenseNumber: varchar("license_number", { length: 40 }).unique(),
+    // Private scans (see lib/coach-documents.ts): URLs of `document` media rows.
+    licenseDocUrl: text("license_doc_url"), // scan sertifikat lisensi kepelatihan
+    ktpUrl: text("ktp_url"), // KTP
     photoUrl: text("photo_url"),
     phone: text("phone"),
     email: text("email"),
-    experienceYears: int("experience_years").notNull().default(0),
     specialty: text("specialty"), // pelatih kepala / asisten / kiper / fisik
     createdAt: timestamp("created_at").default(NOW).notNull(),
   },
-  (t) => [index("coaches_club_idx").on(t.clubId)],
+  (t) => [index("coaches_club_idx").on(t.clubId), index("coaches_second_club_idx").on(t.secondClubId)],
 );
 
 export const players = mysqlTable(
@@ -487,7 +501,6 @@ export const badges = mysqlTable("badges", {
   name: text("name").notNull(),
   description: text("description").notNull(),
   icon: varchar("icon", { length: 40 }).notNull().default("award"),
-  tier: mysqlEnum("tier", badgeTier).notNull().default("bronze"),
 });
 
 export const playerBadges = mysqlTable(
@@ -520,39 +533,71 @@ export type Tiebreaker =
   | "fairPlay"
   | "drawLots";
 
-export const tournaments = mysqlTable("tournaments", {
+/**
+ * Turnamen — the umbrella event. It carries only what is the same for every
+ * age group: name, season, description and organizer. Each age group (KU)
+ * that plays in it is one row of `tournaments` below.
+ */
+export const competitions = mysqlTable("competitions", {
   id: id(),
   name: text("name").notNull(),
   slug: varchar("slug", { length: 255 }).notNull().unique(),
   season: varchar("season", { length: 16 }).notNull(),
-  format: mysqlEnum("format", tournamentFormat).notNull(),
-  status: mysqlEnum("status", tournamentStatus).notNull().default("draft"),
-  ageCategoryId: uuid("age_category_id").references(() => ageCategories.id, {
-    onDelete: "set null",
-  }),
-  scoringFormulaId: uuid("scoring_formula_id").references(
-    () => scoringFormulas.id,
-    { onDelete: "set null" },
-  ),
   description: text("description"),
-  logoUrl: text("logo_url"),
-  host: text("host"),
-  city: text("city"),
-  startDate: date("start_date"),
-  endDate: date("end_date"),
-  groupCount: int("group_count").notNull().default(0),
-  teamsPerGroup: int("teams_per_group").notNull().default(0),
-  advancePerGroup: int("advance_per_group").notNull().default(2),
-  doubleRound: boolean("double_round").notNull().default(false),
-  knockoutLegs: int("knockout_legs").notNull().default(1),
-  pointsWin: int("points_win").notNull().default(3),
-  pointsDraw: int("points_draw").notNull().default(1),
-  pointsLoss: int("points_loss").notNull().default(0),
-  tiebreakers: json("tiebreakers").$type<Tiebreaker[]>().notNull(),
+  /** Penyelenggara. */
+  organizer: text("organizer"),
   createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").default(NOW).notNull(),
   updatedAt: timestamp("updated_at").default(NOW).notNull(),
 });
+
+/**
+ * One KU (age group) inside a Turnamen: its own format, dates, participants,
+ * fixtures, standings and statistics. The UI calls a row of this table a "KU";
+ * everything that used to hang off a tournament (matches, standings, squads,
+ * player stats, badges) still points here.
+ *
+ * Display name = `<turnamen name> · <age category code>` — see `kuName` in
+ * lib/queries/ku.ts.
+ */
+export const tournaments = mysqlTable(
+  "tournaments",
+  {
+    id: id(),
+    competitionId: uuid("competition_id")
+      .notNull()
+      .references(() => competitions.id, { onDelete: "cascade" }),
+    format: mysqlEnum("format", tournamentFormat).notNull(),
+    status: mysqlEnum("status", tournamentStatus).notNull().default("draft"),
+    ageCategoryId: uuid("age_category_id").references(() => ageCategories.id, {
+      onDelete: "set null",
+    }),
+    scoringFormulaId: uuid("scoring_formula_id").references(
+      () => scoringFormulas.id,
+      { onDelete: "set null" },
+    ),
+    city: text("city"),
+    startDate: date("start_date"),
+    endDate: date("end_date"),
+    // Group-stage settings: only rows created before the Piala/Hybrid formats were retired use them.
+    groupCount: int("group_count").notNull().default(0),
+    teamsPerGroup: int("teams_per_group").notNull().default(0),
+    advancePerGroup: int("advance_per_group").notNull().default(2),
+    doubleRound: boolean("double_round").notNull().default(false),
+    knockoutLegs: int("knockout_legs").notNull().default(1),
+    pointsWin: int("points_win").notNull().default(3),
+    pointsDraw: int("points_draw").notNull().default(1),
+    pointsLoss: int("points_loss").notNull().default(0),
+    tiebreakers: json("tiebreakers").$type<Tiebreaker[]>().notNull(),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").default(NOW).notNull(),
+    updatedAt: timestamp("updated_at").default(NOW).notNull(),
+  },
+  (t) => [
+    // an age group takes part in a turnamen once
+    uniqueIndex("tournaments_competition_age_idx").on(t.competitionId, t.ageCategoryId),
+  ],
+);
 
 export const tournamentTeams = mysqlTable(
   "tournament_teams",
@@ -643,7 +688,7 @@ export const matches = mysqlTable("matches", {
   refereeId: uuid("referee_id").references(() => referees.id, {
     onDelete: "set null",
   }),
-  /** Operator assigned to run the match console; kick-off needs both a referee and an operator. */
+  /** Legacy single assignment, mirrored to the first member of matchOperators. */
   operatorId: uuid("operator_id").references(() => users.id, { onDelete: "set null" }),
   scheduledAt: timestamp("scheduled_at").notNull(),
   status: mysqlEnum("status", matchStatus).notNull().default("scheduled"),
@@ -672,6 +717,37 @@ export const matches = mysqlTable("matches", {
   createdAt: timestamp("created_at").default(NOW).notNull(),
   updatedAt: timestamp("updated_at").default(NOW).notNull(),
 });
+
+/** All assigned operators share the console and may record events for either team. */
+export const matchOperators = mysqlTable(
+  "match_operators",
+  {
+    matchId: uuid("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").default(NOW).notNull(),
+  },
+  (t) => [
+    uniqueIndex("match_operator_idx").on(t.matchId, t.userId),
+    index("match_operator_user_idx").on(t.userId),
+  ],
+);
+
+/**
+ * The Turnamen an operator account is assigned to. An account without `scope:all-competitions`
+ * (operators, out of the box) only sees these Turnamen, their KUs and their matches.
+ */
+export const operatorCompetitions = mysqlTable(
+  "operator_competitions",
+  {
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    competitionId: uuid("competition_id").notNull().references(() => competitions.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").default(NOW).notNull(),
+  },
+  (t) => [
+    uniqueIndex("operator_competition_idx").on(t.userId, t.competitionId),
+    index("operator_competition_comp_idx").on(t.competitionId),
+  ],
+);
 
 export const matchEvents = mysqlTable("match_events", {
   id: id(),
@@ -724,6 +800,16 @@ export const matchLineups = mysqlTable(
   (t) => [uniqueIndex("match_lineup_idx").on(t.matchId, t.playerId)],
 );
 
+/** A submitted DSP is distinct from an operator's draft lineup. One per side. */
+export const matchDspSubmissions = mysqlTable("match_dsp_submissions", {
+  id: id(),
+  matchId: uuid("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
+  clubId: uuid("club_id").notNull().references(() => clubs.id, { onDelete: "cascade" }),
+  submittedBy: uuid("submitted_by").references(() => users.id, { onDelete: "set null" }),
+  coachName: text("coach_name").notNull(),
+  submittedAt: timestamp("submitted_at").default(NOW).notNull(),
+}, (t) => [uniqueIndex("match_dsp_side_idx").on(t.matchId, t.clubId)]);
+
 /**
  * What a confirmed match contributed to each player's statistics. Confirming or
  * amending a result applies only the difference to this ledger, so a match is
@@ -753,6 +839,8 @@ export const playerMatchStats = mysqlTable(
     yellowCards: int("yellow_cards").notNull().default(0),
     redCards: int("red_cards").notNull().default(0),
     motm: int("motm").notNull().default(0),
+    /** 1 when a goalkeeper conceded nothing while he was on the pitch. */
+    cleanSheets: int("clean_sheets").notNull().default(0),
   },
   (t) => [uniqueIndex("player_match_stats_idx").on(t.matchId, t.playerId)],
 );
@@ -763,14 +851,18 @@ export type ImportStage = {
   key: string;
   label: string;
   status: "pending" | "running" | "passed" | "failed" | "skipped";
+  /** A message template (translated with `params` when shown). */
   detail?: string;
+  params?: Record<string, string | number>;
   count?: number;
 };
 
 export type ImportIssue = {
   field: string;
   code: string;
+  /** A message template (translated with `params` when shown). */
   message: string;
+  params?: Record<string, string | number>;
   severity: "error" | "warning";
 };
 
@@ -832,6 +924,38 @@ export const media = mysqlTable("media", {
   createdAt: timestamp("created_at").default(NOW).notNull(),
 });
 
+/* ═══════════════════════════ Articles ═════════════════════════════ */
+
+export const articleStatus = ["draft", "published"] as const;
+
+/**
+ * An article shown on the home page (below the tournaments) and on /artikel. Written in plain
+ * text: blank lines separate paragraphs, so the page never renders stored HTML. A draft is only
+ * visible to people who may edit articles.
+ */
+export const articles = mysqlTable(
+  "articles",
+  {
+    id: id(),
+    title: varchar("title", { length: 200 }).notNull(),
+    /** Short teaser shown on cards. */
+    excerpt: text("excerpt"),
+    body: longtext("body").notNull(),
+    coverUrl: text("cover_url"),
+    status: mysqlEnum("status", articleStatus).notNull().default("draft"),
+    authorId: uuid("author_id").references(() => users.id, { onDelete: "set null" }),
+    /** Set when the article is first published; the date readers see. */
+    publishedAt: timestamp("published_at"),
+    createdAt: timestamp("created_at").default(NOW).notNull(),
+    updatedAt: timestamp("updated_at").default(NOW).notNull(),
+  },
+  (t) => [index("articles_status_published_idx").on(t.status, t.publishedAt)],
+);
+
+export const articlesRelations = relations(articles, ({ one }) => ({
+  author: one(users, { fields: [articles.authorId], references: [users.id] }),
+}));
+
 /* ═══════════════════════ Audit + AI ═══════════════════════════════ */
 
 export const auditLogs = mysqlTable("audit_logs", {
@@ -889,11 +1013,7 @@ export const scoutShortlists = mysqlTable("scout_shortlists", {
 
 /* ═══════════════════════════ Relations ════════════════════════════ */
 
-export const clubsRelations = relations(clubs, ({ one, many }) => ({
-  homeVenue: one(venues, {
-    fields: [clubs.homeVenueId],
-    references: [venues.id],
-  }),
+export const clubsRelations = relations(clubs, ({ many }) => ({
   players: many(players),
   coaches: many(coaches),
 }));
@@ -942,7 +1062,15 @@ export const playerBadgesRelations = relations(playerBadges, ({ one }) => ({
   }),
 }));
 
+export const competitionsRelations = relations(competitions, ({ many }) => ({
+  kus: many(tournaments),
+}));
+
 export const tournamentsRelations = relations(tournaments, ({ one, many }) => ({
+  competition: one(competitions, {
+    fields: [tournaments.competitionId],
+    references: [competitions.id],
+  }),
   ageCategory: one(ageCategories, {
     fields: [tournaments.ageCategoryId],
     references: [ageCategories.id],
@@ -1028,8 +1156,164 @@ export const importRowsRelations = relations(importRows, ({ one }) => ({
   }),
 }));
 
+/* ═══════════════════════ Keuangan (finance) ═══════════════════════
+ * Monitoring keuangan per Unit Bisnis. Every ledger row belongs to exactly one unit; a unit's
+ * login sees only its own rows (lib/finance/scope.ts), an administrator sees them all.
+ * The user ↔ unit link lives in its own table instead of a column on `users`, so the rest of
+ * the app keeps working on a database that has not been migrated yet.
+ */
+
+/** outstanding = Modal Belum Kembali, returned = Modal Sudah Kembali. */
+export const capitalStatus = ["outstanding", "returned"] as const;
+/** weekly = repeats every match week (× program weeks); monthly = counted once. */
+export const budgetPeriod = ["weekly", "monthly"] as const;
+
+/** Rupiah amount; whole rupiah, so a JS number is exact far beyond any realistic budget. */
+const rupiah = (name: string) => bigint(name, { mode: "number" });
+
+export const businessUnits = mysqlTable("business_units", {
+  id: id(),
+  code: varchar("code", { length: 24 }).notNull().unique(),
+  name: varchar("name", { length: 120 }).notNull(),
+  description: text("description"),
+  /** How many match weeks the program runs: the RAB multiplies weekly costs by it and the match-fee grid has this many columns. */
+  programWeeks: int("program_weeks").notNull().default(10),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").default(NOW).notNull(),
+});
+
+/** Which unit a login belongs to (an account is in at most one unit). */
+export const businessUnitMembers = mysqlTable(
+  "business_unit_members",
+  {
+    userId: uuid("user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    businessUnitId: uuid("business_unit_id")
+      .notNull()
+      .references(() => businessUnits.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").default(NOW).notNull(),
+  },
+  (t) => [index("business_unit_members_unit_idx").on(t.businessUnitId)],
+);
+
+/** Columns every ledger table shares. */
+const ledger = () => ({
+  businessUnitId: uuid("business_unit_id")
+    .notNull()
+    .references(() => businessUnits.id, { onDelete: "restrict" }),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").default(NOW).notNull(),
+  updatedAt: timestamp("updated_at").default(NOW).notNull(),
+});
+
+/** ASET — equipment & match facilities the unit bought. */
+export const finAssets = mysqlTable(
+  "fin_assets",
+  {
+    id: id(),
+    ...ledger(),
+    purchasedOn: date("purchased_on").notNull(),
+    name: varchar("name", { length: 160 }).notNull(),
+    amount: rupiah("amount").notNull(),
+    proofUrl: text("proof_url"),
+    note: text("note"),
+  },
+  (t) => [index("fin_assets_unit_date_idx").on(t.businessUnitId, t.purchasedOn)],
+);
+
+/** MODAL — money the owners put into the unit, and whether it has been paid back. */
+export const finCapital = mysqlTable(
+  "fin_capital",
+  {
+    id: id(),
+    ...ledger(),
+    ownerName: varchar("owner_name", { length: 120 }).notNull(),
+    amount: rupiah("amount").notNull(),
+    status: mysqlEnum("status", capitalStatus).notNull().default("outstanding"),
+    investedOn: date("invested_on"),
+    returnedOn: date("returned_on"),
+    note: text("note"),
+  },
+  (t) => [index("fin_capital_unit_idx").on(t.businessUnitId)],
+);
+
+/** DEVIDEN — profit paid out to the owners. */
+export const finDividends = mysqlTable(
+  "fin_dividends",
+  {
+    id: id(),
+    ...ledger(),
+    recipientName: varchar("recipient_name", { length: 120 }).notNull(),
+    amount: rupiah("amount").notNull(),
+    paidOn: date("paid_on"),
+    note: text("note"),
+  },
+  (t) => [index("fin_dividends_unit_idx").on(t.businessUnitId)],
+);
+
+/** UANG MASUK REGISTRASI — one row per club: the fee billed, the down payment and the settlement. */
+export const finRegistrations = mysqlTable(
+  "fin_registrations",
+  {
+    id: id(),
+    ...ledger(),
+    clubName: varchar("club_name", { length: 160 }).notNull(),
+    fee: rupiah("fee").notNull(),
+    dpAmount: rupiah("dp_amount").notNull().default(0),
+    dpPaidOn: date("dp_paid_on"),
+    dpProofUrl: text("dp_proof_url"),
+    finalAmount: rupiah("final_amount").notNull().default(0),
+    finalPaidOn: date("final_paid_on"),
+    finalProofUrl: text("final_proof_url"),
+    note: text("note"),
+  },
+  (t) => [uniqueIndex("fin_registrations_unit_club_idx").on(t.businessUnitId, t.clubName)],
+);
+
+/** UANG MASUK MATCH FEE — one row per club per match week: matches played × the fee per match. */
+export const finMatchFees = mysqlTable(
+  "fin_match_fees",
+  {
+    id: id(),
+    ...ledger(),
+    clubName: varchar("club_name", { length: 160 }).notNull(),
+    week: int("week").notNull(),
+    matches: int("matches").notNull(),
+    feePerMatch: rupiah("fee_per_match").notNull(),
+    proofUrl: text("proof_url"),
+    note: text("note"),
+  },
+  (t) => [uniqueIndex("fin_match_fees_unit_club_week_idx").on(t.businessUnitId, t.clubName, t.week)],
+);
+
+/** RAB — budget lines (Rencana Anggaran Biaya): quantity × unit price, grouped by category. */
+export const finBudgetItems = mysqlTable(
+  "fin_budget_items",
+  {
+    id: id(),
+    ...ledger(),
+    period: mysqlEnum("period", budgetPeriod).notNull(),
+    category: varchar("category", { length: 160 }).notNull(),
+    categoryOrder: int("category_order").notNull().default(0),
+    name: varchar("name", { length: 200 }).notNull(),
+    itemOrder: int("item_order").notNull().default(0),
+    quantity: int("quantity").notNull().default(1),
+    unitPrice: rupiah("unit_price").notNull().default(0),
+    note: text("note"),
+  },
+  (t) => [index("fin_budget_items_unit_period_idx").on(t.businessUnitId, t.period)],
+);
+
 /* ═══════════════════════════ Type exports ═════════════════════════ */
 
+export type BusinessUnit = typeof businessUnits.$inferSelect;
+export type FinAsset = typeof finAssets.$inferSelect;
+export type FinCapital = typeof finCapital.$inferSelect;
+export type FinDividend = typeof finDividends.$inferSelect;
+export type FinRegistration = typeof finRegistrations.$inferSelect;
+export type FinMatchFee = typeof finMatchFees.$inferSelect;
+export type FinBudgetItem = typeof finBudgetItems.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Player = typeof players.$inferSelect;
 export type Club = typeof clubs.$inferSelect;
@@ -1037,8 +1321,12 @@ export type Referee = typeof referees.$inferSelect;
 export type Coach = typeof coaches.$inferSelect;
 export type Media = typeof media.$inferSelect;
 export type Venue = typeof venues.$inferSelect;
+export type Article = typeof articles.$inferSelect;
 export type AgeCategory = typeof ageCategories.$inferSelect;
 export type ScoringFormula = typeof scoringFormulas.$inferSelect;
+/** Turnamen (the umbrella event). */
+export type Competition = typeof competitions.$inferSelect;
+/** KU — one age group inside a Turnamen. */
 export type Tournament = typeof tournaments.$inferSelect;
 export type TournamentTeam = typeof tournamentTeams.$inferSelect;
 export type Standing = typeof standings.$inferSelect;

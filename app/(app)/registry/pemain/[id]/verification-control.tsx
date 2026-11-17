@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { toast } from "@/components/ui/toaster";
 import { setVerification } from "../actions";
+import { useT } from "@/lib/i18n/client";
+import { msg } from "@/lib/i18n/translate";
 
 const OPTIONS = [
-  { value: "verified", label: "Verifikasi", icon: CheckCircle2, tone: "text-success" },
-  { value: "flagged", label: "Tandai", icon: Flag, tone: "text-warn" },
-  { value: "pending", label: "Menunggu", icon: Clock, tone: "text-info" },
-  { value: "rejected", label: "Tolak", icon: XCircle, tone: "text-danger" },
+  { value: "verified", label: msg("Verifikasi::tombol"), icon: CheckCircle2, tone: "text-success" },
+  { value: "flagged", label: msg("Tandai"), icon: Flag, tone: "text-warn" },
+  { value: "pending", label: msg("Menunggu"), icon: Clock, tone: "text-info" },
+  { value: "rejected", label: msg("Tolak"), icon: XCircle, tone: "text-danger" },
 ] as const;
 
 export function VerificationControl({
@@ -23,6 +25,7 @@ export function VerificationControl({
   current: string;
   notes: string | null;
 }) {
+  const t = useT();
   const [pending, start] = React.useTransition();
   const [noteText, setNoteText] = React.useState(notes ?? "");
 
@@ -34,9 +37,9 @@ export function VerificationControl({
     start(async () => {
       try {
         await setVerification(fd);
-        toast.success("Status verifikasi diperbarui");
+        toast.success(t("Status verifikasi diperbarui"));
       } catch (e) {
-        toast.error("Gagal", e instanceof Error ? e.message : undefined);
+        toast.error(t("Gagal"), e instanceof Error ? e.message : undefined);
       }
     });
   };
@@ -59,18 +62,18 @@ export function VerificationControl({
             ) : (
               <o.icon className={`size-3.5 ${o.tone}`} />
             )}
-            {o.label}
+            {t(o.label)}
           </Button>
         ))}
       </div>
       <Textarea
         value={noteText}
         onChange={(e) => setNoteText(e.target.value)}
-        placeholder="Catatan verifikasi (mis. selisih data akta / KK)…"
+        placeholder={t("Catatan verifikasi (mis. selisih data akta / KK)…")}
         className="text-xs"
       />
       <p className="text-[11px] text-ink-muted">
-        Perubahan status tercatat pada jejak audit.
+        {t("Perubahan status tercatat pada jejak audit.")}
       </p>
     </div>
   );
