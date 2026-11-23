@@ -75,6 +75,18 @@ export const NAV: NavItem[] = [
     capability: "article:view",
   },
   {
+    key: "generate",
+    label: "Generate",
+    short: "Generate",
+    href: "/generate/name-tag",
+    icon: "IdCard",
+    hint: msg("Name tag & sertifikat (PDF)"),
+    children: [
+      { label: msg("Name Tag"), href: "/generate/name-tag", capability: "generate.nametag:view" },
+      { label: msg("Sertifikat"), href: "/generate/sertifikat", capability: "generate.certificate:view" },
+    ],
+  },
+  {
     key: "pemain",
     label: msg("Profil Pemain"),
     short: msg("Pemain"),

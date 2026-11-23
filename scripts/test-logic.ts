@@ -34,6 +34,8 @@ import { isOpenApi, isOpenView } from "@/lib/auth/redirect";
 import { FRESH_EVENT_SECONDS, NOTABLE_EVENTS, eventAgeSeconds, isGoalEvent, isNotableEvent, minuteLabel } from "@/lib/live-feed";
 import { QUICK_TYPES, TEAM_COUNTER_TYPES, buildTeamCounts, possessionFromPasses } from "@/lib/quick-events";
 import { inCompetitionScope } from "@/lib/competition-scope";
+import { KIND_FIELDS, PRINT_KINDS, ageOn, defaultLayout, fieldText, normalizeLayout, pageSizePt, printFileName, printLayoutSchema } from "@/lib/print/layout";
+import { coverCrop, overlaySize } from "@/lib/print/render";
 import { createT } from "@/lib/i18n/translate";
 import { buildMatchStatistics, buildPossession } from "@/lib/match-statistics";
 import { participationAt, assertPlaying, assertSubstitution, assertParticipationHistory, type ParticipationLineup } from "@/lib/match-participation";
@@ -434,6 +436,29 @@ ok(inClubScope(["a", "b"], "b") && inClubScope(["a"], "z", "a") && !inClubScope(
 console.log("\n[turnamen scope]");
 ok(inCompetitionScope(null, "x") && inCompetitionScope(null, null), "no scope means every Turnamen");
 ok(inCompetitionScope(["a", "b"], "b") && !inCompetitionScope(["a"], "z") && !inCompetitionScope(["a"], null) && !inCompetitionScope([], "a"), "an operator sees only assigned Turnamen; none assigned means none");
+
+console.log("\n[print templates]");
+ok(PRINT_KINDS.every((k) => printLayoutSchema.safeParse(defaultLayout(k)).success), "both default layouts pass the layout validation");
+ok(PRINT_KINDS.every((k) => defaultLayout(k).fields.map((f) => f.key).join() === KIND_FIELDS[k].join()), "a default layout lists exactly the values of its kind, in order");
+const tag = defaultLayout("name_tag");
+ok(["name", "dob", "age", "club", "nisn", "role"].every((k) => tag.fields.find((f) => f.key === k)?.visible) && tag.fields.filter((f) => f.visible).length === 6 && !!tag.photo?.visible, "the name tag shows NAMA, TGL LAHIR, USIA, CLUB, NISN, JABATAN and the photo by default");
+ok(tag.fields.filter((f) => f.visible).every((f, i, all) => f.x === 0.66 && (i === 0 || f.y > all[i - 1].y)), "the name tag values sit in one column, top to bottom");
+ok(tag.fields.every((f) => f.x + (f.align === "left" ? f.w : 0) <= 1), "no default value runs off the template");
+ok(normalizeLayout("name_tag", { nonsense: true }).fields.length === tag.fields.length, "a malformed stored layout falls back to the defaults");
+const moved = { ...tag, fields: tag.fields.filter((f) => f.key !== "position").map((f) => (f.key === "name" ? { ...f, y: 0.1 } : f)) };
+const norm = normalizeLayout("name_tag", moved);
+ok(norm.fields.find((f) => f.key === "name")?.y === 0.1 && norm.fields.some((f) => f.key === "position"), "a stored layout keeps its positions and gains values added later");
+ok(normalizeLayout("certificate", { ...defaultLayout("certificate"), photo: tag.photo }).photo === null, "certificates never carry a photo frame");
+ok(!printLayoutSchema.safeParse({ ...tag, fields: [{ ...tag.fields[0], color: "red" }] }).success && !printLayoutSchema.safeParse({ ...tag, widthMm: 5 }).success, "colours must be #rrggbb and the print width is bounded");
+ok(fieldText({ ...tag.fields[0], upper: true }, { values: { name: "Budi Santoso" } }) === "BUDI SANTOSO" && fieldText(tag.fields[4], { values: { nisn: "" } }) === "-", "values print in capitals when asked; a missing value prints as -");
+const a4 = pageSizePt(defaultLayout("certificate"), 3508, 2480);
+ok(Math.round(a4.width) === 842 && Math.round(a4.height) === 595, "a 297 mm wide certificate is an A4 landscape page");
+ok(overlaySize(tag, 1500, 2000).w === 1181 && overlaySize(defaultLayout("certificate"), 3508, 2480).w === 3508, "text is drawn at 300 dpi of the printed width (capped at A4 300 dpi)");
+const crop = coverCrop(1000, 1000, 300, 400);
+ok(Math.abs(crop.sw / crop.sh - 0.75) < 1e-9 && crop.sy === 0 && crop.sx > 0, "a square photo is cropped at the sides to fill a portrait frame");
+ok(Math.abs(coverCrop(600, 1200, 300, 300).sy - 180) < 1e-9, "a tall photo keeps its upper part (faces), not the middle");
+ok(ageOn("2014-03-12", new Date("2026-03-11T12:00:00+07:00")) === 11 && ageOn("2014-03-12", new Date("2026-03-12T00:30:00+07:00")) === 12, "age counts whole years on WIB calendar days");
+ok(printFileName("name-tag", "CRF", "Liga Pelajar Jabodetabek 2026") === "name-tag-crf-liga-pelajar-jabodetabek-2026.pdf" && printFileName() === "cetak.pdf", "PDF file names are plain and safe");
 
 console.log("\n[open pages]");
 const compId = "6a056fc0-90ef-4395-83f6-ea77c87c0d73";
