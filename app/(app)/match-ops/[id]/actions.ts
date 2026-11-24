@@ -186,7 +186,7 @@ export async function resumeSecondHalf(id: string) {
       status: "live",
       period: "second_half",
       clockStartedAt: new Date(),
-      currentMinute: Math.max(m.currentMinute, halfOf(duration)),
+      currentMinute: halfOf(duration),
       homeScoreHt: half ? m.homeScore : m.homeScoreHt,
       awayScoreHt: half ? m.awayScore : m.awayScoreHt,
     })

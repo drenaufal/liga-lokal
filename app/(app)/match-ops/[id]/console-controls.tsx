@@ -80,7 +80,7 @@ export function ConsoleControls({
 }) {
   const t = useT();
   const [pending, start] = React.useTransition();
-  const view = useClockView({ status, currentMinute, clockStartedAt }, duration);
+  const view = useClockView({ status, currentMinute, clockStartedAt, period }, duration);
   const timeUp = status === "live" && view.expired;
   const [startOpen, setStartOpen] = React.useState(false);
 
@@ -130,10 +130,21 @@ export function ConsoleControls({
 
       {timeUp && (
         <p className="relative mt-4 rounded-2xl bg-brand/20 px-4 py-2.5 text-center text-xs font-semibold text-white">
-          {view.overtimeMin > 0 ? t("Waktu pertandingan habis · tambahan waktu +{n}'.", { n: view.overtimeMin }) : t("Waktu pertandingan habis.")}{" "}
-          {canOperate
-            ? t("Pertandingan baru selesai setelah Anda menekan “Akhiri Pertandingan”.")
-            : t("Menunggu operator mengakhiri pertandingan.")}
+          {period === "first_half" ? (
+            <>
+              {t("Waktu babak pertama habis.")}{" "}
+              {canOperate
+                ? t("Babak pertama baru selesai setelah Anda menekan “Akhiri Babak 1”.")
+                : t("Menunggu operator mengakhiri babak 1.")}
+            </>
+          ) : (
+            <>
+              {t("Waktu pertandingan habis.")}{" "}
+              {canOperate
+                ? t("Pertandingan baru selesai setelah Anda menekan “Akhiri Pertandingan”.")
+                : t("Menunggu operator mengakhiri pertandingan.")}
+            </>
+          )}
         </p>
       )}
 
@@ -158,7 +169,12 @@ export function ConsoleControls({
             </>
           )}
           {status === "live" && period === "first_half" && (
-            <Button size="sm" variant="secondary" disabled={pending} onClick={() => run(pauseClock, t("Turun minum"))}>
+            <Button
+              size="sm"
+              variant={timeUp ? "primary" : "secondary"}
+              disabled={pending}
+              onClick={() => run(pauseClock, t("Turun minum"))}
+            >
               <Pause className="size-3.5" /> {t("Akhiri Babak 1")}
             </Button>
           )}
@@ -170,8 +186,8 @@ export function ConsoleControls({
           {status === "live" && (
             <Button
               size="sm"
-              variant={timeUp ? "primary" : "secondary"}
-              className={timeUp ? undefined : "border-0 bg-night-2 text-white hover:bg-night-line"}
+              variant={timeUp && period === "second_half" ? "primary" : "secondary"}
+              className={timeUp && period === "second_half" ? undefined : "border-0 bg-night-2 text-white hover:bg-night-line"}
               disabled={pending}
               onClick={() => run(endMatch, t("Peluit panjang"))}
             >

@@ -17,6 +17,7 @@ export type ClockState = {
   status: string;
   currentMinute: number;
   clockStartedAt: Date | string | null;
+  period?: string | null;
 };
 
 /** Highest minute the clock will show: full time plus stoppage. */
@@ -36,39 +37,70 @@ export function elapsedMinute(c: ClockState, cap: number, now = Date.now()) {
   return Math.min(cap, c.currentMinute + Math.max(0, run));
 }
 
-/** What the clock shows right now: time left, and stoppage once it has run out. */
+/** What the clock shows right now: elapsed count-up time, capped at half/full target when time is up. */
 export type ClockView = {
   running: boolean;
-  /** Seconds played so far. */
+  /** Actual seconds played so far. */
   elapsedSec: number;
-  /** Seconds left of the nominal match length (never below 0). */
+  /** Seconds formatted and displayed on screen (counts up, stops at period target). */
+  displaySec: number;
+  /** Seconds left of the current period nominal length (0 once expired). */
   remainingSec: number;
-  /** Nominal time is up — the match stays live until an operator ends it. */
+  /** Target nominal minute for the current half (e.g. 20 for half 1, 40 for half 2). */
+  periodTargetMin: number;
+  /** Half or match nominal time is up — match remains live until operator stops it. */
   expired: boolean;
-  /** Whole minutes played past full time (0 until expired), capped at the stoppage allowance. */
+  /** Current period name ("first_half", "halftime", "second_half", etc.). */
+  period: string;
+  /** Whole minutes played past nominal time (0 until expired). */
   overtimeMin: number;
 };
 
 export function clockView(c: ClockState, duration: number, now = Date.now()): ClockView {
+  const halfMin = halfOf(duration);
+  const isHalftime = c.period === "halftime" || c.status === "halftime";
+  const isSecondHalf = c.period === "second_half" || (!isHalftime && c.currentMinute >= halfMin);
+  const period = isHalftime ? "halftime" : isSecondHalf ? "second_half" : (c.period || "first_half");
+
+  const periodTargetMin = isSecondHalf ? duration : halfMin;
+  const targetSec = periodTargetMin * 60;
+
   const running = c.status === "live" && !!c.clockStartedAt;
   const run = running ? Math.max(0, (now - new Date(c.clockStartedAt as Date | string).getTime()) / 1000) : 0;
-  const elapsedSec = c.currentMinute * 60 + run;
-  const total = duration * 60;
-  const expired = elapsedSec >= total;
+
+  let elapsedSec: number;
+  if (isHalftime) {
+    elapsedSec = halfMin * 60;
+  } else if (isSecondHalf) {
+    elapsedSec = Math.max(halfMin * 60, c.currentMinute * 60) + run;
+  } else {
+    elapsedSec = c.currentMinute * 60 + run;
+  }
+
+  const expired = elapsedSec >= targetSec;
+  // Timer stops at nominal period target when time is up; match remains live until operator ends the half.
+  const displaySec = expired ? targetSec : elapsedSec;
+
   return {
     running,
     elapsedSec,
-    remainingSec: Math.max(0, Math.ceil(total - elapsedSec)),
+    displaySec,
+    remainingSec: Math.max(0, Math.ceil(targetSec - elapsedSec)),
+    periodTargetMin,
     expired,
-    overtimeMin: expired ? Math.min(STOPPAGE, Math.floor((elapsedSec - total) / 60)) : 0,
+    period,
+    overtimeMin: expired ? Math.min(STOPPAGE, Math.floor((elapsedSec - targetSec) / 60)) : 0,
   };
 }
 
-/** 4210 → "70:10". */
-export function formatCountdown(sec: number) {
+/** 1205 → "20:05". */
+export function formatClock(sec: number) {
   const s = Math.max(0, Math.floor(sec));
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
+
+/** Backward compatibility alias for formatClock. */
+export const formatCountdown = formatClock;
 
 /**
  * SQL for a match's length: its own setting, else the age category rule, else

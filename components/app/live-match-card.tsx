@@ -53,6 +53,7 @@ export async function LiveMatchCard({ m, compact }: { m: LiveMatch; compact?: bo
                 currentMinute={m.minute ?? 0}
                 clockStartedAt={m.clockStartedAt ?? null}
                 duration={m.duration}
+                period={m.period}
                 className="text-white [&>span]:text-white"
               />
             </>

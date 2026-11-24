@@ -153,7 +153,7 @@ export async function recordQuickEvent(input: {
       matchId,
       type: type as (typeof matchEvents.$inferInsert)["type"],
       minute,
-      period: minute > half ? "second_half" : "first_half",
+      period: m.period === "second_half" ? "second_half" : "first_half",
       clubId,
       playerId,
       relatedPlayerId,
@@ -167,7 +167,7 @@ export async function recordQuickEvent(input: {
     if (linkedAssistId) {
       await tx
         .update(matchEvents)
-        .set({ relatedPlayerId: playerId, minute, period: minute > half ? "second_half" : "first_half" })
+        .set({ relatedPlayerId: playerId, minute, period: m.period === "second_half" ? "second_half" : "first_half" })
         .where(eq(matchEvents.id, linkedAssistId));
     }
     if (type === "goal") await recomputeMatchScore(matchId, tx);
@@ -206,7 +206,7 @@ export async function recordTeamEvent(input: { matchId: string; clubId: string; 
       matchId,
       type,
       minute,
-      period: minute > halfOf(duration) ? "second_half" : "first_half",
+      period: m.period === "second_half" ? "second_half" : "first_half",
       clubId,
       playerId: null,
       createdBy: userId,
