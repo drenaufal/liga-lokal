@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { competitions, operatorCompetitions, tournaments } from "@/lib/db/schema";
+import { competitions, operatorCompetitions, printTemplates, tournaments } from "@/lib/db/schema";
+import { releaseMedia } from "@/lib/media-store";
 import { actionUser } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { assertCompetitionAccess } from "@/lib/competition-access";
@@ -161,10 +162,13 @@ export async function deleteCompetition(formData: FormData) {
     (k) => k.id,
   );
   const weights = await activeFormulaWeights();
+  // name tag / certificate designs go with the Turnamen (rows by cascade, their images here)
+  const designs = await db.select({ url: printTemplates.imageUrl }).from(printTemplates).where(eq(printTemplates.competitionId, id));
   await db.transaction(async (tx) => {
     for (const kuId of kuIds) await purgeKu(tx, kuId, weights);
     await tx.delete(competitions).where(eq(competitions.id, id));
   });
+  await releaseMedia(...designs.map((d) => d.url));
 
   await recordAudit({
     actorId: user.id,

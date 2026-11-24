@@ -17,6 +17,7 @@ import {
   varchar,
 } from "drizzle-orm/mysql-core";
 import { PLAYER_POSITIONS } from "../positions";
+import type { PrintLayout } from "../print/layout";
 
 /* ═══════════════════════ Column helpers (MariaDB) ══════════════════════ */
 
@@ -923,6 +924,33 @@ export const media = mysqlTable("media", {
   uploadedBy: uuid("uploaded_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").default(NOW).notNull(),
 });
+
+/* ═════════════════════ Print templates (Generate) ═════════════════════ */
+
+export const printTemplateKind = ["name_tag", "certificate"] as const;
+
+/**
+ * The name-tag and certificate design of one Turnamen: an uploaded background image (a `media`
+ * row, see `imageUrl`) plus where each value is printed on it (lib/print/layout.ts). One per kind.
+ */
+export const printTemplates = mysqlTable(
+  "print_templates",
+  {
+    id: id(),
+    competitionId: uuid("competition_id").notNull().references(() => competitions.id, { onDelete: "cascade" }),
+    kind: mysqlEnum("kind", printTemplateKind).notNull(),
+    imageUrl: text("image_url").notNull(),
+    /** Pixel size of the image, so pages and the editor keep its proportions. */
+    width: int("width").notNull(),
+    height: int("height").notNull(),
+    /** Positions of the values; NULL = the defaults of the kind. */
+    layout: json("layout").$type<PrintLayout>(),
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").default(NOW).notNull(),
+    updatedAt: timestamp("updated_at").default(NOW).notNull(),
+  },
+  (t) => [uniqueIndex("print_template_idx").on(t.competitionId, t.kind)],
+);
 
 /* ═══════════════════════════ Articles ═════════════════════════════ */
 
