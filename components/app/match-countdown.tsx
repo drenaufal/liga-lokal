@@ -2,16 +2,17 @@
 
 import * as React from "react";
 import { Timer } from "lucide-react";
-import { clockView, formatCountdown, type ClockState, type ClockView } from "@/lib/match-clock";
+import { clockView, formatClock, type ClockState, type ClockView } from "@/lib/match-clock";
 import { cn } from "@/lib/utils";
 
 /**
- * Live view of a match clock that counts DOWN from the match length. When it
- * reaches 00:00 it stays there and counts stoppage (+N') — the match itself is
- * only finished when an operator ends it.
+ * Live view of a match clock that counts UP per half. In half 1 it runs from 00:00
+ * to halfDuration (e.g. 20:00). In half 2 it runs from halfDuration (e.g. 20:00)
+ * to fullDuration (e.g. 40:00). When the half's time is reached, the display stops
+ * at the limit and stays live until an operator ends the half.
  */
 export function useClockView(
-  clock: { status: string; currentMinute: number; clockStartedAt: Date | string | null },
+  clock: { status: string; currentMinute: number; clockStartedAt: Date | string | null; period?: string | null },
   duration: number,
 ): ClockView {
   const state: ClockState = clock;
@@ -29,7 +30,7 @@ export function useClockView(
 
 type Variant = "hero" | "inline";
 
-/** Presentational countdown. */
+/** Presentational match clock timer. */
 export function Countdown({
   view,
   variant = "inline",
@@ -42,12 +43,21 @@ export function Countdown({
   halftime?: boolean;
   className?: string;
 }) {
-  const time = formatCountdown(view.remainingSec);
-  const label = view.expired ? "Waktu habis" : halftime ? "Jeda" : "Sisa waktu";
+  const time = formatClock(view.displaySec);
+  const isSecondHalf = view.period === "second_half";
+  const label = halftime
+    ? "Jeda"
+    : view.expired
+      ? isSecondHalf
+        ? "Waktu pertandingan habis"
+        : "Waktu babak 1 habis"
+      : isSecondHalf
+        ? "Babak 2"
+        : "Babak 1";
 
   if (variant === "hero") {
     return (
-      <div className={cn("flex flex-col items-center", className)}>
+      <div className="flex flex-col items-center">
         <span
           suppressHydrationWarning
           className={cn(
@@ -57,7 +67,6 @@ export function Countdown({
         >
           <Timer className={cn("size-4", view.running && !view.expired && "animate-live")} aria-hidden />
           {time}
-          {view.expired && view.overtimeMin > 0 && <span className="text-base">+{view.overtimeMin}&rsquo;</span>}
         </span>
         <span className={cn("mt-1.5 text-[11px] font-semibold", view.expired ? "text-white" : "text-night-muted")}>
           {label}
@@ -69,7 +78,7 @@ export function Countdown({
   return (
     <span
       suppressHydrationWarning
-      title={`${label} · berjalan ${Math.floor(view.elapsedSec / 60)}'`}
+      title={`${label} · ${time}`}
       className={cn(
         "inline-flex items-center gap-1 font-mono text-[11px] font-bold tabular-nums",
         view.expired ? "text-danger" : "text-brand",
@@ -78,25 +87,26 @@ export function Countdown({
     >
       <Timer className={cn("size-3", view.running && !view.expired && "animate-live")} aria-hidden />
       {time}
-      {view.expired && view.overtimeMin > 0 && <span>+{view.overtimeMin}&rsquo;</span>}
     </span>
   );
 }
 
-/** Self-ticking inline countdown for lists and cards. */
+/** Self-ticking inline timer for lists and cards. */
 export function LiveCountdown({
   status,
   currentMinute,
   clockStartedAt,
   duration,
+  period,
   className,
 }: {
   status: string;
   currentMinute: number;
   clockStartedAt: Date | string | null;
   duration: number;
+  period?: string | null;
   className?: string;
 }) {
-  const view = useClockView({ status, currentMinute, clockStartedAt }, duration);
+  const view = useClockView({ status, currentMinute, clockStartedAt, period }, duration);
   return <Countdown view={view} className={className} />;
 }

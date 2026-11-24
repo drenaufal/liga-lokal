@@ -27,6 +27,7 @@ export type MatchRowData = {
   currentMinute?: number | null;
   clockStartedAt?: Date | string | null;
   duration?: number;
+  period?: string | null;
   homeScore: number;
   awayScore: number;
   /** Shoot-out score of a level Cup match. */
@@ -88,7 +89,7 @@ export async function MatchRow({ m, showMeta = true }: { m: MatchRowData; showMe
             <div className="flex flex-col items-center">
               {done || live ? <span className="whitespace-nowrap rounded-2xl bg-black/20 px-4 py-2 font-display text-4xl leading-none tabular-nums @4xl:px-6 @4xl:py-3 @4xl:text-6xl">{m.homeScore}<span className="mx-1">–</span>{m.awayScore}</span> : <span className="rounded-full bg-black/20 px-4 py-2 font-display text-2xl italic @4xl:px-5 @4xl:text-3xl">VS</span>}
               {shootout && <span className="mt-1 text-[9px] font-semibold">{shootout}</span>}
-              {live && <span className="mt-1 flex items-center gap-1 text-[9px] font-bold"><Radio className="size-2 animate-live" />{m.duration ? <LiveCountdown status={m.status} currentMinute={m.currentMinute ?? 0} clockStartedAt={m.clockStartedAt ?? null} duration={m.duration} className="text-current" /> : <>{m.currentMinute ?? 0}&rsquo;</>}</span>}
+              {live && <span className="mt-1 flex items-center gap-1 text-[9px] font-bold"><Radio className="size-2 animate-live" />{m.duration ? <LiveCountdown status={m.status} currentMinute={m.currentMinute ?? 0} clockStartedAt={m.clockStartedAt ?? null} duration={m.duration} period={m.period} className="text-current" /> : <>{m.currentMinute ?? 0}&rsquo;</>}</span>}
             </div>
             <Side name={m.awayName ?? placeholderLabel(t, m.awayPlaceholder)} short={m.awayShort} logo={m.awayLogo} dim={winner === "home"} bold={winner === "away"} dsp={showDsp && m.awayClubId ? !!m.awayDspSubmitted : undefined} />
           </div>

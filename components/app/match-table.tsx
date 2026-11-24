@@ -84,7 +84,7 @@ export async function MatchTable({
               <span className="mt-1 flex items-center gap-1 text-[10px] font-bold text-brand">
                 <Radio className="size-2.5 animate-live" aria-hidden />
                 {m.duration ? (
-                  <LiveCountdown status={m.status} currentMinute={m.currentMinute ?? 0} clockStartedAt={m.clockStartedAt ?? null} duration={m.duration} />
+                  <LiveCountdown status={m.status} currentMinute={m.currentMinute ?? 0} clockStartedAt={m.clockStartedAt ?? null} duration={m.duration} period={m.period} />
                 ) : (
                   <>{m.currentMinute ?? 0}&rsquo;</>
                 )}
