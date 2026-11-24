@@ -79,8 +79,10 @@ export function DialogContent({
 
   if (!mounted || !ctx.open) return null;
 
+  // Auto margins centre a dialog that fits and keep a taller one scrollable from its top
+  // (flex centring would push its top out of reach).
   return createPortal(
-    <div className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto p-4 sm:items-center">
+    <div className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto p-4">
       <div
         className="fixed inset-0 bg-night/50 backdrop-blur-[2px] animate-fade-in"
         onClick={() => ctx.setOpen(false)}
@@ -89,7 +91,7 @@ export function DialogContent({
         role="dialog"
         aria-modal="true"
         className={cn(
-          "relative z-10 my-8 w-full max-w-lg rounded-3xl bg-surface shadow-[0_30px_80px_-20px_rgba(20,20,20,0.45)] animate-pop-in",
+          "relative z-10 my-8 w-full max-w-lg rounded-3xl sm:my-auto bg-surface shadow-[0_30px_80px_-20px_rgba(20,20,20,0.45)] animate-pop-in",
           className,
         )}
       >

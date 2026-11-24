@@ -136,6 +136,11 @@ const GROUPS = [
     caps: ["ku:create", "ku:status", "ku:teams", "ku:fixtures", "ku:schedule", "ku:match-delete", "ku:delete"],
   },
   { id: "article", title: msg("Artikel"), caps: ["article:view", "article:create", "article:edit", "article:delete"] },
+  {
+    id: "generate",
+    title: msg("Generate — Name Tag & Sertifikat"),
+    caps: ["generate.nametag:view", "generate.nametag:template", "generate.certificate:view", "generate.certificate:template"],
+  },
   { id: "player-profile", title: msg("Profil Pemain (Publik)"), caps: ["player-profile:view"] },
   {
     id: "match",
@@ -555,6 +560,34 @@ const DEFS: Record<Capability, Def> = {
     defaults: OPERATOR,
   },
 
+  /* Generate (name tags & certificates) */
+  "generate.nametag:view": {
+    label: msg("Membuka Name Tag"),
+    description: msg("Menu Generate → Name Tag: pilih turnamen dan SSB, lalu unduh name tag pemain & pelatih (PDF). Name tag memuat NISN dan tanggal lahir."),
+    kind: "menu",
+    defaults: OPERATOR,
+  },
+  "generate.nametag:template": {
+    label: msg("Mengatur template name tag"),
+    description: msg("Mengunggah, mengganti, dan mengatur posisi isian template name tag tiap turnamen."),
+    kind: "feature",
+    requires: "generate.nametag:view",
+    defaults: OPERATOR,
+  },
+  "generate.certificate:view": {
+    label: msg("Membuka Sertifikat"),
+    description: msg("Menu Generate → Sertifikat: pilih turnamen dan KU, pilih pemain, lalu unduh sertifikat (PDF)."),
+    kind: "menu",
+    defaults: OPERATOR,
+  },
+  "generate.certificate:template": {
+    label: msg("Mengatur template sertifikat"),
+    description: msg("Mengunggah, mengganti, dan mengatur posisi isian template sertifikat tiap turnamen."),
+    kind: "feature",
+    requires: "generate.certificate:view",
+    defaults: OPERATOR,
+  },
+
   /* Public player profile */
   "player-profile:view": {
     label: msg("Membuka Profil Pemain (publik)"),
@@ -821,7 +854,7 @@ export function isHoldable(role: Role, cap: Capability) {
 
 /**
  * Attaching photos or documents happens inside the registry forms, so anyone who may create
- * or edit one of those records may upload files.
+ * or edit one of those records may upload files — as may whoever manages a print template.
  */
 export const FILE_UPLOAD_CAPS: readonly Capability[] = [
   "registry.player:create",
@@ -835,6 +868,9 @@ export const FILE_UPLOAD_CAPS: readonly Capability[] = [
   "registry.venue:create",
   "registry.venue:edit",
   "finance:input",
+  // name tag & certificate designs
+  "generate.nametag:template",
+  "generate.certificate:template",
 ];
 
 /**

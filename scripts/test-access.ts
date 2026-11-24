@@ -121,6 +121,7 @@ ok(allowedChildHrefs("registry", { role: "viewer", grants: onlyPlayers }).join()
 ok(homeHref({ role: "viewer", grants: [] }) === null, "a role with nothing has no home page");
 ok(homeHref({ role: "viewer", grants: onlyPlayers }) === "/registry/pemain", "without the dashboard, home page is the first allowed menu");
 ok(homeHref("admin") === "/command-center" && homeHref("coach") === "/dsp", "with the dashboard allowed, home page is the dashboard; a coach lands on the DSP");
+ok(moduleViewCaps("generate").join() === "generate.nametag:view,generate.certificate:view" && can("operator", "generate.nametag:template") && !can("viewer", "generate.nametag:view") && !can("coach", "generate.certificate:view"), "Generate has a menu each for name tags and certificates; operators manage templates, viewers and coaches do not see it");
 ok(moduleViewCaps("registry").length === 7 && moduleViewCaps("player-intelligence").length === 4, "module guards cover every tab");
 const lonelyAudit = navFor({ role: "operator", grants: ["audit:view"] });
 ok(lonelyAudit.length === 0, "audit without settings:view opens nothing (settings:view is required)");

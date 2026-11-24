@@ -12,6 +12,7 @@ import {
   Flame,
   Hand,
   Heart,
+  IdCard,
   LayoutDashboard,
   Newspaper,
   Radar,
@@ -49,6 +50,7 @@ const MAP = {
   CheckCircle2,
   TrendingUp,
   Wallet,
+  IdCard,
   // badge icons
   target: Target,
   wand: Wand2,

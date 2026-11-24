@@ -109,8 +109,6 @@ export default async function RadarPage({
                 {[
                   [t("Gol / 90"), p90.goals, peers.map((x) => (x.minutesPlayed ? (x.goals / x.minutesPlayed) * 90 : 0))],
                   [t("Assist / 90"), p90.assists, peers.map((x) => (x.minutesPlayed ? (x.assists / x.minutesPlayed) * 90 : 0))],
-                  [t("Umpan kunci / 90"), p90.keyPasses, peers.map((x) => (x.minutesPlayed ? (x.keyPasses / x.minutesPlayed) * 90 : 0))],
-                  [t("Tekel / 90"), p90.tackles, peers.map((x) => (x.minutesPlayed ? (x.tackles / x.minutesPlayed) * 90 : 0))],
                   [t("Penyelamatan / 90"), p90.saves, peers.map((x) => (x.minutesPlayed ? (x.saves / x.minutesPlayed) * 90 : 0))],
                 ].map(([label, value, pool]) => {
                   const fill = share(value as number, pool as number[]);
