@@ -64,7 +64,7 @@ export default async function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-2.5 text-xs">
             <Row label={t("Nama instansi")}>{t("[Nama Instansi / Federasi]")}</Row>
-            <Row label={t("Penyelenggara")}>PT DVONES Indonesia</Row>
+            <Row label={t("Penyelenggara")}>Liga Lokal</Row>
             <Row label={t("Lingkungan")}>{process.env.NODE_ENV === "production" ? t("Produksi") : t("Pengembangan")}</Row>
             <Row label={t("Zona waktu")}>Asia/Jakarta (WIB)</Row>
             <Row label={t("Bahasa")}>{locale === "en" ? "English" : "Bahasa Indonesia"}</Row>
