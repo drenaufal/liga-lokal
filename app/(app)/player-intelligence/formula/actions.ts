@@ -5,10 +5,68 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { playerStats, scoringFormulas, players } from "@/lib/db/schema";
+import { insertReturning } from "@/lib/db/returning";
 import { actionUser } from "@/lib/auth/session";
 import { auditText, recordAudit } from "@/lib/audit";
-import { computeRating, computeScore, normalizeWeights, weightsFromInput } from "@/lib/scoring";
+import { DEFAULT_WEIGHTS, computeRating, computeScore, normalizeWeights, weightsFromInput } from "@/lib/scoring";
 import { getT } from "@/lib/i18n/server";
+
+const createSchema = z.object({
+  name: z.string().trim().min(3),
+  description: z.string().trim().optional(),
+  sourceFormulaId: z.string().optional(),
+});
+
+export async function createFormula(input: {
+  name: string;
+  description?: string;
+  sourceFormulaId?: string;
+}) {
+  const t = await getT();
+  const user = await actionUser("intelligence.formula:edit");
+  const parsed = createSchema.safeParse(input);
+  if (!parsed.success) throw new Error(t("Data formula tidak valid"));
+  const v = parsed.data;
+
+  let weights = DEFAULT_WEIGHTS;
+  if (v.sourceFormulaId) {
+    const src = await db.query.scoringFormulas.findFirst({
+      where: eq(scoringFormulas.id, v.sourceFormulaId),
+    });
+    if (!src) throw new Error(t("Formula tidak ditemukan"));
+    weights = normalizeWeights(src.weights);
+  }
+
+  const [created] = await insertReturning(db, scoringFormulas, {
+    name: v.name,
+    description: v.description || null,
+    weights,
+    isActive: false,
+    version: 1,
+    createdBy: user.id,
+  });
+
+  await recordAudit({
+    actorId: user.id,
+    actorName: user.name,
+    actorRole: user.role,
+    action: "formula.create",
+    entityType: "scoring_formula",
+    entityId: created.id,
+    summary: auditText('Formula penilaian baru: "{name}"', { name: created.name }),
+    after: weights as unknown as Record<string, unknown>,
+  });
+
+  revalidatePath("/player-intelligence/formula");
+  return {
+    id: created.id,
+    name: created.name,
+    description: created.description,
+    weights: normalizeWeights(created.weights),
+    isActive: created.isActive,
+    version: created.version,
+  };
+}
 
 const schema = z.object({
   id: z.string(),

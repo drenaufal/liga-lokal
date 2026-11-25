@@ -48,6 +48,7 @@ export const audit = {
   "Akun pengguna diperbarui: {name} ({from} → {to})": "User account updated: {name} ({from} → {to})",
   "Hak akses peran diperbarui: {roles}": "Role permissions updated: {roles}",
   "Pemain terbaik dipilih manual: {name}": "Best player selected manually: {name}",
+  "Formula penilaian baru: \"{name}\"": "New scoring formula: \"{name}\"",
   "Bobot formula \"{name}\" diperbarui": "Weights of formula \"{name}\" updated",
   "Formula \"{name}\" diaktifkan; {n} baris statistik dihitung ulang": "Formula \"{name}\" activated; {n} stat {n|row|rows} recalculated",
   "Kategori usia baru: {code} (usia maksimal {n})": "New age category: {code} (maximum age {n})",
