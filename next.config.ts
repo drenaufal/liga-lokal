@@ -38,7 +38,17 @@ const nextConfig: NextConfig = {
     ],
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    // return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      {
+        source: "/templates/:file*",
+        headers: [
+          { key: "Content-Type", value: "text/csv; charset=utf-8" },
+          { key: "Content-Disposition", value: "attachment" },
+        ],
+      },
+    ];
   },
   // The icon set lives in /public/Web. Browsers, crawlers and iOS ask for these
   // well-known names at the site root, so point them at the real files.
