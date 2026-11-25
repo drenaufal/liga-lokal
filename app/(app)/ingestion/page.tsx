@@ -63,8 +63,10 @@ export default async function IngestionPage() {
                 {["players", "clubs", "referees", "venues"].map((e) => (
                   <li key={e}>
                     <a
-                      href={`/templates/${e}.csv`}
-                      download
+                      // href={`/templates/${e}.csv`}
+                      // download
+                      href={`/api/templates/${e}`}
+                      download={`${e}.csv`}
                       className="flex items-center justify-between rounded-lg border border-line-soft px-2.5 py-1.5 text-ink-secondary transition-colors hover:border-brand/30 hover:text-ink"
                     >
                       <span>{t("Templat {entity}", { entity: t(ENTITY_LABEL[e]) })}</span>
