@@ -17,7 +17,7 @@ export default async function FormulaPage({ searchParams }: { searchParams: Prom
   const [{ list, preview }, filterOptions] = await Promise.all([getFormulaData(params, scope), getPlayerFilterOptions(scope)]);
   const canEdit = can(user, "intelligence.formula:edit");
   const canActivate = can(user, "intelligence.formula:activate");
-  if (!list.length) return <EmptyState title={t("Belum ada formula penilaian")} description={t("Formula diperlukan untuk menampilkan pratinjau skor pemain.")} />;
+  if (!list.length && !canEdit) return <EmptyState title={t("Belum ada formula penilaian")} description={t("Formula diperlukan untuk menampilkan pratinjau skor pemain.")} />;
 
   return (
     <FormulaWorkbench
