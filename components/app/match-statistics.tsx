@@ -1,7 +1,6 @@
 import { CircleDot } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MATCH_EVENT_STYLE } from "./match-event-style";
-import { cn } from "@/lib/utils";
 import type { MatchStatistic } from "@/lib/match-statistics";
 import { getT } from "@/lib/i18n/server";
 
@@ -25,8 +24,8 @@ export async function MatchStatistics({ stats, possession, homeShort, awayShort 
           {/* Possession leads: it is the one share rather than a count */}
           <div className="rounded-xl bg-surface-2/70 p-3">
             <div className="grid grid-cols-[3.5rem_minmax(0,1fr)_3.5rem] items-center gap-2">
-              <dt className="col-start-2 row-start-1 mx-auto inline-flex max-w-full items-center gap-1.5 rounded-lg bg-night px-2.5 py-1.5 text-[10px] font-semibold text-white">
-                <CircleDot className="size-3.5 shrink-0" /><span>{t("Penguasaan bola")}</span>
+              <dt className="col-start-2 row-start-1 mx-auto inline-flex max-w-full items-center gap-1.5 text-xs font-semibold text-ink">
+                <CircleDot className="size-3.5 shrink-0 text-ink-secondary" /><span>{t("Penguasaan bola")}</span>
               </dt>
               <dd className="col-start-1 row-start-1 font-display text-xl tabular-nums">
                 <span className="sr-only">{homeShort ?? t("Tuan rumah")}: </span>{possession ? `${possession.home}%` : "–"}
@@ -46,13 +45,12 @@ export async function MatchStatistics({ stats, possession, homeShort, awayShort 
             </p>
           </div>
           {stats.map(({ label, type, home, away }) => {
-            const style = MATCH_EVENT_STYLE[type];
-            const Icon = style.icon;
+            const Icon = MATCH_EVENT_STYLE[type].icon;
             const total = home + away || 1;
             return (
               <div key={label}>
                 <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center gap-2">
-                  <dt className={cn("col-start-2 row-start-1 mx-auto inline-flex max-w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold", style.tile)}><Icon className="size-3.5 shrink-0" /><span>{t.dyn(label)}</span></dt>
+                  <dt className="col-start-2 row-start-1 mx-auto inline-flex max-w-full items-center gap-1.5 text-xs font-semibold text-ink"><Icon className="size-3.5 shrink-0 text-ink-secondary" /><span>{t.dyn(label)}</span></dt>
                   <dd className="col-start-1 row-start-1 font-display text-xl tabular-nums"><span className="sr-only">{homeShort ?? t("Tuan rumah")}: </span>{home}</dd>
                   <dd className="col-start-3 row-start-1 text-right font-display text-xl tabular-nums"><span className="sr-only">{awayShort ?? t("Tamu")}: </span>{away}</dd>
                 </div>
