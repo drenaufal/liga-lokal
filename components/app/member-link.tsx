@@ -11,15 +11,17 @@ export async function MemberLink({
   className,
   children,
   title,
+  prefetch,
 }: {
   href: string;
   className?: string;
   children: React.ReactNode;
   title?: string;
+  prefetch?: boolean;
 }) {
   if (await isGuest()) return <div className={className}>{children}</div>;
   return (
-    <Link href={href} className={className} title={title}>
+    <Link href={href} className={className} title={title} prefetch={prefetch}>
       {children}
     </Link>
   );

@@ -23,7 +23,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/misc";
 import { FootPreference } from "@/components/app/foot-icon";
-import { getMediaMeta } from "@/lib/media-store";
+import { getMediaMetas } from "@/lib/media-store";
+import { isUuid } from "@/lib/media";
 import { DocumentRow } from "@/components/app/document-row";
 import { crestTint } from "@/lib/crest";
 import { StatusBadge } from "@/components/app/status-badge";
@@ -62,6 +63,7 @@ export default async function PlayerProfilePage({
   const user = await requireCapability("registry.player:view");
   const { id } = await params;
   const { klub, returnTo } = await searchParams;
+  if (!isUuid(id)) notFound();
   const backHref = typeof returnTo === "string" && (returnTo === "/registry/pemain" || returnTo.startsWith("/registry/pemain?")) ? returnTo : "/registry/pemain";
   const data = await getPlayerProfile(id, klub);
   if (!data || !inClubScope(await getClubScope(), data.player.clubId, data.player.secondClubId)) notFound();
@@ -71,8 +73,9 @@ export default async function PlayerProfilePage({
   const canWrite = can(user, "registry.player:edit");
   const canDocs = can(user, "registry:documents");
   const docMeta = canDocs
-    ? await Promise.all(PLAYER_DOCUMENTS.map((d) => getMediaMeta(player[d.key])))
+    ? await getMediaMetas(PLAYER_DOCUMENTS.map((d) => player[d.key]))
     : [];
+  const dobAge = player.dob ? ageFromDob(player.dob) : null;
 
   const chip = clubChips.find((c) => c.id === selectedClub) ?? null;
   const filtered = !!chip;
@@ -157,7 +160,7 @@ export default async function PlayerProfilePage({
                 <span className="font-mono tracking-wide">{player.nisn}</span>
               </Detail>
               <Detail icon={CalendarDays} label={t("Tanggal lahir")}>
-                {player.dob ? t("{date} · {age} th", { date: fmt.date(player.dob), age: ageFromDob(player.dob) }) : "—"}
+                {player.dob ? (dobAge !== null ? t("{date} · {age} th", { date: fmt.date(player.dob), age: dobAge }) : fmt.date(player.dob)) : "—"}
               </Detail>
               <Detail icon={MapPin} label={t("Tempat lahir")}>{player.birthPlace ?? "—"}</Detail>
               <Detail icon={Ruler} label={t("Tinggi / Berat")}>
@@ -267,9 +270,9 @@ export default async function PlayerProfilePage({
             </div>
             <div className="mt-3 flex items-center justify-between rounded-lg bg-surface-2/60 px-3 py-2 text-xs">
               <span className="text-ink-muted">{t("Rating rata-rata")}</span>
-              <span className="font-semibold tabular-nums text-ink">{totals.appearances > 0 ? totals.rating.toFixed(1) : "—"}</span>
+              <span className="font-semibold tabular-nums text-ink">{totals.appearances > 0 ? (totals.rating ?? 0).toFixed(1) : "—"}</span>
               <span className="text-ink-muted">{t("Skor")}</span>
-              <span className="font-semibold tabular-nums text-brand">{Math.round(totals.score)}</span>
+              <span className="font-semibold tabular-nums text-brand">{Math.round(totals.score ?? 0)}</span>
             </div>
           </CardContent>
         </Card>
@@ -352,7 +355,7 @@ export default async function PlayerProfilePage({
                       return (
                         <tr key={st.id} className="group relative transition-colors hover:bg-surface-2/50">
                           <td className="px-4 py-2.5">
-                            <Link href={href} className="block font-medium text-ink after:absolute after:inset-0 group-hover:text-brand">
+                            <Link href={href} prefetch={false} className="block font-medium text-ink after:absolute after:inset-0 group-hover:text-brand">
                               {st.tournamentName ?? t("Kompetisi {season}", { season: st.season })}
                             </Link>
                             {st.clubShort && (
@@ -368,9 +371,9 @@ export default async function PlayerProfilePage({
                           <td className="px-3 py-2.5 text-right tabular-nums">{st.appearances}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums">{st.goals}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums">{st.assists}</td>
-                          <td className="px-3 py-2.5 text-right tabular-nums">{st.rating.toFixed(1)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{(st.rating ?? 0).toFixed(1)}</td>
                           <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-ink">
-                            {Math.round(st.score)}
+                            {Math.round(st.score ?? 0)}
                           </td>
                           <td className="px-2 py-2.5 text-ink-muted group-hover:text-brand">
                             <ChevronRight className="size-4" />
@@ -439,7 +442,7 @@ export default async function PlayerProfilePage({
                     <div className="mt-2 grid grid-cols-3 gap-1 text-center">
                       <Mini label={t("Main")} value={h.appearances} />
                       <Mini label={t("Gol::jumlah")} value={h.goals} />
-                      <Mini label={t("Rating")} value={h.avgRating.toFixed(1)} />
+                      <Mini label={t("Rating")} value={(h.avgRating ?? 0).toFixed(1)} />
                     </div>
                   </div>
                 ))}

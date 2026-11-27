@@ -3,7 +3,7 @@
 **Unified Football Intelligence Platform** — sistem operasi terpadu untuk manajemen
 kompetisi, data pemain, dan kecerdasan talenta sepak bola akar rumput.
 
-Dibangun dari `documents/Proposal_FOOTGRIT-OS-FINAL.pdf` untuk PT DVONES Indonesia.
+
 
 ## Tujuh modul kerja
 

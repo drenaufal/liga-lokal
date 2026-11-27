@@ -36,7 +36,7 @@ export default async function BadgeGalleryPage({ searchParams }: { searchParams:
     { key: "awardSort", label: t("Urutkan penerima"), defaultValue: "recent", options: [{ value: "recent", label: t("Terbaru dahulu") }, { value: "oldest", label: t("Terlama dahulu") }, { value: "name", label: t("Nama pemain A–Z") }] },
   ];
   const awardRow = (a: (typeof gallery.badges)[number]["awards"][number]) => <li key={a.id}>
-    <MemberLink href={"/registry/pemain/" + a.playerId} className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-xs hover:bg-surface-2">
+    <MemberLink href={"/registry/pemain/" + a.playerId} prefetch={false} className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-xs hover:bg-surface-2">
       <span className="min-w-0 truncate text-ink-secondary">{a.playerName}<span className="text-ink-muted"> · {a.club}</span>
         {!ku && a.ageCode && <span className="text-ink-muted"> · {a.ageCode}</span>}
         {!competition && a.competition && <span className="text-ink-muted"> · {a.competition}</span>}

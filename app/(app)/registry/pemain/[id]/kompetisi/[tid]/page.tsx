@@ -65,8 +65,8 @@ export default async function PlayerCompetitionPage({
         [t("Penyelamatan::jumlah"), stat.saves],
         [t("Intersep::jumlah"), stat.interceptions],
         [t("Kartu"), `${stat.yellowCards} / ${stat.redCards}`],
-        [t("Rating"), stat.rating.toFixed(1)],
-        [t("Skor"), Math.round(stat.score)],
+        [t("Rating"), (stat.rating ?? 0).toFixed(1)],
+        [t("Skor"), Math.round(stat.score ?? 0)],
       ]
     : [];
 
