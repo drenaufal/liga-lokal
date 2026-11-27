@@ -4,6 +4,7 @@ import { getPlayerRadarData, searchPlayersForRadar, getPlayerFilterOptions } fro
 import { getClubScope } from "@/lib/auth/session";
 import { requireViewerCapability } from "@/lib/auth/session";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Avatar } from "@/components/ui/avatar";
 import { Radar } from "@/components/charts/radar";
 import { RADAR_AXES, radarValues } from "@/lib/player-metrics";
 import { positionText } from "@/lib/positions";
@@ -106,16 +107,19 @@ export default async function ComparePage({
                 <table className="w-full text-sm">
                   <thead className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-muted">
                     <tr>
-                      <th className="px-4 py-2.5">{t("Metrik")}</th>
+                      <th className="px-4 py-2.5 align-bottom">{t("Metrik")}</th>
                       {ordered.map((r, i) => (
-                        <th key={r.id} className="px-3 py-2.5 text-right">
-                          <span className="flex items-center justify-end gap-1.5">
-                            <span
-                              className="size-2 rounded-full"
-                              style={{ background: SERIES_COLORS[i] }}
-                            />
-                            {r.name.split(" ").slice(-1)}
-                          </span>
+                        <th key={r.id} className="px-3 py-2.5 text-right align-bottom" title={r.name}>
+                          <div className="flex flex-col items-end gap-1">
+                            <Avatar src={r.photoUrl} name={r.name} size={60} fit="contain" />
+                            <span className="inline-flex items-center justify-end gap-1.5">
+                              <span
+                                className="size-2 shrink-0 rounded-full"
+                                style={{ background: SERIES_COLORS[i] }}
+                              />
+                              {r.name.split(" ").slice(-1)}
+                            </span>
+                          </div>
                         </th>
                       ))}
                     </tr>
