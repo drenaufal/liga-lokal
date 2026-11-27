@@ -1,3 +1,4 @@
+import * as React from "react";
 import {
   and,
   asc,
@@ -42,6 +43,10 @@ import { sumStats, type StatTotals } from "@/lib/player-stats";
 import { ascNullsLast, descNullsFirst } from "@/lib/db/order";
 import { kuNameSql } from "@/lib/queries/ku";
 import { clubScopeFilter, coachClubIds, coachOfClub, coachScopeFilter, playerScopeFilter } from "@/lib/club-scope";
+import { isUuid } from "@/lib/media";
+
+const perRequest: <A extends unknown[], R>(fn: (...args: A) => R) => (...args: A) => R =
+  typeof React.cache === "function" ? React.cache : (fn) => fn;
 
 export type PlayerListParams = {
   q?: string;
@@ -178,10 +183,11 @@ export type ClubChip = {
 };
 
 /**
- * Player profile. `clubFilter` narrows the statistics to one club (the
- * tournaments played for it); without it they accumulate across every club.
+ * Deduplicated per request so `generateMetadata` and the page component share
+ * one set of DB queries (even when the page also passes a `?klub=` filter).
  */
-export async function getPlayerProfile(id: string, clubFilter?: string) {
+const loadPlayerProfileBase = perRequest(async (id: string) => {
+  if (!isUuid(id)) return null;
   const [row] = await db
     .select({ player: players, club: clubs, ageCategory: ageCategories })
     .from(players)
@@ -227,6 +233,33 @@ export async function getPlayerProfile(id: string, clubFilter?: string) {
     seasonHistory,
   };
 
+  // Percentile context: same line + age category. Only meaningful for the
+  // all-clubs line, which is what the pool's career rows are.
+  const line = rolesOfLine(positionLine(player.position));
+  const peers = await db
+    .select({ score: playerStats.score, goals: playerStats.goals })
+    .from(playerStats)
+    .innerJoin(players, eq(players.id, playerStats.playerId))
+    .where(
+      and(
+        eq(playerStats.season, "career"),
+        inArray(players.position, [...line]),
+        player.ageCategoryId ? eq(players.ageCategoryId, player.ageCategoryId) : sql`true`,
+      ),
+    );
+
+  return { row, player, secondClub, seasonHistory, statRows, peers };
+});
+
+/**
+ * Player profile. `clubFilter` narrows the statistics to one club (the
+ * tournaments played for it); without it they accumulate across every club.
+ */
+export async function getPlayerProfile(id: string, clubFilter?: string) {
+  const base = await loadPlayerProfileBase(id);
+  if (!base) return null;
+  const { row, player, secondClub, seasonHistory, statRows, peers } = base;
+
   const careerRow = statRows.find((r) => !r.stat.tournamentId && r.stat.season === "career")?.stat;
   const tournamentRows = statRows
     .filter((r) => r.stat.tournamentId)
@@ -258,21 +291,6 @@ export async function getPlayerProfile(id: string, clubFilter?: string) {
   const history = selectedClub
     ? seasonHistory.filter((h) => h.clubId === selectedClub)
     : seasonHistory;
-
-  // Percentile context: same line + age category. Only meaningful for the
-  // all-clubs line, which is what the pool's career rows are.
-  const line = rolesOfLine(positionLine(player.position));
-  const peers = await db
-    .select({ score: playerStats.score, goals: playerStats.goals })
-    .from(playerStats)
-    .innerJoin(players, eq(players.id, playerStats.playerId))
-    .where(
-      and(
-        eq(playerStats.season, "career"),
-        inArray(players.position, [...line]),
-        player.ageCategoryId ? eq(players.ageCategoryId, player.ageCategoryId) : sql`true`,
-      ),
-    );
 
   return {
     player: { ...player, seasonHistory: history },
@@ -324,7 +342,8 @@ export type PlayerMatchRow = {
 };
 
 /** The "click a competition" drill-down: every match the player's club played there. */
-export async function getPlayerTournamentDetail(playerId: string, tournamentId: string) {
+export const getPlayerTournamentDetail = perRequest(async (playerId: string, tournamentId: string) => {
+  if (!isUuid(playerId) || !isUuid(tournamentId)) return null;
   const [player] = await db
     .select({
       id: players.id,
@@ -473,7 +492,7 @@ export async function getPlayerTournamentDetail(playerId: string, tournamentId: 
   });
 
   return { player, tournament: t, stat: statRow?.stat ?? null, club, matches: rows };
-}
+});
 
 /* ─────────────────────────── Clubs ──────────────────────────────── */
 

@@ -11,8 +11,10 @@ export function createPool(uri: string) {
     uri,
     connectionLimit: Number(process.env.DATABASE_POOL_SIZE ?? 5),
     maxIdle: 2,
-    idleTimeout: 60_000,
+    idleTimeout: 30_000,
     enableKeepAlive: true,
+    keepAliveInitialDelay: 10_000,
+    connectTimeout: 10_000,
     timezone: "Z",
     decimalNumbers: true,
   });

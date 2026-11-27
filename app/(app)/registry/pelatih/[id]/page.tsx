@@ -5,7 +5,7 @@ import { ArrowLeft, Mail, Phone, MapPin, ScrollText, Pencil, Cake } from "lucide
 import { getCoachProfile } from "@/lib/queries/registry";
 import { requireCapability, getClubScope } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
-import { getMediaMeta } from "@/lib/media-store";
+import { getMediaMetas } from "@/lib/media-store";
 import { COACH_DOCUMENTS, coachDocumentCompleteness } from "@/lib/coach-documents";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
@@ -50,8 +50,9 @@ export default async function CoachProfilePage({
   const canWrite = can(user, "registry.coach:edit");
   const canDocs = can(user, "registry:documents");
   const docMeta = canDocs
-    ? await Promise.all(COACH_DOCUMENTS.map((doc) => getMediaMeta(c[doc.key])))
+    ? await getMediaMetas(COACH_DOCUMENTS.map((doc) => c[doc.key]))
     : [];
+  const dobAge = c.dob ? ageFromDob(c.dob) : null;
   const completeness = coachDocumentCompleteness(c);
   const canManageAccount = can(user, "registry.coach:account");
   const account = canManageAccount && c.userId ? await db.query.users.findFirst({ where: eq(users.id, c.userId), columns: { email: true, active: true } }) : null;
@@ -81,8 +82,8 @@ export default async function CoachProfilePage({
             {c.specialty && <p className="mt-0.5 text-xs text-ink-muted">{t.dyn(c.specialty)}</p>}
             <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-secondary">
               {c.licenseNumber && <span className="flex items-center gap-1"><ScrollText className="size-3" /> {c.licenseNumber}</span>}
-              {c.dob && (
-                <span className="flex items-center gap-1"><Cake className="size-3" /> {t("{n} th", { n: ageFromDob(c.dob) })}</span>
+              {dobAge !== null && (
+                <span className="flex items-center gap-1"><Cake className="size-3" /> {t("{n} th", { n: dobAge })}</span>
               )}
               {c.city && <span className="flex items-center gap-1"><MapPin className="size-3" /> {c.city}</span>}
               {c.email && <span className="flex items-center gap-1"><Mail className="size-3" /> {c.email}</span>}

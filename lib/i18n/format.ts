@@ -32,6 +32,11 @@ const COMPACT_EN: [number, string][] = [
 
 export type Formatters = ReturnType<typeof makeFormatters>;
 
+function parseValidDate(date: Date | string | number): Date | null {
+  const d = date instanceof Date ? date : new Date(date);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 /** Date, number and currency formatting bound to one language. */
 export function makeFormatters(locale: Locale) {
   const tag = INTL_LOCALE[locale];
@@ -42,21 +47,28 @@ export function makeFormatters(locale: Locale) {
     locale,
     tag,
     date(date: Date | string | number, opts: Intl.DateTimeFormatOptions = { dateStyle: "medium" }) {
-      return new Intl.DateTimeFormat(tag, { timeZone: APP_TIME_ZONE, ...opts }).format(new Date(date));
+      const d = parseValidDate(date);
+      return d ? new Intl.DateTimeFormat(tag, { timeZone: APP_TIME_ZONE, ...opts }).format(d) : "—";
     },
     dateTime(date: Date | string | number) {
-      return new Intl.DateTimeFormat(tag, {
-        timeZone: APP_TIME_ZONE,
-        dateStyle: "medium",
-        timeStyle: "short",
-      }).format(new Date(date));
+      const d = parseValidDate(date);
+      return d
+        ? new Intl.DateTimeFormat(tag, {
+            timeZone: APP_TIME_ZONE,
+            dateStyle: "medium",
+            timeStyle: "short",
+          }).format(d)
+        : "—";
     },
     time(date: Date | string | number) {
-      return new Intl.DateTimeFormat(tag, {
-        timeZone: APP_TIME_ZONE,
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(new Date(date));
+      const d = parseValidDate(date);
+      return d
+        ? new Intl.DateTimeFormat(tag, {
+            timeZone: APP_TIME_ZONE,
+            hour: "2-digit",
+            minute: "2-digit",
+          }).format(d)
+        : "—";
     },
     number,
     /** Always "Rp", also in English — `Intl` would print "IDR" there. */
@@ -88,7 +100,9 @@ export function makeFormatters(locale: Locale) {
       return `Rp\u00a0${sign}${number(abs, { maximumFractionDigits: 0 })}`;
     },
     relative(date: Date | string | number) {
-      const diff = new Date(date).getTime() - Date.now();
+      const d = parseValidDate(date);
+      if (!d) return "";
+      const diff = d.getTime() - Date.now();
       const abs = Math.abs(diff);
       const rtf = new Intl.RelativeTimeFormat(tag, { numeric: "auto" });
       for (const [unit, ms] of RELATIVE_UNITS) {

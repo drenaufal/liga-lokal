@@ -144,6 +144,7 @@ export default async function PlayersPage({
                     <TD>
                       <Link
                         href={`/registry/pemain/${p.id}?returnTo=${encodeURIComponent(returnTo)}`}
+                        prefetch={false}
                         className="font-medium text-ink hover:text-brand"
                       >
                         {p.fullName}
@@ -187,7 +188,7 @@ export default async function PlayersPage({
                     </TD>
                     <TD className="text-xs">{p.ageCode ?? "—"}</TD>
                     <TD className="text-right tabular-nums">
-                      {p.dob ? ageFromDob(p.dob) : "—"}
+                      {(p.dob ? ageFromDob(p.dob) : null) ?? "—"}
                     </TD>
                     <TD className="font-mono text-xs text-ink-muted">
                       {p.registrationNo}

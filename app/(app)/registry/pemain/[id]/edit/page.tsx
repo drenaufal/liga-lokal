@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireCapability } from "@/lib/auth/session";
 import { getPlayer, getRegistryFilters } from "@/lib/queries/registry";
-import { getMediaMeta } from "@/lib/media-store";
+import { getMediaMetas } from "@/lib/media-store";
+import { isUuid } from "@/lib/media";
 import { PLAYER_DOCUMENTS } from "@/lib/player-documents";
 import { Card, CardContent } from "@/components/ui/card";
 import { PlayerForm } from "../../player-form";
@@ -23,11 +24,12 @@ export default async function EditPlayerPage({
   const t = await getT();
   await requireCapability("registry.player:edit");
   const { id } = await params;
+  if (!isUuid(id)) notFound();
   const player = await getPlayer(id);
   if (!player) notFound();
-  const [{ clubs, ageCategories }, ...metas] = await Promise.all([
+  const [{ clubs, ageCategories }, metas] = await Promise.all([
     getRegistryFilters(),
-    ...PLAYER_DOCUMENTS.map((d) => getMediaMeta(player[d.key])),
+    getMediaMetas(PLAYER_DOCUMENTS.map((d) => player[d.key])),
   ]);
   const docMeta = Object.fromEntries(PLAYER_DOCUMENTS.map((d, i) => [d.key, metas[i]]));
 

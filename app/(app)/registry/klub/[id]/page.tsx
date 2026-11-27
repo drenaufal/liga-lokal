@@ -147,6 +147,7 @@ export default async function ClubProfilePage({
                         <Link
                           key={p.id}
                           href={`/registry/pemain/${p.id}`}
+                          prefetch={false}
                           className="flex items-center gap-2.5 rounded-lg border border-line-soft bg-surface-2/40 p-2 transition-colors hover:border-brand/30"
                         >
                           <span className="grid size-6 shrink-0 place-items-center rounded-md bg-surface-2 text-[10px] font-semibold text-ink-muted">

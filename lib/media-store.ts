@@ -29,15 +29,58 @@ export async function getMedia(id: string) {
   return db.query.media.findFirst({ where: eq(media.id, id) });
 }
 
+export type MediaMeta = {
+  id: string;
+  kind: MediaKind;
+  fileName: string | null;
+  mimeType: string;
+  size: number;
+  createdAt: Date;
+};
+
 /** Metadata only (no payload) for a media URL — used to render document cards. */
-export async function getMediaMeta(url: string | null | undefined) {
+export async function getMediaMeta(url: string | null | undefined): Promise<MediaMeta | null> {
   const id = mediaIdFromUrl(url);
   if (!id) return null;
-  const row = await db.query.media.findFirst({
-    where: eq(media.id, id),
-    columns: { id: true, kind: true, fileName: true, mimeType: true, size: true, createdAt: true },
-  });
-  return row ?? null;
+  try {
+    const row = await db.query.media.findFirst({
+      where: eq(media.id, id),
+      columns: { id: true, kind: true, fileName: true, mimeType: true, size: true, createdAt: true },
+    });
+    return row ?? null;
+  } catch (e) {
+    console.error("media meta lookup failed", e);
+    return null;
+  }
+}
+
+/**
+ * Batch metadata lookup for multiple document URLs in one query (0 queries when
+ * no uploaded media URL is present). Never throws on transient DB errors so
+ * profile pages keep rendering with a fallback label.
+ */
+export async function getMediaMetas(urls: (string | null | undefined)[]): Promise<(MediaMeta | null)[]> {
+  const ids = urls.map(mediaIdFromUrl);
+  const uniqueIds = [...new Set(ids.filter((id): id is string => !!id))];
+  if (!uniqueIds.length) return urls.map(() => null);
+  try {
+    const rows = await db
+      .select({
+        id: media.id,
+        kind: media.kind,
+        fileName: media.fileName,
+        mimeType: media.mimeType,
+        size: media.size,
+        createdAt: media.createdAt,
+      })
+      .from(media)
+      .where(inArray(media.id, uniqueIds));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    return ids.map((id) => (id ? (byId.get(id) ?? null) : null));
+  } catch (e) {
+    console.error("batch media meta lookup failed", e);
+    return urls.map(() => null);
+  }
 }
 
 /**
